@@ -34,6 +34,7 @@ export type RootStackParamList = {
   EditProfile: undefined;
   Register: { reason?: 'after_request' | 'default' } | undefined;
   Reviews: { userId: string; userName: string };
+  HostProfile: { userId: string };
   LeaveReview: { outingId: string; toUserId: string; toUserName: string };
   VenueDetail: {
     venueKey: string;

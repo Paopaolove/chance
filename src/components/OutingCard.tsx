@@ -84,9 +84,8 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
             userId={outing.hostId}
             firstName={outing.hostName}
             onPress={() =>
-              navigation.navigate('Reviews', {
+              navigation.navigate('HostProfile', {
                 userId: outing.hostId,
-                userName: outing.hostName,
               })
             }
           />

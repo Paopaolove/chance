@@ -12,6 +12,7 @@ import { OutingDetailScreen } from '../screens/OutingDetailScreen';
 import { PaywallScreen } from '../screens/PaywallScreen';
 import { LeaveReviewScreen } from '../screens/LeaveReviewScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
+import { HostProfileScreen } from '../screens/HostProfileScreen';
 import { ReviewsScreen } from '../screens/ReviewsScreen';
 import { VenueDetailScreen } from '../screens/VenueDetailScreen';
 import { colors } from '../theme';
@@ -90,6 +91,11 @@ export function RootNavigator() {
               name="Reviews"
               component={ReviewsScreen}
               options={{ title: 'Avis' }}
+            />
+            <Stack.Screen
+              name="HostProfile"
+              component={HostProfileScreen}
+              options={{ title: 'Profil' }}
             />
             <Stack.Screen
               name="LeaveReview"

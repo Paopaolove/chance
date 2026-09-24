@@ -60,9 +60,8 @@ export function PersonCard({ person, onPress, onPropose }: Props) {
             userId={person.id}
             firstName={person.firstName}
             onPress={() =>
-              navigation.navigate('Reviews', {
+              navigation.navigate('HostProfile', {
                 userId: person.id,
-                userName: person.firstName,
               })
             }
           />

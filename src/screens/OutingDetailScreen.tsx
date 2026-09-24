@@ -251,7 +251,14 @@ export function OutingDetailScreen() {
 
 
       {/* Visible before accept: listing, 1 photo, place, budget */}
-      <View style={styles.hostBlock}>
+      <Pressable
+        style={styles.hostBlock}
+        onPress={() =>
+          navigation.navigate('HostProfile', { userId: outing.hostId })
+        }
+        accessibilityRole="button"
+        accessibilityLabel={`Profil de ${outing.hostName}`}
+      >
         <Avatar
           name={outing.hostName}
           photoUri={photoUri}
@@ -265,12 +272,6 @@ export function OutingDetailScreen() {
           <RatingLine
             userId={outing.hostId}
             firstName={outing.hostName}
-            onPress={() =>
-              navigation.navigate('Reviews', {
-                userId: outing.hostId,
-                userName: outing.hostName,
-              })
-            }
           />
           <Text style={styles.hostMeta}>
             {outing.neighborhood}
@@ -286,7 +287,7 @@ export function OutingDetailScreen() {
             </Pressable>
           ) : null}
         </View>
-      </View>
+      </Pressable>
 
       <View style={styles.chips}>
         <View style={styles.chip}>
