@@ -45,7 +45,7 @@ const slides = [
     titleBold: 'rencontre',
     titleSuffix: '.',
     body:
-      'Pas de fil sans fin. Pas de swipe.\n\nUne vraie rencontre autour d’une table, d’un bar ou d’une sortie.',
+      'Pas de fil sans fin, pas de swipe.\n\nUne vraie rencontre autour d’une table, d’un bar ou d’une sortie.',
   },
   {
     key: '3',
