@@ -15,6 +15,7 @@ import { Button } from '../components/Button';
 import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import { budgetChipLabel, categoryLabels, mockHosts } from '../data/mockOutings';
+import { formatOutingCategoryLabel } from '../utils/categoryLabel';
 import {
   formatTravelMinutes,
   getTravelMinutes,
@@ -289,7 +290,7 @@ export function OutingDetailScreen() {
 
       <View style={styles.chips}>
         <View style={styles.chip}>
-          <Text style={styles.chipText}>{categoryLabels[outing.category]}</Text>
+          <Text style={styles.chipText}>{formatOutingCategoryLabel(outing.category, outing.categoryDetail)}</Text>
         </View>
         <View style={styles.chip}>
           <Text style={styles.chipText}>
@@ -309,10 +310,6 @@ export function OutingDetailScreen() {
           </View>
         ) : null}
       </View>
-      {outing.categoryDetail ? (
-        <Text style={styles.categoryDetail}>{outing.categoryDetail}</Text>
-      ) : null}
-
       <Text style={styles.title}>{outing.title}</Text>
       <Text style={styles.when}>{formatOutingWhen(outing.startsAt)}</Text>
 

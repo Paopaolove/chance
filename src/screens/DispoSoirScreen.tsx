@@ -105,7 +105,7 @@ export function DispoSoirScreen() {
     }
     if (on && categories.includes('autre') && !categoryDetail.trim()) {
       Alert.alert(
-        'Précise la catégorie',
+        'Précise la sortie',
         'Quand tu coches Autre, indique ce que tu as en tête (ex. bowling…).',
       );
       return;
@@ -127,7 +127,7 @@ export function DispoSoirScreen() {
     }
     if (categories.includes('autre') && !categoryDetail.trim()) {
       Alert.alert(
-        'Précise la catégorie',
+        'Précise la sortie',
         'Quand tu coches Autre, indique ce que tu as en tête (ex. bowling…).',
       );
       return;
@@ -232,15 +232,15 @@ export function DispoSoirScreen() {
       {hint ? <Text style={styles.error}>{hint}</Text> : null}
       {categories.includes('autre') ? (
         <>
-          <Text style={styles.sectionHint}>Précise *</Text>
+          <Text style={styles.sectionHint}>Précise la sortie</Text>
           <TextInput
             style={styles.input}
             value={categoryDetail}
             onChangeText={setCategoryDetail}
-            placeholder="Ex. bowling, pique-nique…"
+            placeholder="Ex. balade, promenade de chien, café, atelier…"
             placeholderTextColor={colors.textMuted}
             autoCorrect={false}
-            accessibilityLabel="Précise la catégorie Autre"
+            accessibilityLabel="Précise la sortie"
           />
         </>
       ) : null}

@@ -232,8 +232,8 @@ export function CreateOutingScreen() {
 
     if (category === 'autre' && !categoryDetail.trim()) {
       Alert.alert(
-        'Précise la catégorie',
-        'Quand tu choisis Autre, indique ce que tu proposes (ex. bowling, pique-nique…).',
+        'Précise la sortie',
+        'Quand tu choisis Autre, indique ce que tu proposes (ex. balade, café, atelier…).',
       );
       return;
     }
@@ -383,15 +383,15 @@ export function CreateOutingScreen() {
         </View>
         {category === 'autre' ? (
           <>
-            <Text style={styles.label}>Précise *</Text>
+            <Text style={styles.label}>Précise la sortie</Text>
             <TextInput
               style={styles.input}
               value={categoryDetail}
               onChangeText={setCategoryDetail}
-              placeholder="Ex. bowling, pique-nique…"
+              placeholder="Ex. balade, promenade de chien, café, atelier…"
               placeholderTextColor={colors.textMuted}
               autoCorrect={false}
-              accessibilityLabel="Précise la catégorie Autre"
+              accessibilityLabel="Précise la sortie"
             />
           </>
         ) : null}

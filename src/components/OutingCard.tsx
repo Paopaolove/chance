@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useChance } from '../data/ChanceContext';
-import { budgetChipLabel, categoryLabels, mockHosts } from '../data/mockOutings';
+import { budgetChipLabel, mockHosts } from '../data/mockOutings';
+import { formatOutingCategoryLabel } from '../utils/categoryLabel';
 import {
   formatTravelMinutes,
   getTravelMinutes,
@@ -48,7 +49,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
     >
       <View style={styles.topRow}>
         <View style={styles.chip}>
-          <Text style={styles.chipText}>{categoryLabels[outing.category]}</Text>
+          <Text style={styles.chipText}>{formatOutingCategoryLabel(outing.category, outing.categoryDetail)}</Text>
         </View>
         <View style={[styles.chip, styles.chipBudget]}>
           <Text style={[styles.chipText, styles.chipBudgetText]}>
