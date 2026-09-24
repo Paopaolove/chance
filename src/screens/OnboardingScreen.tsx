@@ -90,6 +90,7 @@ export function OnboardingScreen() {
   const [interests, setInterests] = useState<string[]>([]);
   const [customFilters, setCustomFilters] = useState<string[]>([]);
   const [acceptedRules, setAcceptedRules] = useState(false);
+  const [absencesExpanded, setAbsencesExpanded] = useState(false);
   const [neighborhood, setNeighborhood] = useState('');
   const [error, setError] = useState('');
   const listRef = useRef<FlatList>(null);
@@ -526,57 +527,69 @@ export function OnboardingScreen() {
   }
 
   if (step === 'rules') {
+    const steps = [
+      'Tu poses une sortie, ou tu en rejoins une.',
+      'Si on t’accepte, tu as 10 minutes pour confirmer.',
+      'À la confirmation, 20 € sont bloqués. Rendus si tu viens.',
+      'Le chat s’ouvre 1 heure avant. Pas avant.',
+    ];
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.wrapScroll}>
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Comment ça marche</Text>
           <View style={styles.disclaimerBox}>
-            <Text style={styles.disclaimerTitle}>
+            <Text style={styles.disclaimerLead}>
               Chance n’est pas un site de rencontre.
             </Text>
-            <Text style={styles.disclaimerBody}>
+            <Text style={styles.disclaimerLead}>
               On ne swipe pas, on ne cherche pas un match.
             </Text>
-            <Text style={styles.disclaimerBody}>
+            <Text style={styles.disclaimerLead}>
               On partage une table, un verre ou une sortie.
             </Text>
           </View>
-          <View style={styles.rulesBox}>
-            <Text style={styles.rulesLine}>
-              1. Tu poses une sortie, ou tu en rejoins une.
-            </Text>
-            <Text style={styles.rulesLine}>
-              2. Si on t’accepte, tu as 10 minutes pour confirmer.
-            </Text>
-            <Text style={styles.rulesLine}>
-              3. À la confirmation, 20 € sont bloqués. Rendus si tu viens.
-            </Text>
-            <Text style={styles.rulesLine}>
-              4. Le chat s’ouvre 1 heure avant. Pas avant.
-            </Text>
+          <View style={styles.stepsBox}>
+            {steps.map((line, i) => (
+              <View key={i} style={styles.stepRow}>
+                <Text style={styles.stepNum}>{i + 1}.</Text>
+                <Text style={styles.stepText}>{line}</Text>
+              </View>
+            ))}
           </View>
-          <Text style={styles.rulesSection}>Absences</Text>
-          <View style={styles.rulesBox}>
-            <Text style={styles.rulesLine}>
-              • Annulation au moins 3h avant → caution rendue.
+          <Pressable
+            style={styles.accordionHeader}
+            onPress={() => setAbsencesExpanded((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: absencesExpanded }}
+          >
+            <Text style={styles.accordionTitle}>Conditions d’absence</Text>
+            <Text style={styles.accordionChevron}>
+              {absencesExpanded ? '▴' : '▾'}
             </Text>
-            <Text style={styles.rulesLine}>
-              • Annulation trop tard ou absence → caution perdue.
-            </Text>
-            <Text style={styles.rulesLine}>
-              • Un imprévu peut être signalé (avec une raison). Il ne lève la
-              caution que si l’hôte accepte.
-            </Text>
-            <Text style={styles.rulesLine}>
-              • Deux absences → perte de priorité, puis le compte peut être
-              fermé.
-            </Text>
-            <Text style={styles.rulesLine}>
-              • L’hôte ne vient pas → 1 avertissement, 2e fois compte fermé.
-              Les autres récupèrent la caution.
-            </Text>
-          </View>
+          </Pressable>
+          {absencesExpanded ? (
+            <View style={styles.rulesBox}>
+              <Text style={styles.rulesLine}>
+                • Annulation au moins 3h avant → caution rendue.
+              </Text>
+              <Text style={styles.rulesLine}>
+                • Annulation trop tard ou absence → caution perdue.
+              </Text>
+              <Text style={styles.rulesLine}>
+                • Un imprévu peut être signalé (avec une raison). Il ne lève la
+                caution que si l’hôte accepte.
+              </Text>
+              <Text style={styles.rulesLine}>
+                • Deux absences → perte de priorité, puis le compte peut être
+                fermé.
+              </Text>
+              <Text style={styles.rulesLine}>
+                • L’hôte ne vient pas → 1 avertissement, 2e fois compte fermé.
+                Les autres récupèrent la caution.
+              </Text>
+            </View>
+          ) : null}
           <Pressable
             style={styles.acceptRow}
             onPress={() => setAcceptedRules((v) => !v)}
@@ -593,7 +606,11 @@ export function OnboardingScreen() {
             </Text>
           </Pressable>
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button title="Continuer" onPress={continueRules} style={styles.cta} />
+          <Button
+            title="C’est compris"
+            onPress={continueRules}
+            style={styles.cta}
+          />
         </ScrollView>
       </SafeAreaView>
     );
@@ -874,13 +891,61 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xl,
   },
-  disclaimerTitle: {
+  disclaimerLead: {
+    ...typography.subtitle,
+    fontSize: 20,
+    lineHeight: 28,
+    color: colors.text,
+    fontFamily: fonts.semiBold,
+  },
+  stepsBox: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  stepNum: {
+    ...typography.subtitle,
+    fontSize: 22,
+    lineHeight: 30,
+    color: colors.primary,
+    fontFamily: fonts.bold,
+    minWidth: 28,
+  },
+  stepText: {
+    ...typography.subtitle,
+    fontSize: 20,
+    lineHeight: 28,
+    color: colors.text,
+    flex: 1,
+  },
+  accordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  accordionTitle: {
     ...typography.bodyStrong,
     color: colors.text,
   },
-  disclaimerBody: {
-    ...typography.body,
-    color: colors.text,
+  accordionChevron: {
+    ...typography.subtitle,
+    color: colors.primary,
   },
   rulesBox: {
     backgroundColor: colors.surface,
@@ -891,17 +956,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xl,
   },
-  rulesSection: {
-    ...typography.bodyStrong,
-    color: colors.text,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
   rulesLine: { ...typography.body, color: colors.textSecondary },
   acceptRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
+    marginTop: spacing.lg,
   },
   checkbox: {
     width: 24,
