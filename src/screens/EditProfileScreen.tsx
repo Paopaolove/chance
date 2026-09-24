@@ -50,9 +50,16 @@ export function EditProfileScreen() {
   const toggleInterest = (interest: string) => {
     setInterests((prev) => {
       if (prev.includes(interest)) {
+        setError('');
         return prev.filter((i) => i !== interest);
       }
-      if (prev.length >= SUGGESTED_INTERESTS_MAX) return prev;
+      if (prev.length >= SUGGESTED_INTERESTS_MAX) {
+        setError(
+          `Max ${SUGGESTED_INTERESTS_MAX} dans la liste — crée le tien dans « Créer un centre d’intérêt ».`,
+        );
+        return prev;
+      }
+      setError('');
       return [...prev, interest];
     });
   };
@@ -173,7 +180,11 @@ export function EditProfileScreen() {
         })}
       </View>
 
-      <CustomFiltersEditor value={customFilters} onChange={setCustomFilters} />
+      <CustomFiltersEditor
+        value={customFilters}
+        onChange={setCustomFilters}
+        label="Créer un centre d’intérêt"
+      />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Button title="Enregistrer" onPress={onSave} style={styles.cta} />

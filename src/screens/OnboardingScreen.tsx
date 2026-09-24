@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
+import { CustomFiltersEditor } from '../components/CustomFiltersEditor';
 import { useChance } from '../data/ChanceContext';
 import {
   INTEREST_SUGGESTIONS,
@@ -85,6 +86,7 @@ export function OnboardingScreen() {
   const [firstName, setFirstName] = useState('');
   const [bio, setBio] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
+  const [customFilters, setCustomFilters] = useState<string[]>([]);
   const [acceptedRules, setAcceptedRules] = useState(false);
   const [neighborhood, setNeighborhood] = useState('');
   const [error, setError] = useState('');
@@ -177,11 +179,16 @@ export function OnboardingScreen() {
   const toggleInterest = (interest: string) => {
     setInterests((prev) => {
       if (prev.includes(interest)) {
+        setError('');
         return prev.filter((i) => i !== interest);
       }
       if (prev.length >= SUGGESTED_INTERESTS_MAX) {
+        setError(
+          `Tu peux en choisir jusqu’à ${SUGGESTED_INTERESTS_MAX} dans la liste — ou crée le tien juste en dessous.`,
+        );
         return prev;
       }
+      setError('');
       return [...prev, interest];
     });
   };
@@ -212,6 +219,7 @@ export function OnboardingScreen() {
       neighborhood,
       bio: bio.trim().slice(0, MAX_BIO_LENGTH),
       interests,
+      customFilters,
       photoUri,
       phone: phone.trim(),
       authProvider,
@@ -481,9 +489,18 @@ export function OnboardingScreen() {
           <Text style={styles.counter}>
             {interests.length}/{SUGGESTED_INTERESTS_MAX}
           </Text>
+          <CustomFiltersEditor
+            value={customFilters}
+            onChange={setCustomFilters}
+            label="Créer un centre d’intérêt"
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             title="Continuer"
-            onPress={() => setStep('rules')}
+            onPress={() => {
+              setError('');
+              setStep('rules');
+            }}
             style={styles.cta}
           />
           <Button
@@ -491,6 +508,8 @@ export function OnboardingScreen() {
             variant="ghost"
             onPress={() => {
               setInterests([]);
+              setCustomFilters([]);
+              setError('');
               setStep('rules');
             }}
             style={styles.secondary}

@@ -18,9 +18,16 @@ interface Props {
   onChange: (next: string[]) => void;
   /** Optional error shown under the field (parent-driven). */
   error?: string;
+  /** Optional label override (default: Créer un centre d'intérêt). */
+  label?: string;
 }
 
-export function CustomFiltersEditor({ value, onChange, error }: Props) {
+export function CustomFiltersEditor({
+  value,
+  onChange,
+  error,
+  label = 'Créer un centre d’intérêt',
+}: Props) {
   const [draft, setDraft] = useState('');
   const [localError, setLocalError] = useState('');
 
@@ -37,13 +44,17 @@ export function CustomFiltersEditor({ value, onChange, error }: Props) {
 
   const remove = (tag: string) => {
     onChange(value.filter((t) => t !== tag));
+    if (localError) setLocalError('');
   };
+
+  const atMax = value.length >= MAX_CUSTOM_FILTERS;
 
   return (
     <View>
-      <Text style={styles.label}>Tes filtres</Text>
+      <Text style={styles.label}>{label}</Text>
       <Text style={styles.hint}>
-        Ajoute un filtre descriptif — Ex. vegan, afterwork, calme, bilingual…
+        Écris un mot puis appuie sur Ajouter — Ex. vegan, afterwork, calme,
+        bilingual…
       </Text>
       <View style={styles.row}>
         <TextInput
@@ -57,16 +68,21 @@ export function CustomFiltersEditor({ value, onChange, error }: Props) {
           placeholderTextColor={colors.textMuted}
           maxLength={MAX_CUSTOM_FILTER_LENGTH}
           returnKeyType="done"
+          blurOnSubmit={false}
           onSubmitEditing={add}
+          editable={!atMax}
         />
         <Pressable
           onPress={add}
+          accessibilityRole="button"
+          accessibilityLabel="Ajouter le centre d’intérêt"
+          hitSlop={8}
           style={({ pressed }) => [
             styles.addBtn,
             pressed && styles.addPressed,
-            value.length >= MAX_CUSTOM_FILTERS && styles.addDisabled,
+            atMax && styles.addDisabled,
           ]}
-          disabled={value.length >= MAX_CUSTOM_FILTERS}
+          disabled={atMax}
         >
           <Text style={styles.addText}>Ajouter</Text>
         </Pressable>
