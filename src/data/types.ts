@@ -230,7 +230,10 @@ export type AppAction =
   | { type: 'COMPLETE_OUTING'; payload: { outingId: string } }
   | { type: 'ADD_REVIEW'; payload: Review }
   | { type: 'REPLY_TO_REVIEW'; payload: { reviewId: string; reply: string } }
-  | { type: 'HIDE_REVIEW_TEXT'; payload: { reviewId: string } };
+  | {
+      type: 'REQUEST_HIDE_REVIEW_TEXT';
+      payload: { reviewId: string; userId: string };
+    };
 
 export interface Review {
   id: string;
@@ -244,6 +247,8 @@ export interface Review {
   /** At most one reply from the reviewed user. */
   reply?: string;
   createdAt: string;
+  /** User ids who agreed to hide text (need both from + to). */
+  hideTextConsentUserIds?: string[];
   /** Text (comment + reply) hidden by mutual agreement; note + count remain. */
   textHidden?: boolean;
 }

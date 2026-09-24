@@ -488,14 +488,24 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'HIDE_REVIEW_TEXT': {
+    case 'REQUEST_HIDE_REVIEW_TEXT': {
+      const { reviewId, userId } = action.payload;
       return {
         ...state,
-        reviews: state.reviews.map((r) =>
-          r.id === action.payload.reviewId
-            ? { ...r, textHidden: true }
-            : r,
-        ),
+        reviews: state.reviews.map((r) => {
+          if (r.id !== reviewId) return r;
+          if (r.textHidden) return r;
+          if (userId !== r.fromUserId && userId !== r.toUserId) return r;
+          const consents = new Set(r.hideTextConsentUserIds ?? []);
+          consents.add(userId);
+          const both =
+            consents.has(r.fromUserId) && consents.has(r.toUserId);
+          return {
+            ...r,
+            hideTextConsentUserIds: Array.from(consents),
+            ...(both ? { textHidden: true } : {}),
+          };
+        }),
       };
     }
 
@@ -623,7 +633,16 @@ interface ChanceContextValue {
     reviewId: string,
     reply: string,
   ) => { ok: true } | { ok: false; reason: string };
-  hideReviewText: (reviewId: string) => void;
+  /** Mutual consent: each party must call; text hides when both agreed. */
+  requestHideReviewText: (
+    reviewId: string,
+  ) =>
+    | { ok: true; hidden: boolean; waitingForOther: boolean }
+    | { ok: false; reason: string };
+  /** Demo QA: record the other party's hide consent. */
+  simulateOtherHideConsent: (
+    reviewId: string,
+  ) => { ok: true; hidden: boolean } | { ok: false; reason: string };
   getReviewsForUser: (userId: string) => Review[];
   getRatingStats: (userId: string) => UserRatingStats;
   /** Completed (or demo-completed) outings the user can still rate. */
@@ -1379,9 +1398,78 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.reviews],
   );
 
-  const hideReviewText = useCallback((reviewId: string) => {
-    dispatch({ type: 'HIDE_REVIEW_TEXT', payload: { reviewId } });
-  }, []);
+  const requestHideReviewText = useCallback(
+    (
+      reviewId: string,
+    ):
+      | { ok: true; hidden: boolean; waitingForOther: boolean }
+      | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const review = state.reviews.find((r) => r.id === reviewId);
+      if (!review) return { ok: false, reason: 'not_found' };
+      if (review.textHidden) return { ok: false, reason: 'already_hidden' };
+      if (user.id !== review.fromUserId && user.id !== review.toUserId) {
+        return { ok: false, reason: 'not_party' };
+      }
+      if (!review.comment && !review.reply) {
+        return { ok: false, reason: 'no_text' };
+      }
+      const already = (review.hideTextConsentUserIds ?? []).includes(user.id);
+      if (already) {
+        const both =
+          (review.hideTextConsentUserIds ?? []).includes(review.fromUserId) &&
+          (review.hideTextConsentUserIds ?? []).includes(review.toUserId);
+        return {
+          ok: true,
+          hidden: !!review.textHidden || both,
+          waitingForOther: !both,
+        };
+      }
+      dispatch({
+        type: 'REQUEST_HIDE_REVIEW_TEXT',
+        payload: { reviewId, userId: user.id },
+      });
+      const next = new Set(review.hideTextConsentUserIds ?? []);
+      next.add(user.id);
+      const both = next.has(review.fromUserId) && next.has(review.toUserId);
+      return { ok: true, hidden: both, waitingForOther: !both };
+    },
+    [state.currentUser, state.reviews],
+  );
+
+
+  const simulateOtherHideConsent = useCallback(
+    (
+      reviewId: string,
+    ): { ok: true; hidden: boolean } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const review = state.reviews.find((r) => r.id === reviewId);
+      if (!review) return { ok: false, reason: 'not_found' };
+      if (review.textHidden) return { ok: true, hidden: true };
+      const otherId =
+        user.id === review.fromUserId
+          ? review.toUserId
+          : user.id === review.toUserId
+            ? review.fromUserId
+            : null;
+      if (!otherId) return { ok: false, reason: 'not_party' };
+      dispatch({
+        type: 'REQUEST_HIDE_REVIEW_TEXT',
+        payload: { reviewId, userId: otherId },
+      });
+      const next = new Set(review.hideTextConsentUserIds ?? []);
+      next.add(otherId);
+      // also count current user if already consented
+      if ((review.hideTextConsentUserIds ?? []).includes(user.id)) {
+        next.add(user.id);
+      }
+      const both = next.has(review.fromUserId) && next.has(review.toUserId);
+      return { ok: true, hidden: both };
+    },
+    [state.currentUser, state.reviews],
+  );
 
   const showToast = useCallback((title: string, body: string) => {
     const toast: AppToast = {
@@ -1536,7 +1624,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       completeOuting,
       addReview,
       replyToReview,
-      hideReviewText,
+      requestHideReviewText,
+      simulateOtherHideConsent,
       getReviewsForUser,
       getRatingStats,
       getOutingsToRate,
@@ -1585,7 +1674,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       completeOuting,
       addReview,
       replyToReview,
-      hideReviewText,
+      requestHideReviewText,
+      simulateOtherHideConsent,
       getReviewsForUser,
       getRatingStats,
       getOutingsToRate,

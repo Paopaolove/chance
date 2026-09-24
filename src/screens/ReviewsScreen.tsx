@@ -34,7 +34,8 @@ export function ReviewsScreen() {
     getRatingStats,
     getDisplayName,
     replyToReview,
-    hideReviewText,
+    requestHideReviewText,
+    simulateOtherHideConsent,
   } = useChance();
   const { userId, userName } = route.params;
   const reviews = getReviewsForUser(userId);
@@ -87,11 +88,18 @@ export function ReviewsScreen() {
           const fromName = getDisplayName(review.fromUserId);
           const canReply =
             me?.id === review.toUserId && !review.reply && !review.textHidden;
-          const canHide =
+          const isParty =
             !!me &&
-            (me.id === review.fromUserId || me.id === review.toUserId) &&
-            !review.textHidden &&
-            !!(review.comment || review.reply);
+            (me.id === review.fromUserId || me.id === review.toUserId);
+          const hasText = !!(review.comment || review.reply);
+          const myConsent = !!(
+            me &&
+            (review.hideTextConsentUserIds ?? []).includes(me.id)
+          );
+          const canRequestHide =
+            isParty && !review.textHidden && hasText && !myConsent;
+          const waitingOther =
+            isParty && !review.textHidden && hasText && myConsent;
 
           return (
             <View key={review.id} style={styles.card}>
@@ -147,17 +155,34 @@ export function ReviewsScreen() {
                 </View>
               ) : null}
 
-              {canHide ? (
+              {canRequestHide ? (
                 <Pressable
                   onPress={() => {
                     Alert.alert(
                       'Masquer le texte',
-                      'Démo : un seul bouton simule l’accord des deux parties. La note et le compteur restent.',
+                      'Les deux personnes doivent accepter. Seul le texte disparaît — la note et le nombre de sorties restent.',
                       [
                         { text: 'Annuler', style: 'cancel' },
                         {
-                          text: 'Masquer le texte (accord)',
-                          onPress: () => hideReviewText(review.id),
+                          text: 'Donner mon accord',
+                          onPress: () => {
+                            const result = requestHideReviewText(review.id);
+                            if (!result.ok) {
+                              Alert.alert('Impossible', result.reason);
+                              return;
+                            }
+                            if (result.hidden) {
+                              Alert.alert(
+                                'Texte masqué',
+                                'Accord mutuel — la note est conservée.',
+                              );
+                            } else {
+                              Alert.alert(
+                                'En attente',
+                                'Ton accord est enregistré. L’autre personne doit aussi accepter.',
+                              );
+                            }
+                          },
                         },
                       ],
                     );
@@ -165,9 +190,38 @@ export function ReviewsScreen() {
                   style={styles.hideBtn}
                 >
                   <Text style={styles.hideText}>
-                    Masquer le texte (accord)
+                    Demander à masquer le texte
                   </Text>
                 </Pressable>
+              ) : null}
+
+              {waitingOther ? (
+                <View style={styles.waitingBox}>
+                  <Text style={styles.waitingHide}>
+                    En attente de l’accord de l’autre personne. La note et le
+                    compteur de sorties restent.
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      const result = simulateOtherHideConsent(review.id);
+                      if (!result.ok) {
+                        Alert.alert('Impossible', result.reason);
+                        return;
+                      }
+                      Alert.alert(
+                        result.hidden ? 'Texte masqué' : 'En attente',
+                        result.hidden
+                          ? 'Accord mutuel simulé — texte masqué, note conservée.'
+                          : 'Accord de l’autre enregistré.',
+                      );
+                    }}
+                    style={styles.hideBtn}
+                  >
+                    <Text style={styles.hideText}>
+                      Démo · simuler accord de l’autre
+                    </Text>
+                  </Pressable>
+                </View>
               ) : null}
             </View>
           );
@@ -258,5 +312,10 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primary,
     fontFamily: fonts.semiBold,
+  },
+  waitingBox: { marginTop: spacing.sm },
+  waitingHide: {
+    ...typography.caption,
+    color: colors.warning,
   },
 });
