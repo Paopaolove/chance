@@ -349,12 +349,18 @@ export type AppAction =
       };
     };
 
+/** Motif obligatoire si note personne 1 ou 2 (respect / rencontre). */
+export type LowStarReasonKind =
+  | 'comportement_genant'
+  | 'absent_retard'
+  | 'autre';
+
 export interface Review {
   id: string;
   outingId: string;
   fromUserId: string;
   toUserId: string;
-  /** 1–5 stars; not editable after post. */
+  /** 1–5 stars (respect / rencontre); visible; not editable after post. */
   rating: 1 | 2 | 3 | 4 | 5;
   /** Optional; not editable after post. */
   comment?: string;
@@ -365,6 +371,19 @@ export interface Review {
   hideTextConsentUserIds?: string[];
   /** Text (comment + reply) hidden by mutual agreement; note + count remain. */
   textHidden?: boolean;
+  /**
+   * Private: envie de revoir. Never shown on profile, cards, or ReviewsScreen.
+   */
+  wantToSeeAgain?: boolean;
+  /**
+   * Private: required when rating is 1 or 2. Never shown publicly.
+   * No « pas de feeling » motive — use 3–4 + wantToSeeAgain:false instead.
+   */
+  lowStarReason?: {
+    kind: LowStarReasonKind;
+    /** 1 line free text when kind === 'autre'. */
+    detail?: string;
+  };
 }
 
 export type UserRatingStats = {

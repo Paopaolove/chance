@@ -87,7 +87,7 @@ export function RootNavigator() {
             <Stack.Screen
               name="LeaveReview"
               component={LeaveReviewScreen}
-              options={{ title: 'Noter la sortie' }}
+              options={{ title: 'Comment c’était ?' }}
             />
           </>
         )}

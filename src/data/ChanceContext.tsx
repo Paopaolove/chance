@@ -896,6 +896,8 @@ interface ChanceContextValue {
     toUserId: string;
     rating: 1 | 2 | 3 | 4 | 5;
     comment?: string;
+    wantToSeeAgain?: boolean;
+    lowStarReason?: Review['lowStarReason'];
   }) => { ok: true; reviewId: string } | { ok: false; reason: string };
   replyToReview: (
     reviewId: string,
@@ -1710,6 +1712,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       toUserId: string;
       rating: 1 | 2 | 3 | 4 | 5;
       comment?: string;
+      wantToSeeAgain?: boolean;
+      lowStarReason?: Review['lowStarReason'];
     }): { ok: true; reviewId: string } | { ok: false; reason: string } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
@@ -1724,6 +1728,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           r.toUserId === input.toUserId,
       );
       if (dup) return { ok: false, reason: 'already_reviewed' };
+      if (
+        (input.rating === 1 || input.rating === 2) &&
+        !input.lowStarReason
+      ) {
+        return { ok: false, reason: 'low_star_reason_required' };
+      }
       const comment = input.comment?.trim();
       const review: Review = {
         id: uid('rev'),
@@ -1732,6 +1742,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         toUserId: input.toUserId,
         rating: input.rating,
         ...(comment ? { comment } : {}),
+        ...(input.wantToSeeAgain !== undefined
+          ? { wantToSeeAgain: input.wantToSeeAgain }
+          : {}),
+        ...(input.lowStarReason ? { lowStarReason: input.lowStarReason } : {}),
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'ADD_REVIEW', payload: review });

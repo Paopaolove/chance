@@ -186,6 +186,9 @@ export function ProfileScreen() {
               })
             }
           />
+          <Text style={styles.ratingRespectNote}>
+            Les notes parlent du respect en sortie, pas d’un crush.
+          </Text>
           <Text style={styles.sub}>
             {user.age} ans · {user.gender} · {user.neighborhood}
           </Text>
@@ -824,6 +827,14 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   title: { ...typography.title, color: colors.text, marginTop: spacing.sm },
+  ratingRespectNote: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 4,
+    marginHorizontal: spacing.lg,
+  },
   sub: {
     ...typography.caption,
     color: colors.textSecondary,
