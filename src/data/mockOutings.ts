@@ -507,7 +507,7 @@ export const BUDGET_MIN_EUROS = 5;
 export const BUDGET_MAX_EUROS = 50;
 
 export const budgetChipLabel = (euros: number): string =>
-  `Budget max · ${euros} €`;
+  euros <= 0 ? 'Gratuit' : `Budget max · ${euros} €`;
 
 /** @deprecated Import from `./pricing` — re-exported for compatibility. */
 export { pricing, DEPOSIT_EUROS, PRICING } from './pricing';

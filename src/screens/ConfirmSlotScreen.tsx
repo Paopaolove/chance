@@ -68,7 +68,7 @@ export function ConfirmSlotScreen() {
             Caution
           </Text>
           <Text style={styles.boxValue}>
-            {DEPOSIT_EUROS} € bloquée (simulation Stripe — pas de vrai paiement)
+            {DEPOSIT_EUROS} € bloqués pour garantir ta venue, rendus si tu es là.
           </Text>
         </View>
         <Button
@@ -207,9 +207,8 @@ export function ConfirmSlotScreen() {
           <View style={styles.depositBox}>
             <Text style={styles.depositTitle}>Caution bloquée</Text>
             <Text style={styles.depositBody}>
-              {DEPOSIT_EUROS} € seront pré-autorisés sur ta carte (Stripe mock —
-              aucun débit réel). Rendue si tu viens, ou si tu annules au moins
-              3 h avant. Perdue si annulation trop tard ou absence.
+              {DEPOSIT_EUROS} € bloqués pour garantir ta venue, rendus si tu es
+              là.
             </Text>
             <Button title="Confirmer ma place" onPress={onConfirm} />
           </View>

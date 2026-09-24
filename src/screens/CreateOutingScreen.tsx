@@ -18,6 +18,7 @@ import { useChance } from '../data/ChanceContext';
 import {
   BUDGET_MAX_EUROS,
   BUDGET_MIN_EUROS,
+  budgetChipLabel,
 } from '../data/mockOutings';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { OutingCategory } from '../data/types';
@@ -35,12 +36,17 @@ const categories: { id: OutingCategory; label: string }[] = [
 ];
 
 const BUDGET_PRESETS = [15, 25, 40] as const;
-
 function clampCreateBudget(n: number): number {
   return Math.min(
     BUDGET_MAX_EUROS,
     Math.max(BUDGET_MIN_EUROS, Math.round(n)),
   );
+}
+
+/** Preset chips / initial default — OK to auto-switch to Gratuit on Autre. */
+function isPresetDefaultBudget(euros: number): boolean {
+  const n = Math.round(euros);
+  return (BUDGET_PRESETS as readonly number[]).includes(n);
 }
 
 /** Core seats 1–3 (brief). */
@@ -324,7 +330,7 @@ export function CreateOutingScreen() {
           <View style={styles.activeCard}>
             <Text style={styles.activeName}>{active.title}</Text>
             <Text style={styles.activeMeta}>
-              {active.neighborhood} · Budget max · {active.budgetMaxEuros} €
+              {active.neighborhood} · {budgetChipLabel(active.budgetMaxEuros)}
             </Text>
           </View>
           <Button
@@ -376,7 +382,12 @@ export function CreateOutingScreen() {
               key={c.id}
               title={c.label}
               variant={category === c.id ? 'primary' : 'ghost'}
-              onPress={() => setCategory(c.id)}
+              onPress={() => {
+                setCategory(c.id);
+                if (c.id === 'autre' && isPresetDefaultBudget(budgetMaxEuros)) {
+                  setBudgetMaxEuros(0);
+                }
+              }}
               style={styles.chip}
             />
           ))}
@@ -536,6 +547,14 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Budget approx. *</Text>
         <View style={styles.row}>
+          {category === 'autre' ? (
+            <Button
+              title="Gratuit"
+              variant={budgetMaxEuros === 0 ? 'primary' : 'ghost'}
+              onPress={() => setBudgetMaxEuros(0)}
+              style={styles.chip}
+            />
+          ) : null}
           {BUDGET_PRESETS.map((b) => (
             <Button
               key={b}
@@ -545,43 +564,65 @@ export function CreateOutingScreen() {
               style={styles.chip}
             />
           ))}
-        </View>
-        <View style={styles.budgetCard}>
-          <View style={styles.budgetMontantRow}>
-            <Text style={styles.budgetMontantLabel}>Montant</Text>
-            <TextInput
-              style={styles.budgetMontantInput}
-              value={String(Math.round(budgetMaxEuros))}
-              onChangeText={(t) => {
-                const digits = t.replace(/\D/g, '');
-                if (digits === '') return;
-                const n = parseInt(digits, 10);
-                if (!Number.isNaN(n)) {
-                  setBudgetMaxEuros(clampCreateBudget(n));
-                }
-              }}
-              keyboardType="number-pad"
-              maxLength={2}
-              selectTextOnFocus
-              accessibilityLabel="Montant budget en euros"
+          {category !== 'autre' ? (
+            <Button
+              title="Gratuit"
+              variant={budgetMaxEuros === 0 ? 'primary' : 'ghost'}
+              onPress={() => setBudgetMaxEuros(0)}
+              style={styles.chip}
             />
-            <Text style={styles.budgetMontantSuffix}>€</Text>
-          </View>
-          <Slider
-            style={styles.slider}
-            minimumValue={BUDGET_MIN_EUROS}
-            maximumValue={BUDGET_MAX_EUROS}
-            step={1}
-            value={budgetMaxEuros}
-            onValueChange={(v) => setBudgetMaxEuros(clampCreateBudget(v))}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.border}
-            thumbTintColor={colors.primary}
-          />
-          <View style={styles.budgetEnds}>
-            <Text style={styles.budgetHintEnd}>5 € · verre</Text>
-            <Text style={styles.budgetHintEnd}>50 € · repas</Text>
-          </View>
+          ) : null}
+        </View>
+        <View
+          style={[
+            styles.budgetCard,
+            budgetMaxEuros === 0 && styles.budgetCardDisabled,
+          ]}
+          pointerEvents={budgetMaxEuros === 0 ? 'none' : 'auto'}
+        >
+          {budgetMaxEuros === 0 ? (
+            <Text style={styles.budgetFreeHint}>
+              Sortie gratuite — pas de montant à indiquer
+            </Text>
+          ) : (
+            <>
+              <View style={styles.budgetMontantRow}>
+                <Text style={styles.budgetMontantLabel}>Montant libre</Text>
+                <TextInput
+                  style={styles.budgetMontantInput}
+                  value={String(Math.round(budgetMaxEuros))}
+                  onChangeText={(t) => {
+                    const digits = t.replace(/\D/g, '');
+                    if (digits === '') return;
+                    const n = parseInt(digits, 10);
+                    if (!Number.isNaN(n)) {
+                      setBudgetMaxEuros(clampCreateBudget(n));
+                    }
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  selectTextOnFocus
+                  accessibilityLabel="Montant budget en euros"
+                />
+                <Text style={styles.budgetMontantSuffix}>€</Text>
+              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={BUDGET_MIN_EUROS}
+                maximumValue={BUDGET_MAX_EUROS}
+                step={1}
+                value={Math.max(BUDGET_MIN_EUROS, budgetMaxEuros)}
+                onValueChange={(v) => setBudgetMaxEuros(clampCreateBudget(v))}
+                minimumTrackTintColor={colors.primary}
+                maximumTrackTintColor={colors.border}
+                thumbTintColor={colors.primary}
+              />
+              <View style={styles.budgetEnds}>
+                <Text style={styles.budgetHintEnd}>5 € · verre</Text>
+                <Text style={styles.budgetHintEnd}>50 € · repas</Text>
+              </View>
+            </>
+          )}
         </View>
 
         <Text style={styles.label}>Message *</Text>
@@ -703,6 +744,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
+  },
+  budgetCardDisabled: {
+    opacity: 0.55,
+    backgroundColor: colors.surfaceMuted,
+  },
+  budgetFreeHint: {
+    ...typography.bodyStrong,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   budgetValue: {
     fontFamily: fonts.bold,

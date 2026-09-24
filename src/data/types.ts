@@ -126,6 +126,7 @@ export interface Outing {
   capacity: 1 | 2 | 3 | 4;
   spotsLeft: number;
   womenOnly: boolean;
+  /** Max spend in €; 0 = Gratuit. */
   budgetMaxEuros: number;
   status: OutingStatus;
   createdAt: string;
