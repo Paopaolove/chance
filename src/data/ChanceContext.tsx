@@ -19,7 +19,6 @@ import {
   AppToast,
   ChatMessage,
   DispoProfileUpdate,
-  LatePresetMinutes,
   LateReport,
   OnboardingInput,
   VenueAlternate,
@@ -769,7 +768,7 @@ interface ChanceContextValue {
   ) => void;
   reportLate: (
     outingId: string,
-    minutes: LatePresetMinutes,
+    minutes: number,
     requestId?: string,
   ) => void;
   /** Late reports from someone other than the current user (for bandeau). */
@@ -780,7 +779,7 @@ interface ChanceContextValue {
   /** Demo QA: pretend the other party reported late so bandeau is visible. */
   simulateOtherLate: (
     outingId: string,
-    minutes?: LatePresetMinutes,
+    minutes?: number,
     requestId?: string,
   ) => void;
   clearToast: () => void;
@@ -1392,7 +1391,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   const reportLate = useCallback(
     (
       outingId: string,
-      minutes: LatePresetMinutes,
+      minutes: number,
       requestId?: string,
     ) => {
       const user = state.currentUser;
@@ -1440,7 +1439,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   const simulateOtherLate = useCallback(
     (
       outingId: string,
-      minutes: LatePresetMinutes = 10,
+      minutes: number = 10,
       requestId?: string,
     ) => {
       const outing = state.outings.find((o) => o.id === outingId);

@@ -16,12 +16,14 @@ import { useChance } from '../data/ChanceContext';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import {
+  clampLateMinutes,
   formatUntilChatOpens,
   getChatOpensAt,
   isChatUnlocked,
+  LATE_MAX_MINUTES,
+  LATE_MIN_MINUTES,
   LATE_PRESETS,
   lateLabel,
-  type LatePresetMinutes,
 } from '../utils/chat';
 import { formatOutingWhen } from '../utils/format';
 
@@ -53,6 +55,7 @@ export function ChatPlaceholderScreen() {
   const [now, setNow] = useState(Date.now());
   const [draft, setDraft] = useState('');
   const [lateOpen, setLateOpen] = useState(false);
+  const [lateCustom, setLateCustom] = useState('');
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -165,13 +168,27 @@ export function ChatPlaceholderScreen() {
     setDraft('');
   };
 
-  const onLate = (minutes: LatePresetMinutes) => {
-    reportLate(outing.id, minutes, request?.id);
+  const onLate = (minutes: number) => {
+    const n = clampLateMinutes(minutes);
+    if (n == null) {
+      Alert.alert(
+        'Minutes invalides',
+        `Indique un nombre entre ${LATE_MIN_MINUTES} et ${LATE_MAX_MINUTES}.`,
+      );
+      return;
+    }
+    reportLate(outing.id, n, request?.id);
     setLateOpen(false);
+    setLateCustom('');
     Alert.alert(
       'Retard signalé',
-      `L’autre personne verra un bandeau « ${lateLabel(minutes)} ».`,
+      `L’autre personne verra un bandeau « ${lateLabel(n)} ».`,
     );
+  };
+
+  const onLateCustom = () => {
+    const parsed = Number.parseInt(lateCustom.trim(), 10);
+    onLate(parsed);
   };
 
   return (
@@ -236,8 +253,8 @@ export function ChatPlaceholderScreen() {
           <View style={styles.latePanel}>
             <Text style={styles.lateTitle}>J’ai un retard</Text>
             <Text style={styles.lateHint}>
-              Choisis une durée — un message système est envoyé à l’autre
-              personne.
+              Choisis une durée ou écris le nombre exact de minutes — un
+              message système est envoyé à l’autre personne.
             </Text>
             <View style={styles.lateRow}>
               {LATE_PRESETS.map((m) => (
@@ -250,7 +267,35 @@ export function ChatPlaceholderScreen() {
                 </Pressable>
               ))}
             </View>
-            <Pressable onPress={() => setLateOpen(false)}>
+            <View style={styles.lateCustomRow}>
+              <TextInput
+                style={styles.lateCustomInput}
+                value={lateCustom}
+                onChangeText={setLateCustom}
+                placeholder="Minutes exactes"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                returnKeyType="done"
+                onSubmitEditing={onLateCustom}
+                maxLength={3}
+              />
+              <Pressable
+                style={[
+                  styles.lateCustomBtn,
+                  !lateCustom.trim() && styles.sendDisabled,
+                ]}
+                disabled={!lateCustom.trim()}
+                onPress={onLateCustom}
+              >
+                <Text style={styles.lateCustomBtnText}>Envoyer</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={() => {
+                setLateOpen(false);
+                setLateCustom('');
+              }}
+            >
               <Text style={styles.lateCancel}>Annuler</Text>
             </Pressable>
           </View>
@@ -491,6 +536,34 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   lateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  lateCustomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  lateCustomInput: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    ...typography.body,
+    color: colors.text,
+  },
+  lateCustomBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  lateCustomBtnText: {
+    ...typography.bodyStrong,
+    color: colors.white,
+    fontFamily: fonts.semiBold,
+  },
   lateChip: {
     backgroundColor: colors.surface,
     borderRadius: radius.full,

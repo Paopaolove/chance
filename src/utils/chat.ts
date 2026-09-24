@@ -1,9 +1,21 @@
 /** Chat unlocks 1 hour before outing start. */
 export const CHAT_UNLOCK_BEFORE_MS = 60 * 60 * 1000;
 
+/** Quick-pick chips; any positive integer is also allowed via custom input. */
 export type LatePresetMinutes = 5 | 10 | 15 | 20;
 
 export const LATE_PRESETS: LatePresetMinutes[] = [5, 10, 15, 20];
+
+/** Reasonable bounds for a late signal (minutes). */
+export const LATE_MIN_MINUTES = 1;
+export const LATE_MAX_MINUTES = 180;
+
+export function clampLateMinutes(raw: number): number | null {
+  if (!Number.isFinite(raw)) return null;
+  const n = Math.round(raw);
+  if (n < LATE_MIN_MINUTES || n > LATE_MAX_MINUTES) return null;
+  return n;
+}
 
 export function getChatOpensAt(startsAt: string): Date {
   return new Date(new Date(startsAt).getTime() - CHAT_UNLOCK_BEFORE_MS);
@@ -30,18 +42,13 @@ export function formatUntilChatOpens(
   return `${h} h ${m} min`;
 }
 
-export function lateLabel(minutes: LatePresetMinutes): string {
-  return minutes >= 20 ? '20+ min' : `${minutes} min`;
+export function lateLabel(minutes: number): string {
+  return `${minutes} min`;
 }
 
-export function lateSystemText(
-  who: string,
-  minutes: LatePresetMinutes,
-): string {
-  if (minutes >= 20) {
-    return `${who} signale un retard de 20 minutes ou plus.`;
-  }
-  return `${who} signale un retard de ${minutes} minutes.`;
+export function lateSystemText(who: string, minutes: number): string {
+  const unit = minutes === 1 ? 'minute' : 'minutes';
+  return `${who} signale un retard de ${minutes} ${unit}.`;
 }
 
 export function chatThreadKey(outingId: string, requestId?: string): string {

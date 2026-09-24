@@ -169,7 +169,8 @@ export interface LateReport {
   requestId?: string;
   reporterId: string;
   reporterName: string;
-  minutes: LatePresetMinutes;
+  /** Exact delay in minutes (preset chip or custom input). */
+  minutes: number;
   createdAt: string;
 }
 
