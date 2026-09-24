@@ -13,6 +13,9 @@ export type CreateOutingParams = {
   /** Heure libre préremplie (ex. « 19:30 » ou « 20h »). */
   timeLabel?: string;
   flexibleSlot?: boolean;
+  /** When proposing from a profile / Dispo card — keep THAT recipient. */
+  inviteeUserId?: string;
+  inviteeName?: string;
 };
 
 export type MainTabParamList = {

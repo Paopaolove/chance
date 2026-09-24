@@ -174,6 +174,34 @@ export function ChatPlaceholderScreen() {
     );
   }
 
+  if (!confirmed) {
+    return (
+      <View style={styles.wrap}>
+        <Text style={styles.title}>Chat indisponible</Text>
+        <Text style={styles.sub}>
+          avec {otherName} · {outing.title}
+        </Text>
+        <View style={styles.lockCard}>
+          <Text style={styles.lockEmoji}>🔒</Text>
+          <Text style={styles.lockTitle}>Confirmation requise</Text>
+          <Text style={styles.lockBody}>
+            Le chat et l’adresse exacte n’apparaissent qu’après confirmation de
+            place (et le chat s’ouvre à H−1).
+          </Text>
+        </View>
+        <View style={styles.info}>
+          <Text style={styles.infoLabel}>Lieu</Text>
+          <Text style={styles.infoValue}>
+            {outing.venueName} · {outing.approxArea}
+          </Text>
+          <Text style={styles.lockHint}>
+            L’adresse exacte reste masquée jusqu’à confirmation.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   const onSend = () => {
     sendChatMessage(outing.id, draft, request?.id);
     setDraft('');

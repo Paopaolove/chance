@@ -44,7 +44,7 @@ export type EntryIntent = 'feed' | 'dispo';
 export interface User {
   id: string;
   firstName: string;
-  /** Demo default when not collected in onboarding. */
+  /** Real age collected at onboarding / edit (18+). Never silently defaulted. */
   age: number;
   gender: Gender;
   bio: string;
@@ -178,6 +178,8 @@ export interface Request {
   userAge: number;
   userGender: Gender;
   message: string;
+  /** Optional alternate date/slot suggested by the guest (kept for the host). */
+  suggestedDate?: string;
   status: RequestStatus;
   /** ISO UTC. */
   createdAt: string;
@@ -287,6 +289,16 @@ export interface AppToast {
   createdAt: string;
 }
 
+/** Moderation report — private, ≠ public rating / stars. */
+export type UserModerationReport = {
+  id: string;
+  reporterId: string;
+  targetUserId: string;
+  /** Free-text reason (demo). */
+  reason: string;
+  createdAt: string;
+};
+
 export interface AppState {
   onboardingDone: boolean;
   currentUser: User | null;
@@ -308,6 +320,10 @@ export interface AppState {
   hostPublishStrikes: Record<string, number>;
   /** In-app mock notification banner (e.g. late alert). */
   toast: AppToast | null;
+  /** Users blocked by the current user (demo, local). ≠ rating. */
+  blockedUserIds: string[];
+  /** Private moderation reports (demo). One report = one record, no multi-sanctions. */
+  userReports: UserModerationReport[];
 }
 
 export type DispoProfileUpdate = {
@@ -325,12 +341,15 @@ export type DispoProfileUpdate = {
   bio?: string;
   neighborhood?: string;
   firstName?: string;
+  age?: number;
   photoUri?: string | null;
   womenOnlyPreference?: boolean;
 };
 
 export type OnboardingInput = {
   firstName: string;
+  /** Required, 18–99 — no silent default. */
+  age: number;
   gender: Gender;
   neighborhood: string;
   bio: string;
@@ -485,7 +504,11 @@ export type AppAction =
         loser: Request;
         winnerConfirmedAt: string;
       };
-    };
+    }
+  /** Private moderation — ≠ public rating. One report = one record. */
+  | { type: 'REPORT_USER'; payload: UserModerationReport }
+  | { type: 'BLOCK_USER'; payload: { userId: string } }
+  | { type: 'UNBLOCK_USER'; payload: { userId: string } };
 
 /** Motif obligatoire si note personne 1 ou 2 (respect / rencontre). */
 export type LowStarReasonKind =
@@ -535,7 +558,10 @@ export interface Review {
 export type UserRatingStats = {
   /** Average of received person ratings, or null if none. */
   average: number | null;
-  /** Number of reviews received (= sorties notées). */
+  /**
+   * Honored (completed / attended) outings — NOT the number of reviews.
+   * Shown as « X sorties » on trust stats.
+   */
   outingCount: number;
 };
 

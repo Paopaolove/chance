@@ -28,8 +28,9 @@ const LOW_STAR_MOTIVES: { kind: LowStarReasonKind; label: string }[] = [
 export function LeaveReviewScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
-  const { addReview } = useChance();
+  const { addReview, canLeaveReview } = useChance();
   const { outingId, toUserId, toUserName } = route.params;
+  const eligibility = canLeaveReview(outingId, toUserId);
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [wantToSeeAgain, setWantToSeeAgain] = useState<boolean | null>(null);
   const [lowStarKind, setLowStarKind] = useState<LowStarReasonKind | null>(
@@ -107,6 +108,12 @@ export function LeaveReviewScreen() {
         invalid_rating: 'Note invalide.',
         invalid_venue_rating: 'Note du lieu invalide.',
         outing_not_found: 'Sortie introuvable.',
+        not_completed:
+          'Tu ne peux noter qu’après une sortie terminée (honorée).',
+        not_participant:
+          'Avis réservé aux participants d’une sortie terminée.',
+        target_not_participant:
+          'Tu ne peux noter que quelqu’un qui a participé à cette sortie.',
         low_star_reason_required: 'Motif requis pour une note basse.',
       };
       Alert.alert('Impossible', messages[result.reason] ?? result.reason);
@@ -118,6 +125,34 @@ export function LeaveReviewScreen() {
     );
     navigation.goBack();
   };
+
+  if (!eligibility.ok) {
+    const copy: Record<string, string> = {
+      not_completed:
+        'Tu ne peux noter qu’après une sortie terminée (honorée).',
+      not_participant:
+        'Avis réservé aux participants d’une sortie terminée.',
+      target_not_participant:
+        'Tu ne peux noter que quelqu’un qui a participé à cette sortie.',
+      already_reviewed: 'Tu as déjà noté cette personne pour cette sortie.',
+      self: 'Tu ne peux pas te noter toi-même.',
+      no_user: 'Profil manquant.',
+      outing_not_found: 'Sortie introuvable.',
+    };
+    return (
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+      >
+        <Text style={styles.hero}>Avis indisponible</Text>
+        <Text style={styles.intro}>
+          {copy[eligibility.reason] ??
+            'Tu ne peux pas laisser d’avis pour cette sortie.'}
+        </Text>
+        <Button title="Retour" onPress={() => navigation.goBack()} />
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView

@@ -96,6 +96,8 @@ const initialState: AppState = {
   guestNoShowStrikes: {},
   hostPublishStrikes: {},
   toast: null,
+  blockedUserIds: [],
+  userReports: [],
 };
 
 function reducer(state: AppState, action: AppAction): AppState {
@@ -436,6 +438,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           ? { neighborhood: p.neighborhood }
           : {}),
         ...(p.firstName !== undefined ? { firstName: p.firstName } : {}),
+        ...(p.age !== undefined ? { age: p.age } : {}),
         ...(p.customFilters !== undefined
           ? { customFilters: p.customFilters }
           : {}),
@@ -515,6 +518,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         guestNoShowStrikes: {},
         hostPublishStrikes: {},
         toast: null,
+        blockedUserIds: [],
+        userReports: [],
       };
 
     case 'ADD_CHAT_MESSAGE':
@@ -989,6 +994,40 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'REPORT_USER': {
+      const report = action.payload;
+      // One reporter→target pair: replace prior report, no multi-sanctions.
+      const filtered = state.userReports.filter(
+        (r) =>
+          !(
+            r.reporterId === report.reporterId &&
+            r.targetUserId === report.targetUserId
+          ),
+      );
+      return {
+        ...state,
+        userReports: [report, ...filtered],
+      };
+    }
+
+    case 'BLOCK_USER': {
+      const id = action.payload.userId;
+      if (state.blockedUserIds.includes(id)) return state;
+      return {
+        ...state,
+        blockedUserIds: [...state.blockedUserIds, id],
+      };
+    }
+
+    case 'UNBLOCK_USER': {
+      return {
+        ...state,
+        blockedUserIds: state.blockedUserIds.filter(
+          (id) => id !== action.payload.userId,
+        ),
+      };
+    }
+
     default:
       return state;
   }
@@ -1082,6 +1121,7 @@ interface ChanceContextValue {
   joinOuting: (
     outingId: string,
     message?: string,
+    suggestedDate?: string,
   ) => { ok: true; requestId: string } | { ok: false; reason: string };
   acceptRequest: (requestId: string) => void;
   /** Host declines a pending request (no seat was reserved). */
@@ -1104,6 +1144,7 @@ interface ChanceContextValue {
     customFilters?: string[];
     neighborhood?: string;
     firstName?: string;
+    age?: number;
     photoUri?: string | null;
   }) => void;
   setPlan: (
@@ -1226,6 +1267,25 @@ interface ChanceContextValue {
   ) => { ok: true; hidden: boolean } | { ok: false; reason: string };
   getReviewsForUser: (userId: string) => Review[];
   getRatingStats: (userId: string) => UserRatingStats;
+  /** Whether current user may leave a review for toUserId on outingId. */
+  canLeaveReview: (
+    outingId: string,
+    toUserId: string,
+  ) => { ok: true } | { ok: false; reason: string };
+  /**
+   * Private signalement — ≠ public rating. One report = one record
+   * (no invented multi-sanctions).
+   */
+  reportUser: (
+    targetUserId: string,
+    reason: string,
+  ) => { ok: true } | { ok: false; reason: string };
+  /** Block a user locally (demo). Does not change ratings. */
+  blockUser: (
+    targetUserId: string,
+  ) => { ok: true } | { ok: false; reason: string };
+  unblockUser: (targetUserId: string) => void;
+  isBlocked: (userId: string) => boolean;
   /** Venue-only reviews for fiche lieu (never person rating/comment). */
   getVenueReviews: (venueKey: string) => Review[];
   getVenueRatingStats: (venueKey: string) => VenueRatingStats;
@@ -1309,7 +1369,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const user: User = {
         id: uid('user'),
         firstName: input.firstName.trim() || 'Toi',
-        age: 28,
+        age: input.age,
         gender: input.gender,
         bio: input.bio.trim(),
         neighborhood: input.neighborhood.trim(),
@@ -1518,6 +1578,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       outingId: string,
       message = '',
+      suggestedDate?: string,
     ): { ok: true; requestId: string } | { ok: false; reason: string } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
@@ -1549,6 +1610,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         userAge: user.age,
         userGender: user.gender,
         message: message.trim(),
+        ...(suggestedDate?.trim()
+          ? { suggestedDate: suggestedDate.trim() }
+          : {}),
         status: 'pending',
         createdAt: new Date().toISOString(),
       };
@@ -1802,6 +1866,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       customFilters?: string[];
       neighborhood?: string;
       firstName?: string;
+      age?: number;
       photoUri?: string | null;
     }) => {
       dispatch({ type: 'SET_DISPO_PROFILE', payload: update });
@@ -1811,17 +1876,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const peopleDispo = useMemo(() => {
     const byId = new Map<string, User>();
+    const me = state.currentUser;
+    const blocked = new Set(state.blockedUserIds);
     for (const host of mockHosts) {
       if (!host.dispoSoir) continue;
       if (isPastLocalMidnight(host.dispoExpiresAt)) continue;
+      if (me && host.id === me.id) continue; // no propose-to-self
+      if (blocked.has(host.id)) continue;
       byId.set(host.id, host);
     }
-    const me = state.currentUser;
-    if (me?.dispoSoir && !isPastLocalMidnight(me.dispoExpiresAt)) {
-      byId.set(me.id, me);
-    }
+    // Never list self in Dispo feed (no propose-to-self).
     return Array.from(byId.values());
-  }, [state.currentUser]);
+  }, [state.currentUser, state.blockedUserIds]);
 
   const setPlan = useCallback(
     (
@@ -2486,17 +2552,137 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.reviews],
   );
 
+  const countHonoredOutings = useCallback(
+    (userId: string): number => {
+      const ids = new Set<string>();
+      for (const o of state.outings) {
+        if (o.status !== 'completed') continue;
+        if (o.hostId === userId) {
+          ids.add(o.id);
+          continue;
+        }
+        const attended = state.requests.some(
+          (r) =>
+            r.outingId === o.id &&
+            r.userId === userId &&
+            r.status === 'confirmed',
+        );
+        if (attended) ids.add(o.id);
+      }
+      // Historical mock reviews imply past honored outings not in live state.
+      for (const rev of state.reviews) {
+        if (rev.toUserId === userId || rev.fromUserId === userId) {
+          ids.add(rev.outingId);
+        }
+      }
+      return ids.size;
+    },
+    [state.outings, state.requests, state.reviews],
+  );
+
   const getRatingStats = useCallback(
     (userId: string): UserRatingStats => {
       const received = state.reviews.filter((r) => r.toUserId === userId);
-      if (!received.length) return { average: null, outingCount: 0 };
+      const outingCount = countHonoredOutings(userId);
+      if (!received.length) return { average: null, outingCount };
       const sum = received.reduce((acc, r) => acc + r.rating, 0);
       return {
         average: sum / received.length,
-        outingCount: received.length,
+        outingCount,
       };
     },
-    [state.reviews],
+    [state.reviews, countHonoredOutings],
+  );
+
+
+  const canLeaveReview = useCallback(
+    (
+      outingId: string,
+      toUserId: string,
+    ): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      if (toUserId === user.id) return { ok: false, reason: 'self' };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'outing_not_found' };
+      if (outing.status !== 'completed') {
+        return { ok: false, reason: 'not_completed' };
+      }
+      const isHost = outing.hostId === user.id;
+      const myConfirmed = state.requests.some(
+        (r) =>
+          r.outingId === outing.id &&
+          r.userId === user.id &&
+          r.status === 'confirmed',
+      );
+      if (!isHost && !myConfirmed) {
+        return { ok: false, reason: 'not_participant' };
+      }
+      const targetIsHost = outing.hostId === toUserId;
+      const targetConfirmed = state.requests.some(
+        (r) =>
+          r.outingId === outing.id &&
+          r.userId === toUserId &&
+          r.status === 'confirmed',
+      );
+      if (!targetIsHost && !targetConfirmed) {
+        return { ok: false, reason: 'target_not_participant' };
+      }
+      const dup = state.reviews.some(
+        (r) =>
+          r.outingId === outingId &&
+          r.fromUserId === user.id &&
+          r.toUserId === toUserId,
+      );
+      if (dup) return { ok: false, reason: 'already_reviewed' };
+      return { ok: true };
+    },
+    [state.currentUser, state.outings, state.requests, state.reviews],
+  );
+
+  const reportUser = useCallback(
+    (
+      targetUserId: string,
+      reason: string,
+    ): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      if (targetUserId === user.id) return { ok: false, reason: 'self' };
+      const trimmed = reason.trim();
+      if (!trimmed) return { ok: false, reason: 'empty_reason' };
+      const report = {
+        id: uid('urep'),
+        reporterId: user.id,
+        targetUserId,
+        reason: trimmed,
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'REPORT_USER', payload: report });
+      return { ok: true };
+    },
+    [state.currentUser],
+  );
+
+  const blockUser = useCallback(
+    (
+      targetUserId: string,
+    ): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      if (targetUserId === user.id) return { ok: false, reason: 'self' };
+      dispatch({ type: 'BLOCK_USER', payload: { userId: targetUserId } });
+      return { ok: true };
+    },
+    [state.currentUser],
+  );
+
+  const unblockUser = useCallback((targetUserId: string) => {
+    dispatch({ type: 'UNBLOCK_USER', payload: { userId: targetUserId } });
+  }, []);
+
+  const isBlocked = useCallback(
+    (userId: string) => state.blockedUserIds.includes(userId),
+    [state.blockedUserIds],
   );
 
   const getVenueReviews = useCallback(
@@ -2548,6 +2734,29 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (input.toUserId === user.id) return { ok: false, reason: 'self' };
       const outing = state.outings.find((o) => o.id === input.outingId);
       if (!outing) return { ok: false, reason: 'outing_not_found' };
+      if (outing.status !== 'completed') {
+        return { ok: false, reason: 'not_completed' };
+      }
+      const isHost = outing.hostId === user.id;
+      const myConfirmed = state.requests.some(
+        (r) =>
+          r.outingId === outing.id &&
+          r.userId === user.id &&
+          r.status === 'confirmed',
+      );
+      if (!isHost && !myConfirmed) {
+        return { ok: false, reason: 'not_participant' };
+      }
+      const targetIsHost = outing.hostId === input.toUserId;
+      const targetConfirmed = state.requests.some(
+        (r) =>
+          r.outingId === outing.id &&
+          r.userId === input.toUserId &&
+          r.status === 'confirmed',
+      );
+      if (!targetIsHost && !targetConfirmed) {
+        return { ok: false, reason: 'target_not_participant' };
+      }
       const dup = state.reviews.some(
         (r) =>
           r.outingId === input.outingId &&
@@ -2584,7 +2793,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'ADD_REVIEW', payload: review });
       return { ok: true, reviewId: review.id };
     },
-    [state.currentUser, state.reviews, state.outings],
+    [state.currentUser, state.reviews, state.outings, state.requests],
   );
 
   const replyToReview = useCallback(
@@ -3222,6 +3431,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOtherHideConsent,
       getReviewsForUser,
       getRatingStats,
+      canLeaveReview,
+      reportUser,
+      blockUser,
+      unblockUser,
+      isBlocked,
       getVenueReviews,
       getVenueRatingStats,
       getOutingsToRate,
@@ -3290,6 +3504,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOtherHideConsent,
       getReviewsForUser,
       getRatingStats,
+      canLeaveReview,
+      reportUser,
+      blockUser,
+      unblockUser,
+      isBlocked,
       getVenueReviews,
       getVenueRatingStats,
       getOutingsToRate,

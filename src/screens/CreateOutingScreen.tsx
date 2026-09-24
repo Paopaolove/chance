@@ -180,6 +180,8 @@ export function CreateOutingScreen() {
   const [inviteExtras, setInviteExtras] = useState('');
   const [ticketsAlreadyBought, setTicketsAlreadyBought] = useState(false);
   const [fromDispoBanner, setFromDispoBanner] = useState(!!prefill?.fromDispo);
+  const [inviteeUserId, setInviteeUserId] = useState(prefill?.inviteeUserId);
+  const [inviteeName, setInviteeName] = useState(prefill?.inviteeName);
 
   useEffect(() => {
     if (!prefill?.fromDispo) return;
@@ -190,6 +192,9 @@ export function CreateOutingScreen() {
     if (prefill.topic != null) setTopic(prefill.topic);
     if (prefill.excludedTopics != null) setExcludedTopics(prefill.excludedTopics);
     if (prefill.flexibleSlot != null) setFlexibleSlot(!!prefill.flexibleSlot);
+    // Keep THAT recipient when starting from a profile / Dispo card.
+    if (prefill.inviteeUserId) setInviteeUserId(prefill.inviteeUserId);
+    if (prefill.inviteeName) setInviteeName(prefill.inviteeName);
     const next = defaultDateTime(true, prefill.timeLabel);
     setDateStr(next.dateStr);
     setTimeStr(next.timeStr);
@@ -262,6 +267,18 @@ export function CreateOutingScreen() {
       Alert.alert(
         'Date / heure',
         'Indique une date (JJ/MM/AAAA) et une heure (HH:mm) valides.',
+      );
+      return;
+    }
+
+    if (
+      inviteeUserId &&
+      state.currentUser &&
+      inviteeUserId === state.currentUser.id
+    ) {
+      Alert.alert(
+        'Pas de proposition à soi-même',
+        'Choisis quelqu’un d’autre dans Dispo ce soir.',
       );
       return;
     }
@@ -387,10 +404,15 @@ export function CreateOutingScreen() {
         </Text>
         {fromDispoBanner ? (
           <View style={styles.dispoBanner}>
-            <Text style={styles.dispoBannerTitle}>Depuis Dispo ce soir</Text>
+            <Text style={styles.dispoBannerTitle}>
+              {inviteeName
+                ? `Proposition pour ${inviteeName}`
+                : 'Depuis Dispo ce soir'}
+            </Text>
             <Text style={styles.dispoBannerBody}>
-              Catégorie, créneau, quartier et budget sont préremplis. Ajoute le
-              lieu + un message, puis publie (2e tap).
+              {inviteeName
+                ? `Destinataire conservé : ${inviteeName}. Prérempli depuis sa dispo — tu lui proposes cette sortie.`
+                : 'Catégorie, créneau, quartier et budget sont préremplis. Ajoute le lieu + un message, puis publie (2e tap).'}
             </Text>
           </View>
         ) : null}

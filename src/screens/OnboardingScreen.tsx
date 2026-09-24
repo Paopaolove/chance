@@ -26,6 +26,7 @@ import {
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { AuthProvider, Gender } from '../data/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import { AGE_REQUIRED_HINT, AGE_UNDERAGE_HINT, parseAdultAge } from '../utils/age';
 import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 
 const { width } = Dimensions.get('window');
@@ -67,6 +68,7 @@ type Step =
   | 'email'
   | 'phone'
   | 'gender'
+  | 'age'
   | 'photo'
   | 'profile'
   | 'interests'
@@ -83,6 +85,7 @@ export function OnboardingScreen() {
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [gender, setGender] = useState<Gender | null>(null);
+  const [ageText, setAgeText] = useState('');
   const [womenOnlyPreference, setWomenOnlyPreference] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [firstName, setFirstName] = useState('');
@@ -154,6 +157,21 @@ export function OnboardingScreen() {
     if (gender !== 'femme') {
       setWomenOnlyPreference(false);
     }
+    setStep('age');
+  };
+
+  const continueAge = () => {
+    const age = parseAdultAge(ageText);
+    if (age == null) {
+      const n = Number.parseInt(ageText.trim(), 10);
+      if (Number.isFinite(n) && n < 18) {
+        setError(AGE_UNDERAGE_HINT);
+      } else {
+        setError(AGE_REQUIRED_HINT);
+      }
+      return;
+    }
+    setError('');
     setStep('photo');
   };
 
@@ -218,8 +236,11 @@ export function OnboardingScreen() {
 
   const finish = (intent: 'feed' | 'dispo') => {
     if (!authProvider || !gender) return;
+    const age = parseAdultAge(ageText);
+    if (age == null) return;
     completeOnboarding({
       firstName: firstName.trim(),
+      age,
       gender,
       neighborhood: neighborhood.trim(),
       bio: bio.trim(),
@@ -242,21 +263,22 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Crée ton compte</Text>
           <Text style={styles.hint}>
-            Connexion démo — Apple / Google / e-mail (aucune donnée envoyée).
+            Connexion simulée (démo) — Apple / Google / e-mail. Ce n’est pas une
+            vraie authentification : aucune donnée n’est envoyée.
           </Text>
           <Button
-            title="Continuer avec Apple"
+            title="Continuer avec Apple (démo)"
             onPress={() => chooseAuth('apple')}
             style={styles.cta}
           />
           <Button
-            title="Continuer avec Google"
+            title="Continuer avec Google (démo)"
             variant="secondary"
             onPress={() => chooseAuth('google')}
             style={styles.secondary}
           />
           <Button
-            title="Continuer avec e-mail"
+            title="Continuer avec e-mail (démo)"
             variant="ghost"
             onPress={() => chooseAuth('email')}
             style={styles.secondary}
@@ -388,6 +410,34 @@ export function OnboardingScreen() {
     );
   }
 
+
+  if (step === 'age') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.wrap}>
+          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.title}>Ton âge</Text>
+          <Text style={styles.hint}>
+            Obligatoire — Chance est réservé aux adultes (18 ans et plus). Pas
+            d’âge par défaut.
+          </Text>
+          <Text style={styles.label}>Âge *</Text>
+          <TextInput
+            style={styles.input}
+            value={ageText}
+            onChangeText={setAgeText}
+            placeholder="Ex. 29"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="number-pad"
+            maxLength={2}
+          />
+          {error ? <Text style={styles.error}>{error}</Text> : null}
+          <Button title="Continuer" onPress={continueAge} style={styles.cta} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   if (step === 'photo') {
     return (
       <SafeAreaView style={styles.safe}>
@@ -426,7 +476,8 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Prénom & bio</Text>
           <Text style={styles.hint}>
-            Le prénom est obligatoire. La bio, tu peux la passer.
+            Prénom obligatoire. Bio optionnelle — tu pourras la modifier plus
+            tard.
           </Text>
           <Text style={styles.label}>Prénom *</Text>
           <TextInput
@@ -436,7 +487,7 @@ export function OnboardingScreen() {
             placeholder="Alex"
             placeholderTextColor={colors.textMuted}
           />
-          <Text style={styles.label}>Bio</Text>
+          <Text style={styles.label}>Bio (optionnel)</Text>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={bio}

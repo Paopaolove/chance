@@ -19,6 +19,7 @@ import {
 } from '../data/interests';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import { AGE_REQUIRED_HINT, AGE_UNDERAGE_HINT, parseAdultAge } from '../utils/age';
 import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 
 export function EditProfileScreen() {
@@ -27,6 +28,9 @@ export function EditProfileScreen() {
   const user = state.currentUser;
 
   const [firstName, setFirstName] = useState(user?.firstName ?? '');
+  const [ageText, setAgeText] = useState(
+    user?.age != null ? String(user.age) : '',
+  );
   const [neighborhood, setNeighborhood] = useState(user?.neighborhood ?? '');
   const [bio, setBio] = useState(user?.bio ?? '');
   const [interests, setInterests] = useState<string[]>(
@@ -73,16 +77,21 @@ export function EditProfileScreen() {
       setError('Indique ton prénom.');
       return;
     }
+    const age = parseAdultAge(ageText);
+    if (age == null) {
+      const n = Number.parseInt(ageText.trim(), 10);
+      setError(
+        Number.isFinite(n) && n < 18 ? AGE_UNDERAGE_HINT : AGE_REQUIRED_HINT,
+      );
+      return;
+    }
     if (!neighborhood.trim()) {
       setError('Indique ton quartier.');
       return;
     }
-    if (!bio.trim()) {
-      setError('Écris une courte bio.');
-      return;
-    }
     updateProfile({
       firstName: firstName.trim(),
+      age,
       neighborhood: neighborhood.trim(),
       bio: bio.trim(),
       interests,
@@ -115,15 +124,28 @@ export function EditProfileScreen() {
         </Pressable>
       </View>
 
-      <Text style={styles.label}>Prénom</Text>
+      <Text style={styles.label}>Prénom *</Text>
       <TextInput
         style={styles.input}
         value={firstName}
         onChangeText={setFirstName}
+        placeholder="Alex"
         placeholderTextColor={colors.textMuted}
       />
 
-      <Text style={styles.label}>Quartier (Paris)</Text>
+      <Text style={styles.label}>Âge *</Text>
+      <Text style={styles.fieldHint}>18 ans minimum — pas d’âge par défaut.</Text>
+      <TextInput
+        style={styles.input}
+        value={ageText}
+        onChangeText={setAgeText}
+        placeholder="Ex. 29"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="number-pad"
+        maxLength={2}
+      />
+
+      <Text style={styles.label}>Quartier (Paris) *</Text>
       <View style={styles.chips}>
         {PARIS_NEIGHBORHOODS.map((q) => {
           const selected = neighborhood === q;
@@ -154,13 +176,13 @@ export function EditProfileScreen() {
         autoCorrect={false}
       />
 
-      <Text style={styles.label}>Bio</Text>
+      <Text style={styles.label}>Bio (optionnel)</Text>
       <TextInput
         style={[styles.input, styles.multiline]}
         value={bio}
         onChangeText={setBio}
         multiline
-        placeholder="Parle un peu de toi…"
+        placeholder="Qui es-tu, qu’est-ce que tu aimes faire à Paris…"
         placeholderTextColor={colors.textMuted}
       />
 
@@ -214,6 +236,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.sm,
     marginTop: spacing.md,
+  },
+  fieldHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+    marginTop: -4,
   },
   input: {
     backgroundColor: colors.surface,

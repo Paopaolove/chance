@@ -114,7 +114,7 @@ export function DispoSoirScreen() {
     Alert.alert(
       on ? 'Tu es dispo ce soir' : 'Dispo désactivée',
       on
-        ? `Visible jusqu’à minuit · ${dispoSlotLabel(slot)} · ${quartier}. Expire aussi à la confirmation d’une sortie.`
+        ? `Visible jusqu’à minuit (Europe/Paris) · ${dispoSlotLabel(slot)} · ${quartier}. Expire aussi à la confirmation d’une sortie.`
         : 'Tu n’es plus signalé comme dispo.',
     );
     navigation.goBack();
@@ -168,7 +168,8 @@ export function DispoSoirScreen() {
       <Text style={styles.body}>
         Signale ta disponibilité pour une sortie improvisée ce soir
         (créneau, catégorie, quartier, budget). Pas un fil social — juste
-        pour se retrouver IRL. Expire à minuit ou à la confirmation.
+        pour se retrouver IRL. Expire à minuit (Europe/Paris) ou à la
+        confirmation.
       </Text>
 
       <View style={styles.card}>
@@ -177,7 +178,7 @@ export function DispoSoirScreen() {
             <Text style={styles.label}>Je suis dispo ce soir</Text>
             <Text style={styles.hint}>
               {on
-                ? 'Visible dans Dispo ce soir · expire à minuit'
+                ? 'Visible dans Dispo ce soir · expire à minuit (Paris)'
                 : 'Masqué pour l’instant'}
             </Text>
           </View>

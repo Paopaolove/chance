@@ -268,31 +268,43 @@ export function FeedScreen() {
   ]);
 
   const goCreateFromDispo = (person?: User) => {
+    // No propose-to-self: if person is me (or missing), create for feed only.
+    const me = user;
+    const target =
+      person && me && person.id !== me.id ? person : undefined;
+    if (person && me && person.id === me.id) {
+      // Own dispo card should not propose to self — open Dispo settings instead.
+      navigation.navigate('DispoSoir');
+      return;
+    }
     const cats =
-      person?.dispoCategories?.length
-        ? person.dispoCategories
-        : user?.dispoCategories ?? [];
+      target?.dispoCategories?.length
+        ? target.dispoCategories
+        : me?.dispoCategories ?? [];
     const primary = (
       cats.includes('autre') ? 'autre' : (cats[0] ?? 'restaurant')
     ) as OutingCategory;
-    const slot = person?.dispoSlot ?? user?.dispoSlot ?? '19:30';
+    const slot = target?.dispoSlot ?? me?.dispoSlot ?? '19:30';
     const detail =
-      person?.dispoCategoryDetail ?? user?.dispoCategoryDetail ?? undefined;
+      target?.dispoCategoryDetail ?? me?.dispoCategoryDetail ?? undefined;
     navigation.navigate('MainTabs', {
       screen: 'Create',
       params: {
         fromDispo: true,
+        ...(target
+          ? { inviteeUserId: target.id, inviteeName: target.firstName }
+          : {}),
         category: primary,
         categoryDetail: primary === 'autre' ? detail : undefined,
         neighborhood:
-          person?.dispoNeighborhood ??
-          person?.neighborhood ??
-          user?.dispoNeighborhood ??
-          user?.neighborhood,
+          target?.dispoNeighborhood ??
+          target?.neighborhood ??
+          me?.dispoNeighborhood ??
+          me?.neighborhood,
         budgetMaxEuros:
-          person?.dispoBudgetMax ?? user?.dispoBudgetMax ?? 25,
-        topic: person?.dispoTopic ?? user?.dispoTopic,
-        excludedTopics: (person?.dispoExclusions ?? user?.dispoExclusions)?.join(
+          target?.dispoBudgetMax ?? me?.dispoBudgetMax ?? 25,
+        topic: target?.dispoTopic ?? me?.dispoTopic,
+        excludedTopics: (target?.dispoExclusions ?? me?.dispoExclusions)?.join(
           ', ',
         ),
         timeLabel: slot === 'flexible' ? '19:30' : slot,

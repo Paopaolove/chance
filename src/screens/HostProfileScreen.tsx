@@ -1,11 +1,19 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useLayoutEffect, useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useLayoutEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useChance } from '../data/ChanceContext';
 import { mockHosts } from '../data/mockOutings';
+import { OutingCategory } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatRatingAverage } from '../utils/format';
@@ -27,7 +35,13 @@ export function HostProfileScreen() {
     getReviewsForUser,
     getRatingStats,
     getDisplayName,
+    reportUser,
+    blockUser,
+    isBlocked,
+    peopleDispo,
   } = useChance();
+  const [reportReason, setReportReason] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
 
   const host = useMemo(() => {
     if (state.currentUser?.id === userId) return state.currentUser;
@@ -102,6 +116,133 @@ export function HostProfileScreen() {
         />
       ) : null}
 
+      {(() => {
+        const me = state.currentUser;
+        if (!me || me.id === userId) return null;
+        const dispoPerson = peopleDispo.find((p) => p.id === userId);
+        if (!dispoPerson) return null;
+        const cats = dispoPerson.dispoCategories?.length
+          ? dispoPerson.dispoCategories
+          : [];
+        const primary = (
+          cats.includes('autre') ? 'autre' : (cats[0] ?? 'restaurant')
+        ) as OutingCategory;
+        const slot = dispoPerson.dispoSlot ?? '19:30';
+        return (
+          <Button
+            title={`Proposer une sortie à ${firstName}`}
+            onPress={() =>
+              navigation.navigate('MainTabs', {
+                screen: 'Create',
+                params: {
+                  fromDispo: true,
+                  inviteeUserId: dispoPerson.id,
+                  inviteeName: dispoPerson.firstName,
+                  category: primary,
+                  categoryDetail:
+                    primary === 'autre'
+                      ? dispoPerson.dispoCategoryDetail
+                      : undefined,
+                  neighborhood:
+                    dispoPerson.dispoNeighborhood ??
+                    dispoPerson.neighborhood,
+                  budgetMaxEuros: dispoPerson.dispoBudgetMax ?? 25,
+                  topic: dispoPerson.dispoTopic,
+                  excludedTopics: dispoPerson.dispoExclusions?.join(', '),
+                  timeLabel: slot === 'flexible' ? '19:30' : slot,
+                  flexibleSlot: slot === 'flexible',
+                },
+              })
+            }
+            style={styles.cta}
+          />
+        );
+      })()}
+
+      {state.currentUser && state.currentUser.id !== userId ? (
+        <View style={styles.moderation}>
+          <Text style={styles.moderationNote}>
+            Signaler ou bloquer n’affecte pas la note publique. Un signalement =
+            une action (pas de multi-sanctions inventées).
+          </Text>
+          {isBlocked(userId) ? (
+            <Text style={styles.blockedLabel}>Tu as bloqué {firstName}.</Text>
+          ) : (
+            <Button
+              title="Bloquer"
+              variant="ghost"
+              onPress={() => {
+                Alert.alert(
+                  `Bloquer ${firstName} ?`,
+                  'Tu ne verras plus sa dispo. Cela ne change pas les notes.',
+                  [
+                    { text: 'Annuler', style: 'cancel' },
+                    {
+                      text: 'Bloquer',
+                      style: 'destructive',
+                      onPress: () => {
+                        const r = blockUser(userId);
+                        if (r.ok) {
+                          Alert.alert('Bloqué', `${firstName} est bloqué (démo).`);
+                        }
+                      },
+                    },
+                  ],
+                );
+              }}
+              style={{ marginBottom: spacing.sm }}
+            />
+          )}
+          {reportOpen ? (
+            <View style={styles.reportBox}>
+              <Text style={styles.label}>Motif du signalement</Text>
+              <TextInput
+                style={styles.input}
+                value={reportReason}
+                onChangeText={setReportReason}
+                placeholder="Décris le problème…"
+                placeholderTextColor={colors.textMuted}
+                multiline
+              />
+              <Button
+                title="Envoyer le signalement"
+                variant="secondary"
+                onPress={() => {
+                  const r = reportUser(userId, reportReason);
+                  if (!r.ok) {
+                    Alert.alert(
+                      'Impossible',
+                      r.reason === 'empty_reason'
+                        ? 'Indique un motif.'
+                        : r.reason,
+                    );
+                    return;
+                  }
+                  setReportOpen(false);
+                  setReportReason('');
+                  Alert.alert(
+                    'Signalement enregistré',
+                    'Privé — n’apparaît pas comme une note. Un seul enregistrement (démo).',
+                  );
+                }}
+              />
+              <Button
+                title="Annuler"
+                variant="ghost"
+                onPress={() => setReportOpen(false)}
+                style={{ marginTop: spacing.sm }}
+              />
+            </View>
+          ) : (
+            <Button
+              title="Signaler"
+              variant="ghost"
+              onPress={() => setReportOpen(true)}
+            />
+          )}
+        </View>
+      ) : null}
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Avis rencontre</Text>
         {isNew ? (
@@ -120,7 +261,8 @@ export function HostProfileScreen() {
           </Text>
         )}
         <Text style={styles.statsNote}>
-          Les notes parlent du respect en sortie, pas d’un crush.
+          Les notes parlent du respect en sortie, pas d’un crush. « X sorties »
+          = sorties honorées (terminées), pas le nombre d’avis.
         </Text>
       </View>
 
@@ -204,6 +346,43 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   cta: { marginBottom: spacing.lg },
+  moderation: {
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  moderationNote: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
+    lineHeight: 18,
+  },
+  blockedLabel: {
+    ...typography.bodyStrong,
+    color: colors.danger,
+    marginBottom: spacing.sm,
+  },
+  reportBox: { marginTop: spacing.sm, gap: spacing.sm },
+  label: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  input: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    minHeight: 80,
+    ...typography.body,
+    color: colors.text,
+    textAlignVertical: 'top',
+    marginBottom: spacing.sm,
+  },
   section: { marginBottom: spacing.md },
   sectionTitle: {
     ...typography.subtitle,

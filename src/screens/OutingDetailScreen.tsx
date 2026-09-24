@@ -55,6 +55,7 @@ export function OutingDetailScreen() {
   } = useChance();
   const outing = getOutingById(route.params.outingId);
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
+  const [suggestedDate, setSuggestedDate] = useState('');
   const [joinedId, setJoinedId] = useState<string | null>(null);
 
   const myRequest = useMemo(() => {
@@ -103,7 +104,11 @@ export function OutingDetailScreen() {
       : undefined;
 
   const onJoin = () => {
-    const result = joinOuting(outing.id, message);
+    const result = joinOuting(
+      outing.id,
+      message,
+      suggestedDate.trim() || undefined,
+    );
     if (!result.ok) {
       const messages: Record<string, string> = {
         women_only: 'Cette sortie est réservée aux femmes.',
@@ -659,6 +664,20 @@ export function OutingDetailScreen() {
             value={message}
             onChangeText={setMessage}
             multiline
+          />
+          <Text style={[styles.section, { marginTop: spacing.md }]}>
+            Proposer une autre date (optionnel)
+          </Text>
+          <Text style={styles.hint}>
+            Conservée pour l’hôte avec ta demande — ex. « demain 20h » ou
+            « samedi soir ».
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex. demain 20h, samedi soir…"
+            placeholderTextColor={colors.textMuted}
+            value={suggestedDate}
+            onChangeText={setSuggestedDate}
           />
           <Pressable
             onPress={() => setMessage(RECOMMENDED_INTRO)}

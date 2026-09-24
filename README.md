@@ -47,6 +47,17 @@ Taxonomie détaillée : [`docs/deposit-imprevu.md`](docs/deposit-imprevu.md).
 
 Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricing.ts`).
 
+### Profils / avis / dispo (Lot D)
+
+- Âge réel saisi (18+), **pas de défaut silencieux à 28**.
+- Champs inscription / édition de profil harmonisés (prénom*, âge*, quartier*, bio optionnelle…).
+- Boutons Apple / Google = **connexion démo** (pas de vraie auth) — indiqué dans l’UI.
+- Trust stats « X sorties » = sorties **honorées** (terminées / participées), pas le nombre d’avis.
+- Avis seulement entre participants d’une sortie **terminée** (`completed`).
+- Signaler / bloquer ≠ note publique ; un signalement = un enregistrement (pas de multi-sanctions inventées).
+- Dispo ce soir : pas de proposition à soi-même ; destinataire conservé depuis un profil.
+- Dispo expire à minuit **Europe/Paris** (`nextParisMidnight`).
+
 ### Démo vs simulé vs réel
 
 | Couche | Ce que c’est |

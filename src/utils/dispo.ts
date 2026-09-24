@@ -1,8 +1,8 @@
-/** Local calendar midnight after `from` (Europe/Paris box clock). */
+import { nextParisMidnight } from './parisTime';
+
+/** @deprecated Prefer nextParisMidnight — kept as alias for Dispo expiry. */
 export function nextLocalMidnight(from: Date = new Date()): Date {
-  const d = new Date(from);
-  d.setHours(24, 0, 0, 0);
-  return d;
+  return nextParisMidnight(from);
 }
 
 export function isPastLocalMidnight(expiresAt?: string | null): boolean {

@@ -49,3 +49,35 @@ export function isParisTomorrow(iso: string, nowMs = Date.now()): boolean {
   const nextNoonMs = Date.UTC(y, m - 1, day, 12, 0, 0) + 24 * 60 * 60 * 1000;
   return parisYmd(iso) === parisYmd(nextNoonMs);
 }
+
+/**
+ * Next calendar midnight in Europe/Paris after `from`.
+ * Returns a Date whose UTC instant is 00:00:00 Europe/Paris on the next Paris day.
+ */
+export function nextParisMidnight(from: Date = new Date()): Date {
+  const today = parisYmd(from.getTime());
+  if (!today) {
+    const fallback = new Date(from);
+    fallback.setHours(24, 0, 0, 0);
+    return fallback;
+  }
+  // Probe from ~20:00 UTC on Paris "today" through the following morning.
+  const [y, m, d] = today.split('-').map(Number);
+  const probeStart = Date.UTC(y, m - 1, d, 20, 0, 0);
+  for (let i = 0; i < 48; i++) {
+    const t = probeStart + i * 15 * 60 * 1000;
+    const ymd = parisYmd(t);
+    if (!ymd || ymd <= today) continue;
+    const time = new Date(t).toLocaleTimeString('en-GB', {
+      timeZone: PARIS_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    if (time === '00:00:00') return new Date(t);
+  }
+  const fallback = new Date(from);
+  fallback.setHours(24, 0, 0, 0);
+  return fallback;
+}

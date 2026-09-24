@@ -59,6 +59,11 @@ export function RequestsScreen() {
           pour « {outing?.title ?? 'sortie'} » · {statusLabels[r.status]}
         </Text>
         {r.message ? <Text style={styles.msg}>« {r.message} »</Text> : null}
+        {r.suggestedDate ? (
+          <Text style={styles.msg}>
+            Autre date proposée · {r.suggestedDate}
+          </Text>
+        ) : null}
         {r.status === 'pending' ? (
           <View style={styles.row}>
             <Button

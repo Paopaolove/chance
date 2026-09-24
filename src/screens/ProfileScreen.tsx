@@ -187,7 +187,8 @@ export function ProfileScreen() {
             }
           />
           <Text style={styles.ratingRespectNote}>
-            Les notes parlent du respect en sortie, pas d’un crush.
+            Les notes parlent du respect en sortie, pas d’un crush. « X sorties »
+            = sorties honorées, pas le nombre d’avis.
           </Text>
           <Text style={styles.sub}>
             {user.age} ans · {user.gender} · {user.neighborhood}
@@ -323,10 +324,13 @@ export function ProfileScreen() {
           <Text style={styles.cardLabel}>Compte</Text>
           <Text style={styles.cardValue}>
             {user.authProvider === 'apple'
-              ? 'Apple'
+              ? 'Apple (démo)'
               : user.authProvider === 'google'
-                ? 'Google'
-                : 'E-mail'}
+                ? 'Google (démo)'
+                : 'E-mail (démo)'}
+          </Text>
+          <Text style={styles.cardHint}>
+            Pas de vraie authentification — connexion simulée locale.
           </Text>
           {user.email ? (
             <Text style={styles.cardHint}>{user.email}</Text>
