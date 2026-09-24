@@ -166,10 +166,16 @@ export function OnboardingScreen() {
       setError('Indique ton prénom.');
       return;
     }
-    if (!bio.trim()) {
-      setError('Écris une courte bio.');
+    setError('');
+    setStep('interests');
+  };
+
+  const skipBio = () => {
+    if (!firstName.trim()) {
+      setError('Indique ton prénom.');
       return;
     }
+    setBio('');
     setError('');
     setStep('interests');
   };
@@ -419,7 +425,7 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Prénom & bio</Text>
           <Text style={styles.hint}>
-            Une courte présentation.
+            Le prénom est obligatoire. La bio, tu peux la passer.
           </Text>
           <Text style={styles.label}>Prénom *</Text>
           <TextInput
@@ -429,19 +435,26 @@ export function OnboardingScreen() {
             placeholder="Alex"
             placeholderTextColor={colors.textMuted}
           />
-          <Text style={styles.label}>Bio *</Text>
+          <Text style={styles.label}>Bio</Text>
           <TextInput
             style={[styles.input, styles.multiline]}
             value={bio}
             onChangeText={setBio}
             placeholder="Qui es-tu, qu’est-ce que tu aimes faire à Paris…"
             placeholderTextColor={colors.textMuted}
-            multiline          />
+            multiline
+          />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             title="Continuer"
             onPress={continueProfile}
             style={styles.cta}
+          />
+          <Button
+            title="Passer"
+            variant="ghost"
+            onPress={skipBio}
+            style={styles.secondary}
           />
         </ScrollView>
       </SafeAreaView>
