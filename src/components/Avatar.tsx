@@ -10,12 +10,12 @@ import {
 import { colors, fonts } from '../theme';
 
 const AVATAR_COLORS = [
-  '#FCE8E1',
-  '#E6F6E7',
-  '#E8F0FE',
+  '#F5E6DC',
+  '#E4EFE7',
+  '#F0EBE4',
   '#F8E9C9',
-  '#F2E8F8',
-  '#E8F5F3',
+  '#EDE4F0',
+  '#E6F0ED',
 ];
 
 interface Props {
