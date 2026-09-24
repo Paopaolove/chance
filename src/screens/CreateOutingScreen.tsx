@@ -37,20 +37,89 @@ const categories: { id: OutingCategory; label: string }[] = [
 /** Core seats 1–3 (brief). */
 const capacities: Array<1 | 2 | 3> = [1, 2, 3];
 
-const DAY_OPTIONS = [
-  { id: 0, label: 'Ce soir' },
-  { id: 1, label: 'Demain' },
-  { id: 2, label: 'Après-demain' },
-  { id: 3, label: '+3 j' },
-] as const;
+function pad2(n: number) {
+  return n < 10 ? `0${n}` : String(n);
+}
 
-const TIME_OPTIONS = [
-  { h: 18, m: 0, label: '18:00' },
-  { h: 19, m: 0, label: '19:00' },
-  { h: 19, m: 30, label: '19:30' },
-  { h: 20, m: 0, label: '20:00' },
-  { h: 21, m: 0, label: '21:00' },
-] as const;
+/** Local calendar day as JJ/MM/AAAA. */
+function formatDateInput(d: Date): string {
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+
+/** Local time as HH:mm. */
+function formatTimeInput(d: Date): string {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+/** French heure label for auto title (20h / 20h30). */
+function formatHeureLabel(hours: number, minutes: number): string {
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h${pad2(minutes)}`;
+}
+
+function parseDateInput(raw: string): { y: number; m: number; d: number } | null {
+  const s = raw.trim();
+  const m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(s);
+  if (!m) return null;
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const year = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const probe = new Date(year, month - 1, day);
+  if (
+    probe.getFullYear() !== year ||
+    probe.getMonth() !== month - 1 ||
+    probe.getDate() !== day
+  ) {
+    return null;
+  }
+  return { y: year, m: month, d: day };
+}
+
+function parseTimeInput(raw: string): { h: number; m: number } | null {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, '');
+  let match = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (match) {
+    const h = Number(match[1]);
+    const m = Number(match[2]);
+    if (h > 23 || m > 59) return null;
+    return { h, m };
+  }
+  match = /^(\d{1,2})h(\d{2})?$/.exec(s);
+  if (match) {
+    const h = Number(match[1]);
+    const m = match[2] ? Number(match[2]) : 0;
+    if (h > 23 || m > 59) return null;
+    return { h, m };
+  }
+  return null;
+}
+
+function buildStartsAt(dateStr: string, timeStr: string): Date | null {
+  const date = parseDateInput(dateStr);
+  const time = parseTimeInput(timeStr);
+  if (!date || !time) return null;
+  return new Date(date.y, date.m - 1, date.d, time.h, time.m, 0, 0);
+}
+
+function defaultDateTime(fromDispo: boolean, timeLabel?: string): {
+  dateStr: string;
+  timeStr: string;
+} {
+  const base = new Date();
+  if (!fromDispo) {
+    base.setDate(base.getDate() + 1);
+  }
+  base.setHours(20, 0, 0, 0);
+  let timeStr = formatTimeInput(base);
+  if (timeLabel) {
+    const parsed = parseTimeInput(timeLabel);
+    if (parsed) {
+      timeStr = `${pad2(parsed.h)}:${pad2(parsed.m)}`;
+    }
+  }
+  return { dateStr: formatDateInput(base), timeStr };
+}
 
 export function CreateOutingScreen() {
   const navigation = useNavigation<Nav>();
@@ -60,11 +129,7 @@ export function CreateOutingScreen() {
     useChance();
   const active = getActiveOutingForUser();
 
-  const initialTimeIdx = (() => {
-    if (!prefill?.timeLabel) return 2;
-    const idx = TIME_OPTIONS.findIndex((t) => t.label === prefill.timeLabel);
-    return idx >= 0 ? idx : 2;
-  })();
+  const initial = defaultDateTime(!!prefill?.fromDispo, prefill?.timeLabel);
 
   const [category, setCategory] = useState<OutingCategory>(
     prefill?.category ?? 'restaurant',
@@ -76,8 +141,8 @@ export function CreateOutingScreen() {
       'Le Marais',
   );
   const [venueName, setVenueName] = useState('');
-  const [dayOffset, setDayOffset] = useState(prefill?.fromDispo ? 0 : 1);
-  const [timeIdx, setTimeIdx] = useState(initialTimeIdx);
+  const [dateStr, setDateStr] = useState(initial.dateStr);
+  const [timeStr, setTimeStr] = useState(initial.timeStr);
   const [capacity, setCapacity] = useState<1 | 2 | 3>(1);
   const [budgetMaxEuros, setBudgetMaxEuros] = useState(
     prefill?.budgetMaxEuros ?? state.currentUser?.dispoBudgetMax ?? 25,
@@ -87,9 +152,7 @@ export function CreateOutingScreen() {
   const [excludedTopics, setExcludedTopics] = useState(
     prefill?.excludedTopics ?? '',
   );
-  const [flexibleSlot, setFlexibleSlot] = useState(
-    !!prefill?.flexibleSlot,
-  );
+  const [flexibleSlot, setFlexibleSlot] = useState(!!prefill?.flexibleSlot);
   const [fromDispoBanner, setFromDispoBanner] = useState(!!prefill?.fromDispo);
 
   useEffect(() => {
@@ -100,13 +163,12 @@ export function CreateOutingScreen() {
     if (prefill.topic != null) setTopic(prefill.topic);
     if (prefill.excludedTopics != null) setExcludedTopics(prefill.excludedTopics);
     if (prefill.flexibleSlot != null) setFlexibleSlot(!!prefill.flexibleSlot);
-    setDayOffset(0);
-    if (prefill.timeLabel) {
-      const idx = TIME_OPTIONS.findIndex((t) => t.label === prefill.timeLabel);
-      if (idx >= 0) setTimeIdx(idx);
-    }
+    const next = defaultDateTime(true, prefill.timeLabel);
+    setDateStr(next.dateStr);
+    setTimeStr(next.timeStr);
     setFromDispoBanner(true);
   }, [prefill]);
+
   const canWomenOnly = state.currentUser?.gender === 'femme';
   const [womenOnly, setWomenOnly] = useState(
     !!state.currentUser?.womenOnlyPreference &&
@@ -114,13 +176,27 @@ export function CreateOutingScreen() {
   );
   const [showQuartiers, setShowQuartiers] = useState(false);
 
-  const startsAt = useMemo(() => {
-    const t = TIME_OPTIONS[timeIdx] ?? TIME_OPTIONS[2];
+  const startsAtDate = useMemo(
+    () => buildStartsAt(dateStr, timeStr),
+    [dateStr, timeStr],
+  );
+
+  const autoTitle = useMemo(() => {
+    const lieu = venueName.trim() || 'Lieu';
+    const parsed = parseTimeInput(timeStr);
+    const heure = parsed
+      ? formatHeureLabel(parsed.h, parsed.m)
+      : timeStr.trim() || '…';
+    return `${lieu} · ${heure}`;
+  }, [venueName, timeStr]);
+
+  const applyShortcut = (offsetDays: number) => {
     const d = new Date();
-    d.setDate(d.getDate() + dayOffset);
-    d.setHours(t.h, t.m, 0, 0);
-    return d.toISOString();
-  }, [dayOffset, timeIdx]);
+    d.setDate(d.getDate() + offsetDays);
+    d.setHours(20, 0, 0, 0);
+    setDateStr(formatDateInput(d));
+    setTimeStr('20:00');
+  };
 
   const onPublish = () => {
     if (!venueName.trim() || !neighborhood.trim() || !message.trim()) {
@@ -131,10 +207,20 @@ export function CreateOutingScreen() {
       return;
     }
 
-    const title =
-      message.trim().length > 48
-        ? `${message.trim().slice(0, 45)}…`
-        : message.trim();
+    const when = buildStartsAt(dateStr, timeStr);
+    if (!when) {
+      Alert.alert(
+        'Date / heure',
+        'Indique une date (JJ/MM/AAAA) et une heure (HH:mm) valides.',
+      );
+      return;
+    }
+
+    const parsedTime = parseTimeInput(timeStr)!;
+    const title = `${venueName.trim()} · ${formatHeureLabel(
+      parsedTime.h,
+      parsedTime.m,
+    )}`;
 
     const result = createOuting({
       title,
@@ -145,7 +231,7 @@ export function CreateOutingScreen() {
       approxArea: neighborhood,
       // Exact address never shown before confirmation — host can refine later.
       exactAddress: `${venueName.trim()}, ${neighborhood.trim()}, Paris`,
-      startsAt,
+      startsAt: when.toISOString(),
       capacity,
       womenOnly: womenOnly && canWomenOnly,
       budgetMaxEuros: Math.round(budgetMaxEuros),
@@ -179,6 +265,9 @@ export function CreateOutingScreen() {
     setFlexibleSlot(false);
     setCapacity(1);
     setBudgetMaxEuros(25);
+    const next = defaultDateTime(false);
+    setDateStr(next.dateStr);
+    setTimeStr(next.timeStr);
     setWomenOnly(
       !!state.currentUser?.womenOnlyPreference &&
         state.currentUser?.gender === 'femme',
@@ -307,30 +396,50 @@ export function CreateOutingScreen() {
         </Text>
 
         <Text style={styles.label}>Date *</Text>
-        <View style={styles.row}>
-          {DAY_OPTIONS.map((d) => (
-            <Button
-              key={d.id}
-              title={d.label}
-              variant={dayOffset === d.id ? 'primary' : 'ghost'}
-              onPress={() => setDayOffset(d.id)}
-              style={styles.chip}
-            />
-          ))}
-        </View>
+        <TextInput
+          style={styles.input}
+          value={dateStr}
+          onChangeText={setDateStr}
+          placeholder="JJ/MM/AAAA"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numbers-and-punctuation"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
 
         <Text style={styles.label}>Heure *</Text>
-        <View style={styles.row}>
-          {TIME_OPTIONS.map((t, idx) => (
-            <Button
-              key={t.label}
-              title={t.label}
-              variant={timeIdx === idx ? 'primary' : 'ghost'}
-              onPress={() => setTimeIdx(idx)}
-              style={styles.chip}
-            />
-          ))}
+        <TextInput
+          style={styles.input}
+          value={timeStr}
+          onChangeText={setTimeStr}
+          placeholder="HH:mm (ex. 20:00 ou 20h30)"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numbers-and-punctuation"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <View style={[styles.row, { marginTop: spacing.sm }]}>
+          <Button
+            title="Ce soir 20h"
+            variant="ghost"
+            onPress={() => applyShortcut(0)}
+            style={styles.chip}
+          />
+          <Button
+            title="Demain 20h"
+            variant="ghost"
+            onPress={() => applyShortcut(1)}
+            style={styles.chip}
+          />
         </View>
+        {!startsAtDate ? (
+          <Text style={styles.fieldError}>
+            Date ou heure invalide — format JJ/MM/AAAA et HH:mm.
+          </Text>
+        ) : null}
+
+        <Text style={styles.autoTitleHint}>Titre auto : {autoTitle}</Text>
 
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
@@ -479,6 +588,16 @@ const styles = StyleSheet.create({
     ...typography.small,
     color: colors.textMuted,
     marginTop: spacing.sm,
+  },
+  fieldError: {
+    ...typography.small,
+    color: colors.danger,
+    marginTop: spacing.sm,
+  },
+  autoTitleHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.md,
   },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { minHeight: 40, paddingHorizontal: spacing.md },

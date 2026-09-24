@@ -9,7 +9,7 @@ export type CreateOutingParams = {
   budgetMaxEuros?: number;
   topic?: string;
   excludedTopics?: string;
-  /** Heure label matching Create TIME_OPTIONS (ex. « 19:30 »). */
+  /** Heure libre préremplie (ex. « 19:30 » ou « 20h »). */
   timeLabel?: string;
   flexibleSlot?: boolean;
 };
