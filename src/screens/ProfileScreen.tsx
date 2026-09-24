@@ -519,8 +519,8 @@ export function ProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Mes sorties à noter</Text>
           <Text style={styles.cardHint}>
-            Après une sortie terminée, laisse une note (1–5) et un commentaire
-            optionnel.
+            Après une sortie terminée, note la personne et le lieu
+            séparément (commentaires optionnels).
           </Text>
           {(() => {
             const toRate = getOutingsToRate();

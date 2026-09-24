@@ -24,6 +24,7 @@ import { colors, fonts, radius, spacing, typography } from '../theme';
 import { isChatUnlocked, lateLabel } from '../utils/chat';
 import { imprevuMotiveLabel } from '../utils/imprevu';
 import { formatOutingWhen } from '../utils/format';
+import { makeVenueKey } from '../utils/venue';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -317,12 +318,25 @@ export function OutingDetailScreen() {
 
       <View style={styles.card}>
         <Text style={styles.section}>Lieu</Text>
-        <Text style={styles.body}>
-          {outing.venueName} · {outing.neighborhood}
-          {outing.approxArea && outing.approxArea !== outing.neighborhood
-            ? ` · ${outing.approxArea}`
-            : ''}
-        </Text>
+        <Pressable
+          onPress={() =>
+            navigation.navigate('VenueDetail', {
+              venueKey: makeVenueKey(outing.venueName, outing.neighborhood),
+              venueName: outing.venueName,
+              neighborhood: outing.neighborhood,
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Voir les avis du lieu ${outing.venueName}`}
+        >
+          <Text style={[styles.body, styles.venueLink]}>
+            {outing.venueName} · {outing.neighborhood}
+            {outing.approxArea && outing.approxArea !== outing.neighborhood
+              ? ` · ${outing.approxArea}`
+              : ''}
+          </Text>
+          <Text style={styles.venueAvisLink}>Voir les avis du lieu</Text>
+        </Pressable>
         {canSeeExact ? (
           <>
             <Text style={[styles.section, { marginTop: spacing.md }]}>
@@ -634,7 +648,17 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontFamily: fonts.semiBold,
   },
-  depositReturned: {
+  venueLink: {
+    color: colors.primaryDark,
+    fontFamily: fonts.semiBold,
+  },
+  venueAvisLink: {
+    ...typography.caption,
+    color: colors.primary,
+    fontFamily: fonts.semiBold,
+    marginTop: spacing.xs,
+  },
+    depositReturned: {
     ...typography.caption,
     color: colors.success,
     textAlign: 'center',

@@ -412,16 +412,24 @@ export interface Review {
   outingId: string;
   fromUserId: string;
   toUserId: string;
-  /** 1–5 stars (respect / rencontre); visible; not editable after post. */
+  /** 1–5 stars RENCONTRE (respect / personne); profile-facing; not editable after post. */
   rating: 1 | 2 | 3 | 4 | 5;
-  /** Optional; not editable after post. */
+  /** Optional person-only comment; never about the venue. Not editable after post. */
   comment?: string;
-  /** At most one reply from the reviewed user. */
+  /** 1–5 stars for the venue / lieu only. Never shown on profile. */
+  venueRating?: 1 | 2 | 3 | 4 | 5;
+  /** Optional venue-only comment; never about the person. */
+  venueComment?: string;
+  /** Stable key for aggregation, e.g. normalized `${venueName}|${neighborhood}`. */
+  venueKey: string;
+  /** Display name of the venue (from the outing). */
+  venueName?: string;
+  /** At most one reply from the reviewed user (to the person comment). */
   reply?: string;
   createdAt: string;
   /** User ids who agreed to hide text (need both from + to). */
   hideTextConsentUserIds?: string[];
-  /** Text (comment + reply) hidden by mutual agreement; note + count remain. */
+  /** Text (person comment + reply) hidden by mutual agreement; note + count remain. */
   textHidden?: boolean;
   /**
    * Private: envie de revoir. Never shown on profile, cards, or ReviewsScreen.
@@ -439,8 +447,15 @@ export interface Review {
 }
 
 export type UserRatingStats = {
-  /** Average of received ratings, or null if none. */
+  /** Average of received person ratings, or null if none. */
   average: number | null;
   /** Number of reviews received (= sorties notées). */
   outingCount: number;
+};
+
+export type VenueRatingStats = {
+  /** Average of venue ratings for this venueKey, or null if none. */
+  average: number | null;
+  /** Number of venue ratings. */
+  reviewCount: number;
 };

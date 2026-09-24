@@ -35,4 +35,9 @@ export type RootStackParamList = {
   Register: { reason?: 'after_request' | 'default' } | undefined;
   Reviews: { userId: string; userName: string };
   LeaveReview: { outingId: string; toUserId: string; toUserName: string };
+  VenueDetail: {
+    venueKey: string;
+    venueName: string;
+    neighborhood?: string;
+  };
 };

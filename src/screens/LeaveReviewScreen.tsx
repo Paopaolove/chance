@@ -37,6 +37,10 @@ export function LeaveReviewScreen() {
   );
   const [lowStarOther, setLowStarOther] = useState('');
   const [comment, setComment] = useState('');
+  const [venueRating, setVenueRating] = useState<1 | 2 | 3 | 4 | 5 | null>(
+    null,
+  );
+  const [venueComment, setVenueComment] = useState('');
 
   const needsMotive = rating === 1 || rating === 2;
 
@@ -68,12 +72,21 @@ export function LeaveReviewScreen() {
         return;
       }
     }
+    if (!venueRating) {
+      Alert.alert(
+        'Note du lieu requise',
+        'Note le lieu de 1 à 5 étoiles (cuisine, bruit, accueil…).',
+      );
+      return;
+    }
 
     const result = addReview({
       outingId,
       toUserId,
       rating,
       comment: comment.trim() || undefined,
+      venueRating,
+      venueComment: venueComment.trim() || undefined,
       wantToSeeAgain,
       ...(needsMotive && lowStarKind
         ? {
@@ -92,12 +105,17 @@ export function LeaveReviewScreen() {
         self: 'Tu ne peux pas te noter toi-même.',
         no_user: 'Profil manquant.',
         invalid_rating: 'Note invalide.',
+        invalid_venue_rating: 'Note du lieu invalide.',
+        outing_not_found: 'Sortie introuvable.',
         low_star_reason_required: 'Motif requis pour une note basse.',
       };
       Alert.alert('Impossible', messages[result.reason] ?? result.reason);
       return;
     }
-    Alert.alert('Merci', 'Ton avis est publié. Le commentaire n’est plus modifiable.');
+    Alert.alert(
+      'Merci',
+      'Ton avis est publié. Les commentaires ne sont plus modifiables.',
+    );
     navigation.goBack();
   };
 
@@ -111,6 +129,8 @@ export function LeaveReviewScreen() {
       <Text style={styles.intro}>
         {`Tu notes le respect et la rencontre, pas le feeling.\nPas d’étincelle, ce n’est pas une mauvaise note.`}
       </Text>
+
+      <Text style={styles.blockTitle}>Personne / rencontre</Text>
       <Text style={styles.personHint}>À propos de {toUserName}</Text>
 
       <Text style={styles.label}>
@@ -227,15 +247,12 @@ export function LeaveReviewScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.divider} />
-
-      <Text style={styles.label}>Commentaire (optionnel)</Text>
-      <Text style={styles.sectionSub}>
-        Libre — lieu ou rencontre. Non modifiable après envoi.
+      <Text style={styles.label}>
+        Commentaire sur la personne (optionnel)
       </Text>
       <TextInput
         style={styles.input}
-        placeholder="Comment s’est passée la sortie / le lieu ?"
+        placeholder="Respect, ponctualité, discussion… Pas le resto."
         placeholderTextColor={colors.textMuted}
         value={comment}
         onChangeText={setComment}
@@ -243,7 +260,51 @@ export function LeaveReviewScreen() {
         maxLength={400}
       />
       <Text style={styles.immutableNote}>
-        Commentaire non modifiable après envoi. Une seule réponse possible.
+        Commentaire personne non modifiable après envoi. Une seule réponse
+        possible.
+      </Text>
+
+      <View style={styles.divider} />
+
+      <Text style={styles.blockTitle}>Lieu</Text>
+      <Text style={styles.sectionSub}>
+        Note et commentaire sur le lieu uniquement — jamais sur la personne.
+      </Text>
+
+      <Text style={styles.label}>Note du lieu (obligatoire)</Text>
+      <View style={styles.starsRow}>
+        {([1, 2, 3, 4, 5] as const).map((n) => (
+          <Pressable
+            key={n}
+            onPress={() => setVenueRating(n)}
+            style={styles.starBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Lieu · ${n} étoile${n > 1 ? 's' : ''}`}
+          >
+            <Text
+              style={[
+                styles.star,
+                venueRating != null && n <= venueRating && styles.starOn,
+              ]}
+            >
+              ★
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <Text style={styles.label}>Commentaire sur le lieu (optionnel)</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Cuisine, bruit, accueil… Pas la personne."
+        placeholderTextColor={colors.textMuted}
+        value={venueComment}
+        onChangeText={setVenueComment}
+        multiline
+        maxLength={400}
+      />
+      <Text style={styles.immutableNote}>
+        Commentaire lieu non modifiable après envoi.
       </Text>
 
       <Button title="Publier l’avis" onPress={onSubmit} />
@@ -264,8 +325,14 @@ const styles = StyleSheet.create({
   intro: {
     ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     lineHeight: 24,
+  },
+  blockTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    fontFamily: fonts.semiBold,
+    marginBottom: spacing.sm,
   },
   personHint: {
     ...typography.caption,
@@ -364,7 +431,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginBottom: spacing.xl,
+    marginVertical: spacing.xl,
   },
   sectionSub: {
     ...typography.caption,

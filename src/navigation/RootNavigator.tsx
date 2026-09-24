@@ -13,6 +13,7 @@ import { PaywallScreen } from '../screens/PaywallScreen';
 import { LeaveReviewScreen } from '../screens/LeaveReviewScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { ReviewsScreen } from '../screens/ReviewsScreen';
+import { VenueDetailScreen } from '../screens/VenueDetailScreen';
 import { colors } from '../theme';
 import { MainTabs } from './MainTabs';
 import { RootStackParamList } from './types';
@@ -94,6 +95,11 @@ export function RootNavigator() {
               name="LeaveReview"
               component={LeaveReviewScreen}
               options={{ title: 'Comment c’était ?' }}
+            />
+            <Stack.Screen
+              name="VenueDetail"
+              component={VenueDetailScreen}
+              options={{ title: 'Avis du lieu' }}
             />
           </>
         )}

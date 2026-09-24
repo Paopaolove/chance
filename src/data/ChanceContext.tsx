@@ -32,6 +32,7 @@ import {
   Review,
   User,
   UserRatingStats,
+  VenueRatingStats,
 } from './types';
 import {
   creditsForSubscribe,
@@ -52,6 +53,7 @@ import {
   imprevuNotifTitle,
   normalizeImprevuReason,
 } from '../utils/imprevu';
+import { makeVenueKey } from '../utils/venue';
 import {
   ensureAndroidChannel,
   scheduleAcceptedConfirmNotifications,
@@ -1035,6 +1037,8 @@ interface ChanceContextValue {
     toUserId: string;
     rating: 1 | 2 | 3 | 4 | 5;
     comment?: string;
+    venueRating: 1 | 2 | 3 | 4 | 5;
+    venueComment?: string;
     wantToSeeAgain?: boolean;
     lowStarReason?: Review['lowStarReason'];
   }) => { ok: true; reviewId: string } | { ok: false; reason: string };
@@ -1054,6 +1058,9 @@ interface ChanceContextValue {
   ) => { ok: true; hidden: boolean } | { ok: false; reason: string };
   getReviewsForUser: (userId: string) => Review[];
   getRatingStats: (userId: string) => UserRatingStats;
+  /** Venue-only reviews for fiche lieu (never person rating/comment). */
+  getVenueReviews: (venueKey: string) => Review[];
+  getVenueRatingStats: (venueKey: string) => VenueRatingStats;
   /** Completed (or demo-completed) outings the user can still rate. */
   getOutingsToRate: () => {
     outing: Outing;
@@ -2258,12 +2265,41 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.reviews],
   );
 
+  const getVenueReviews = useCallback(
+    (venueKey: string) =>
+      state.reviews
+        .filter((r) => r.venueKey === venueKey && r.venueRating != null)
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        ),
+    [state.reviews],
+  );
+
+  const getVenueRatingStats = useCallback(
+    (venueKey: string): VenueRatingStats => {
+      const list = state.reviews.filter(
+        (r) => r.venueKey === venueKey && r.venueRating != null,
+      );
+      if (!list.length) return { average: null, reviewCount: 0 };
+      const sum = list.reduce((acc, r) => acc + (r.venueRating ?? 0), 0);
+      return {
+        average: sum / list.length,
+        reviewCount: list.length,
+      };
+    },
+    [state.reviews],
+  );
+
   const addReview = useCallback(
     (input: {
       outingId: string;
       toUserId: string;
       rating: 1 | 2 | 3 | 4 | 5;
       comment?: string;
+      venueRating: 1 | 2 | 3 | 4 | 5;
+      venueComment?: string;
       wantToSeeAgain?: boolean;
       lowStarReason?: Review['lowStarReason'];
     }): { ok: true; reviewId: string } | { ok: false; reason: string } => {
@@ -2272,7 +2308,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (input.rating < 1 || input.rating > 5) {
         return { ok: false, reason: 'invalid_rating' };
       }
+      if (input.venueRating < 1 || input.venueRating > 5) {
+        return { ok: false, reason: 'invalid_venue_rating' };
+      }
       if (input.toUserId === user.id) return { ok: false, reason: 'self' };
+      const outing = state.outings.find((o) => o.id === input.outingId);
+      if (!outing) return { ok: false, reason: 'outing_not_found' };
       const dup = state.reviews.some(
         (r) =>
           r.outingId === input.outingId &&
@@ -2287,13 +2328,19 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'low_star_reason_required' };
       }
       const comment = input.comment?.trim();
+      const venueComment = input.venueComment?.trim();
+      const venueKey = makeVenueKey(outing.venueName, outing.neighborhood);
       const review: Review = {
         id: uid('rev'),
         outingId: input.outingId,
         fromUserId: user.id,
         toUserId: input.toUserId,
         rating: input.rating,
+        venueRating: input.venueRating,
+        venueKey,
+        venueName: outing.venueName,
         ...(comment ? { comment } : {}),
+        ...(venueComment ? { venueComment } : {}),
         ...(input.wantToSeeAgain !== undefined
           ? { wantToSeeAgain: input.wantToSeeAgain }
           : {}),
@@ -2303,7 +2350,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'ADD_REVIEW', payload: review });
       return { ok: true, reviewId: review.id };
     },
-    [state.currentUser, state.reviews],
+    [state.currentUser, state.reviews, state.outings],
   );
 
   const replyToReview = useCallback(
@@ -2939,6 +2986,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOtherHideConsent,
       getReviewsForUser,
       getRatingStats,
+      getVenueReviews,
+      getVenueRatingStats,
       getOutingsToRate,
       getDisplayName,
       showToast,
@@ -3003,6 +3052,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOtherHideConsent,
       getReviewsForUser,
       getRatingStats,
+      getVenueReviews,
+      getVenueRatingStats,
       getOutingsToRate,
       getDisplayName,
       showToast,
