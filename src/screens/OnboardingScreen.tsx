@@ -526,8 +526,7 @@ export function OnboardingScreen() {
               On ne swipe pas, on ne cherche pas un match.
             </Text>
             <Text style={styles.disclaimerBody}>
-              On partage une table, un verre ou une sortie — pour se voir pour
-              de vrai.
+              On partage une table, un verre ou une sortie.
             </Text>
           </View>
           <View style={styles.rulesBox}>
