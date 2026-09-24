@@ -7,6 +7,8 @@ import { dispoSlotLabel } from '../utils/dispo';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
+import { hostPhotoSize } from '../utils/subscription';
+import { useChance } from '../data/ChanceContext';
 import { Avatar } from './Avatar';
 import { RatingLine } from './RatingLine';
 
@@ -20,6 +22,11 @@ interface Props {
 export function PersonCard({ person, onPress, onPropose }: Props) {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { state } = useChance();
+  const viewer = state.currentUser;
+  // Own card stays readable; others follow subscription photo size.
+  const photoSize =
+    viewer?.id === person.id ? 56 : hostPhotoSize(viewer);
   const quartier = person.dispoNeighborhood ?? person.neighborhood;
   const slot = dispoSlotLabel(person.dispoSlot);
 
@@ -43,7 +50,7 @@ export function PersonCard({ person, onPress, onPropose }: Props) {
           name={person.firstName}
           photoUri={person.photoUri}
           seed={person.id}
-          size={48}
+          size={photoSize}
         />
         <View style={styles.headerText}>
           <Text style={styles.name}>
