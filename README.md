@@ -3,7 +3,7 @@
 Application mobile iOS / Android (Expo) pour des sorties IRL à **Paris intramuros**.  
 Pas de dating : un fil de vraies sorties (restaurant, bar, culture, autre), en 1-to-1 ou petit groupe (2–4).
 
-> MVP démo avec état local mock — **pas de Supabase ni Stripe** pour l’instant.
+> MVP **démo** avec état local mock. Lot E : stubs `src/services/` + `.env.example` (Supabase / Stripe **TEST**) — **pas branchés**, démo OK sans clés. ≠ backend réel, ≠ Stripe live.
 
 
 ## Modèle d’invitation (Chance)
@@ -60,11 +60,13 @@ Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricin
 
 ### Démo vs simulé vs réel
 
-| Couche | Ce que c’est |
-|--------|----------------|
-| **Démo** | App Expo locale, mocks + Context React, parcours cliquable sans backend. |
-| **Simulé** | Paiements / caution / acceptation hôte : Alert + état local (pas de Stripe). |
-| **Réel** | Pas encore : Supabase (auth, sorties) + Stripe (abonnements, caution) à venir. |
+| Couche | Ce que c’est | Ce que ce n’est pas |
+|--------|----------------|---------------------|
+| **Démo** | App Expo locale, mocks + `ChanceContext`, parcours cliquable **sans** `.env`. | Un produit connecté à une base. |
+| **Simulé** | Paiements / caution / accept hôte : **Alert** + état local. Stubs `src/services/*` no-op. | Stripe, ni « carte enregistrée = caution ». |
+| **Réel** | Futur : Supabase (auth, sorties, demandes) + Stripe **TEST** puis live. Esquisse : [`docs/backend-prep.md`](docs/backend-prep.md). | Les stubs Lot E (pas encore branchés). |
+
+**Rappel caution :** carte enregistrée (futur SetupIntent) **≠** caution bloquée (hold 20 € à la confirmation). Voir Lot C / [`docs/deposit-imprevu.md`](docs/deposit-imprevu.md).
 
 ## Lancer la démo
 
@@ -103,12 +105,38 @@ Prérequis : Node 18+, compte Expo Go à jour.
 ```
 src/
   theme/          # couleurs chaudes, typo, spacing
-  data/           # types, mocks, ChanceContext (useReducer)
-  navigation/     # stack + tabs
+  data/           # types, mocks, ChanceContext (useReducer) — monolithe démo
+  services/       # Lot E : ports / stubs (reservations, deposits, notifications,
+                  #   demoTools, supabase, stripe TEST) — non branchés à l’UI
+  navigation/     # stack + tabs (React Navigation)
   screens/        # tous les écrans MVP
-  components/     # Button, OutingCard, EmptyState
-  utils/          # format dates / countdown
+  components/     # Button, OutingCard, EmptyState, DemoMenuModal…
+  utils/          # format, parisTime, notifications expo, chat H−1…
+docs/
+  deposit-imprevu.md   # taxonomie caution (Lot C)
+  backend-prep.md      # esquisse Supabase + Stripe TEST (Lot E)
+.env.example           # SUPABASE_* / STRIPE_PUBLISHABLE_KEY_TEST (optionnel)
 ```
+
+### Architecture — monolithe actuel vs split prévu (Lot E)
+
+**Aujourd’hui :** presque toute la logique métier (réservations, cautions, notifs,
+outils QA `simulate*`, abonnements mock) vit dans `ChanceContext.tsx`. C’est
+volontaire pour une démo stable (3 slides onboarding, chat H−1, 1 annonce active).
+
+**Cible (progressive, pas migrée dans ce lot) :**
+
+| Module `src/services/` | Rôle futur | État Lot E |
+|------------------------|------------|------------|
+| `reservations` | accept / confirm / cancel / close / complete | Interface + stub no-op |
+| `deposits` | hold / release / forfeit 20 € | Interface + stub no-op |
+| `notifications` | push priorité, rappels 10 min, chat H−1 | Port ; démo = `utils/notifications` |
+| `demoTools` | `simulate*` / reset QA | Interface + stub no-op |
+| `supabase` | client si env présente | `null` / no-op sans clés |
+| `stripe` | TEST only (`pk_test_`) | no-op ; `STRIPE_LIVE_ENABLED = false` |
+
+Les écrans continuent d’appeler `useChance()` — **ne pas** brancher les stubs
+depuis l’UI tant que le Context n’a pas délégué (évite double source de vérité).
 
 
 ## Parcours démo suggéré
@@ -122,17 +150,19 @@ src/
 ## Ce qui est mock
 
 - Profil, sorties, demandes : mémoire React (Context)
-- Paiements / caution : Alert + changement de plan local
-- Chat : messages d’exemple
+- Paiements / caution : Alert + changement de plan local (**pas** Stripe)
+- Chat : messages d’exemple (ouverture logique H−1)
 - Pas de persistance (reload = reset + onboarding)
+- `src/services/*` : stubs documentaires — **no-op** sans `.env` ; ≠ backend réel
 
 ## Prochaines étapes
 
-1. **Supabase** — auth, profils, sorties, demandes, realtime chat
-2. **Stripe** — abonnements + caution (PaymentIntent / SetupIntent)
-3. Push notifications (rappel H−1, acceptation, deadline 10 min)
-4. Géoloc / quartiers Paris intramuros plus fine
-5. Modération & signalement
+1. **Brancher** les ports `src/services/` (extraire hors Context sans casser la démo)
+2. **Supabase** — auth, profils, sorties, demandes (schéma : `docs/backend-prep.md`)
+3. **Stripe TEST** — abonnements + caution ; jamais live tant que non validé
+4. Push notifications backend (rappel H−1, acceptation, deadline 10 min)
+5. Géoloc / quartiers Paris intramuros plus fine
+6. Modération & signalement (au-delà du mock signaler / bloquer)
 
 ## Scripts
 

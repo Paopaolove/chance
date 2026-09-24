@@ -64,6 +64,14 @@ import {
 } from '../utils/notifications';
 
 /**
+ * Lot E — monolithe volontaire pour la démo.
+ * Frontières futures (stubs, non branchés) : src/services/
+ *   reservations | deposits | notifications | demoTools | supabase | stripe (TEST)
+ * Ne pas migrer la logique ici tant que les ports ne sont pas délégués.
+ * Voir README « Architecture » + docs/backend-prep.md.
+ */
+
+/**
  * Guest confirm hold after host accept (~10 min).
  * Deadlines are stored as ISO UTC (Date.toISOString()); display via parisTime (Europe/Paris).
  */
