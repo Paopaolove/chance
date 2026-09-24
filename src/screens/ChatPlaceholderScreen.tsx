@@ -22,7 +22,9 @@ import {
   isChatUnlocked,
   LATE_MAX_MINUTES,
   LATE_MIN_MINUTES,
+  LATE_PRESET_OR_MORE,
   LATE_PRESETS,
+  lateChipLabel,
   lateLabel,
 } from '../utils/chat';
 import { formatOutingWhen } from '../utils/format';
@@ -116,10 +118,10 @@ export function ChatPlaceholderScreen() {
         <View style={styles.lockCard}>
           <Text style={styles.lockEmoji}>🔒</Text>
           <Text style={styles.lockTitle}>
-            Le chat s’ouvre 1 h avant la sortie.
+            {formatUntilChatOpens(outing.startsAt, now)}
           </Text>
           <Text style={styles.lockBody}>
-            Ouverture dans {formatUntilChatOpens(outing.startsAt, now)} (
+            Le chat s’ouvre 1 h avant la sortie (
             {opensAt.toLocaleString('fr-FR', {
               weekday: 'short',
               day: 'numeric',
@@ -168,7 +170,7 @@ export function ChatPlaceholderScreen() {
     setDraft('');
   };
 
-  const onLate = (minutes: number) => {
+  const onLate = (minutes: number, orMore = false) => {
     const n = clampLateMinutes(minutes);
     if (n == null) {
       Alert.alert(
@@ -177,18 +179,18 @@ export function ChatPlaceholderScreen() {
       );
       return;
     }
-    reportLate(outing.id, n, request?.id);
+    reportLate(outing.id, n, request?.id, { orMore });
     setLateOpen(false);
     setLateCustom('');
     Alert.alert(
       'Retard signalé',
-      `L’autre personne verra un bandeau « ${lateLabel(n)} ».`,
+      `L’autre personne verra un bandeau « ${lateLabel(n, { orMore })} ».`,
     );
   };
 
   const onLateCustom = () => {
     const parsed = Number.parseInt(lateCustom.trim(), 10);
-    onLate(parsed);
+    onLate(parsed, false);
   };
 
   return (
@@ -208,7 +210,9 @@ export function ChatPlaceholderScreen() {
           <View style={styles.lateBanner}>
             {lateFromOthers.map((r) => (
               <Text key={r.id} style={styles.lateBannerText}>
-                ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes)})
+                ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, {
+                  orMore: r.orMore,
+                })})
               </Text>
             ))}
           </View>
@@ -261,9 +265,11 @@ export function ChatPlaceholderScreen() {
                 <Pressable
                   key={m}
                   style={styles.lateChip}
-                  onPress={() => onLate(m)}
+                  onPress={() =>
+                    onLate(m, m === LATE_PRESET_OR_MORE)
+                  }
                 >
-                  <Text style={styles.lateChipText}>{lateLabel(m)}</Text>
+                  <Text style={styles.lateChipText}>{lateChipLabel(m)}</Text>
                 </Pressable>
               ))}
             </View>

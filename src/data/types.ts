@@ -171,6 +171,8 @@ export interface LateReport {
   reporterName: string;
   /** Exact delay in minutes (preset chip or custom input). */
   minutes: number;
+  /** True when the « 20+ min » chip was used (not exact custom input). */
+  orMore?: boolean;
   createdAt: string;
 }
 

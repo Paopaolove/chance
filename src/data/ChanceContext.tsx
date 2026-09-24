@@ -770,6 +770,7 @@ interface ChanceContextValue {
     outingId: string,
     minutes: number,
     requestId?: string,
+    opts?: { orMore?: boolean },
   ) => void;
   /** Late reports from someone other than the current user (for bandeau). */
   getLateReportsForOthers: (
@@ -1393,11 +1394,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       outingId: string,
       minutes: number,
       requestId?: string,
+      opts?: { orMore?: boolean },
     ) => {
       const user = state.currentUser;
       if (!user) return;
       const who = user.firstName;
       const now = new Date().toISOString();
+      const orMore = !!opts?.orMore;
       const report: LateReport = {
         id: uid('late'),
         outingId,
@@ -1405,6 +1408,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         reporterId: user.id,
         reporterName: who,
         minutes,
+        orMore: orMore || undefined,
         createdAt: now,
       };
       dispatch({ type: 'REPORT_LATE', payload: report });
@@ -1414,7 +1418,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         outingId,
         requestId,
         kind: 'system',
-        text: lateSystemText(who, minutes),
+        text: lateSystemText(who, minutes, { orMore }),
         createdAt: now,
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: sys });

@@ -149,8 +149,8 @@ export function RequestsScreen() {
         </Text>
         {r.status === 'pending' ? (
           <Button
-            title="Simuler acceptation hôte (démo)"
-            variant="secondary"
+            title="Démo · simuler acceptation"
+            variant="ghost"
             onPress={() => {
               simulateHostAccept(r.id);
               navigation.navigate('ConfirmSlot', { requestId: r.id });

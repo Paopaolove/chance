@@ -17,6 +17,7 @@ import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import { planLabel } from '../utils/format';
 import {
+  hasFullPhotoAccess,
   isTrialActive,
   outingCreditsOf,
   trialDaysRemaining,
@@ -142,7 +143,7 @@ export function ProfileScreen() {
               name={user.firstName}
               photoUri={user.photoUri}
               seed={user.id}
-              size={104}
+              size={hasFullPhotoAccess(user) ? 104 : 56}
             />
           </Pressable>
           <Pressable onPress={onPickPhoto}>

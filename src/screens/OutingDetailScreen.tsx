@@ -143,7 +143,7 @@ export function OutingDetailScreen() {
         <View style={styles.lateBanner}>
           {lateFromOthers.map((r) => (
             <Text key={r.id} style={styles.lateBannerText}>
-              ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes)})
+              ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, { orMore: r.orMore })})
             </Text>
           ))}
         </View>

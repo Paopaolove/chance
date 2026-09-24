@@ -10,6 +10,9 @@ export const LATE_PRESETS: LatePresetMinutes[] = [5, 10, 15, 20];
 export const LATE_MIN_MINUTES = 1;
 export const LATE_MAX_MINUTES = 180;
 
+/** Chip « 20 » means « 20 minutes ou plus » (vs exact custom input). */
+export const LATE_PRESET_OR_MORE: LatePresetMinutes = 20;
+
 export function clampLateMinutes(raw: number): number | null {
   if (!Number.isFinite(raw)) return null;
   const n = Math.round(raw);
@@ -25,28 +28,49 @@ export function isChatUnlocked(startsAt: string, nowMs = Date.now()): boolean {
   return nowMs >= getChatOpensAt(startsAt).getTime();
 }
 
-/** Human countdown until chat opens (French). */
+/**
+ * French countdown until chat opens.
+ * Under 1 h → « Chat dans {mm} min »; otherwise hours (+ minutes).
+ */
 export function formatUntilChatOpens(
   startsAt: string,
   nowMs = Date.now(),
 ): string {
   const left = Math.max(0, getChatOpensAt(startsAt).getTime() - nowMs);
-  if (left <= 0) return 'maintenant';
+  if (left <= 0) return 'Chat ouvert';
   const totalMin = Math.ceil(left / 60_000);
   if (totalMin < 60) {
-    return `${totalMin} min`;
+    return `Chat dans ${totalMin} min`;
   }
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
-  if (m === 0) return `${h} h`;
-  return `${h} h ${m} min`;
+  if (m === 0) return `Chat dans ${h} h`;
+  return `Chat dans ${h} h ${m} min`;
 }
 
-export function lateLabel(minutes: number): string {
+export type LateLabelOpts = { orMore?: boolean };
+
+/** Chip label: preset 20 → « 20+ min », others « N min ». */
+export function lateChipLabel(minutes: number): string {
+  if (minutes === LATE_PRESET_OR_MORE) return '20+ min';
   return `${minutes} min`;
 }
 
-export function lateSystemText(who: string, minutes: number): string {
+/** Bandeau / toast short label. */
+export function lateLabel(minutes: number, opts?: LateLabelOpts): string {
+  if (opts?.orMore) return '20+ min';
+  return `${minutes} min`;
+}
+
+/** System message in chat thread. */
+export function lateSystemText(
+  who: string,
+  minutes: number,
+  opts?: LateLabelOpts,
+): string {
+  if (opts?.orMore) {
+    return `${who} signale un retard de 20 minutes ou plus.`;
+  }
   const unit = minutes === 1 ? 'minute' : 'minutes';
   return `${who} signale un retard de ${minutes} ${unit}.`;
 }
