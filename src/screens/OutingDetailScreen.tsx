@@ -44,6 +44,10 @@ export function OutingDetailScreen() {
     getLateReportsForOthers,
     simulateOtherLate,
     simulateOutingInMinutes,
+    reportHostNoShow,
+    reportVenueClosed,
+    respondVenueAlternate,
+    getRequestById,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
@@ -144,6 +148,60 @@ export function OutingDetailScreen() {
           ))}
         </View>
       ) : null}
+
+      {outing.venueIssue ? (
+        <View style={styles.venueIssueCard}>
+          <Text style={styles.venueIssueTitle}>Restaurant fermé</Text>
+          {outing.venueIssue.alternate ? (
+            <Text style={styles.venueIssueBody}>
+              Proposition · {outing.venueIssue.alternate.venueName} ·{' '}
+              {outing.venueIssue.alternate.neighborhood} · ≤{' '}
+              {outing.venueIssue.alternate.budgetMaxEuros} €
+            </Text>
+          ) : null}
+          {outing.venueIssue.status === 'alternate_proposed' && !isHost ? (
+            <View style={styles.venueIssueActions}>
+              <Button
+                title="Accepter le lieu alternatif"
+                onPress={() => {
+                  const r = respondVenueAlternate(outing.id, 'accepted');
+                  if (!r.ok) Alert.alert('Impossible', r.reason);
+                  else
+                    Alert.alert(
+                      'Lieu mis à jour',
+                      'Même quartier, budget proche. Caution conservée.',
+                    );
+                }}
+              />
+              <Button
+                title="Refuser (caution remboursée)"
+                variant="secondary"
+                onPress={() => {
+                  const r = respondVenueAlternate(outing.id, 'refused');
+                  if (!r.ok) Alert.alert('Impossible', r.reason);
+                  else
+                    Alert.alert(
+                      'Annulé',
+                      'Tu refuses sans perdre ta caution (mock).',
+                    );
+                }}
+                style={{ marginTop: spacing.sm }}
+              />
+            </View>
+          ) : null}
+          {outing.venueIssue.status === 'alternate_accepted' ? (
+            <Text style={styles.venueIssueOk}>
+              Nouveau lieu accepté — caution conservée.
+            </Text>
+          ) : null}
+          {outing.venueIssue.status === 'refused' ? (
+            <Text style={styles.venueIssueOk}>
+              Refus — caution remboursée aux invités concernés.
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
+
 
       {/* Visible before accept: listing, 1 photo, place, budget */}
       <View style={styles.hostBlock}>
@@ -306,6 +364,36 @@ export function OutingDetailScreen() {
                 onPress={() => simulateOtherLate(outing.id, 10)}
                 style={{ marginTop: spacing.sm }}
               />
+              <Button
+                title="Simuler restaurant fermé"
+                variant="ghost"
+                onPress={() => {
+                  const r = reportVenueClosed(outing.id);
+                  if (!r.ok) Alert.alert('Impossible', r.reason);
+                  else
+                    Alert.alert(
+                      'Restaurant fermé',
+                      `Alternatif : ${r.alternate.venueName} · ${r.alternate.neighborhood}`,
+                    );
+                }}
+                style={{ marginTop: spacing.sm }}
+              />
+              <Button
+                title="Simuler no-show hôte (1er/2e)"
+                variant="ghost"
+                onPress={() => {
+                  const r = reportHostNoShow(outing.id);
+                  if (!r.ok) Alert.alert('Impossible', r.reason);
+                  else
+                    Alert.alert(
+                      r.banned ? 'Bannissement' : 'Avertissement',
+                      r.banned
+                        ? '2e no-show — hôte banni. Cautions remboursées.'
+                        : '1er no-show — avertissement. Cautions remboursées.',
+                    );
+                }}
+                style={{ marginTop: spacing.sm }}
+              />
             </View>
           )}
         </View>
@@ -327,6 +415,15 @@ export function OutingDetailScreen() {
           {myRequest.status === 'confirmed' && (
             <>
               <Text style={styles.statusOk}>Place confirmée.</Text>
+              {'id' in myRequest &&
+              getRequestById(myRequest.id)?.depositStatus === 'returned' ? (
+                <Text style={styles.depositReturned}>
+                  Caution remboursée (mock).
+                </Text>
+              ) : 'id' in myRequest &&
+                getRequestById(myRequest.id)?.depositStatus === 'held' ? (
+                <Text style={styles.hint}>Caution 20 € bloquée (mock).</Text>
+              ) : null}
               <Text style={styles.hint}>
                 {isChatUnlocked(outing.startsAt)
                   ? 'Le chat est ouvert (H−1).'
@@ -370,6 +467,36 @@ export function OutingDetailScreen() {
                       'id' in myRequest ? myRequest.id : undefined,
                     )
                   }
+                  style={{ marginTop: spacing.sm }}
+                />
+                <Button
+                  title="Simuler restaurant fermé"
+                  variant="ghost"
+                  onPress={() => {
+                    const r = reportVenueClosed(outing.id);
+                    if (!r.ok) Alert.alert('Impossible', r.reason);
+                    else
+                      Alert.alert(
+                        'Restaurant fermé',
+                        `Alternatif proposé : ${r.alternate.venueName}`,
+                      );
+                  }}
+                  style={{ marginTop: spacing.sm }}
+                />
+                <Button
+                  title="Signaler no-show hôte"
+                  variant="ghost"
+                  onPress={() => {
+                    const r = reportHostNoShow(outing.id);
+                    if (!r.ok) Alert.alert('Impossible', r.reason);
+                    else
+                      Alert.alert(
+                        r.banned ? 'Hôte banni' : 'Avertissement hôte',
+                        r.banned
+                          ? '2e no-show — ban. Ta caution est remboursée.'
+                          : '1er no-show — warning. Ta caution est remboursée.',
+                      );
+                  }}
                   style={{ marginTop: spacing.sm }}
                 />
               </View>
@@ -484,6 +611,37 @@ const styles = StyleSheet.create({
     ...typography.bodyStrong,
     color: colors.success,
     textAlign: 'center',
+  },
+  venueIssueCard: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  venueIssueTitle: {
+    ...typography.bodyStrong,
+    color: colors.warning,
+    fontFamily: fonts.semiBold,
+  },
+  venueIssueBody: {
+    ...typography.body,
+    color: colors.text,
+  },
+  venueIssueActions: { marginTop: spacing.sm },
+  venueIssueOk: {
+    ...typography.caption,
+    color: colors.success,
+    fontFamily: fonts.semiBold,
+  },
+  depositReturned: {
+    ...typography.caption,
+    color: colors.success,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    fontFamily: fonts.semiBold,
   },
   lateBanner: {
     backgroundColor: colors.warningSoft,

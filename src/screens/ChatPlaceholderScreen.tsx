@@ -40,6 +40,9 @@ export function ChatPlaceholderScreen() {
     getLateReportsForOthers,
     simulateOtherLate,
     simulateOutingInMinutes,
+    reportHostNoShow,
+    reportVenueClosed,
+    respondVenueAlternate,
   } = useChance();
 
   const outing = getOutingById(route.params.outingId);
@@ -268,6 +271,53 @@ export function ChatPlaceholderScreen() {
             variant="ghost"
             onPress={() => simulateOtherLate(outing.id, 15, request?.id)}
           />
+          <Button
+            title="Simuler restaurant fermé"
+            variant="ghost"
+            onPress={() => {
+              const r = reportVenueClosed(outing.id);
+              if (!r.ok) Alert.alert('Impossible', r.reason);
+              else
+                Alert.alert(
+                  'Restaurant fermé',
+                  `Alternatif : ${r.alternate.venueName} (même quartier)`,
+                );
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
+          <Button
+            title="Signaler no-show hôte"
+            variant="ghost"
+            onPress={() => {
+              const r = reportHostNoShow(outing.id);
+              if (!r.ok) Alert.alert('Impossible', r.reason);
+              else
+                Alert.alert(
+                  r.banned ? 'Hôte banni' : 'Avertissement',
+                  r.banned
+                    ? '2e no-show — ban + cautions remboursées.'
+                    : '1er no-show — warning + cautions remboursées.',
+                );
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
+          {outing.venueIssue?.status === 'alternate_proposed' &&
+          outing.hostId !== state.currentUser?.id ? (
+            <>
+              <Button
+                title="Accepter lieu alternatif"
+                variant="secondary"
+                onPress={() => respondVenueAlternate(outing.id, 'accepted')}
+                style={{ marginTop: spacing.sm }}
+              />
+              <Button
+                title="Refuser (caution OK)"
+                variant="ghost"
+                onPress={() => respondVenueAlternate(outing.id, 'refused')}
+                style={{ marginTop: spacing.sm }}
+              />
+            </>
+          ) : null}
         </View>
 
         <View style={styles.composer}>

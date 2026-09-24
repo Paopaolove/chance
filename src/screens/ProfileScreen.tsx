@@ -117,6 +117,22 @@ export function ProfileScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.brand}>Chance</Text>
+        {user.banned ? (
+          <View style={styles.banBanner}>
+            <Text style={styles.banTitle}>Compte suspendu (démo)</Text>
+            <Text style={styles.banBody}>
+              {user.bannedReason ??
+                '2e no-show en tant qu’hôte — tu ne peux plus publier.'}
+            </Text>
+          </View>
+        ) : (user.hostNoShowCount ?? 0) === 1 ? (
+          <View style={styles.warnBanner}>
+            <Text style={styles.warnTitle}>Avertissement no-show</Text>
+            <Text style={styles.warnBody}>
+              1er no-show hôte enregistré. Un 2e entraînera un ban (démo).
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.hero}>
           <Pressable onPress={onPickPhoto} accessibilityLabel="Photo de profil">
             <Avatar
@@ -571,7 +587,40 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
+  banBanner: {
+    backgroundColor: colors.dangerSoft,
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  banTitle: {
+    ...typography.bodyStrong,
+    color: colors.danger,
+    fontFamily: fonts.semiBold,
+  },
+  banBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+  warnBanner: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  warnTitle: {
+    ...typography.bodyStrong,
+    color: colors.warning,
+    fontFamily: fonts.semiBold,
+  },
+  warnBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
   brand: {
+
     ...typography.caption,
     color: colors.primary,
     fontFamily: fonts.bold,

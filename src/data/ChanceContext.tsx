@@ -22,6 +22,7 @@ import {
   LatePresetMinutes,
   LateReport,
   OnboardingInput,
+  VenueAlternate,
   Outing,
   OutingCategory,
   PlanId,
@@ -55,6 +56,7 @@ const initialState: AppState = {
   chatMessages: [],
   reviews: mockReviews,
   lateReports: [],
+  hostNoShowStrikes: {},
   toast: null,
 };
 
@@ -215,6 +217,7 @@ function reducer(state: AppState, action: AppAction): AppState {
                 ...r,
                 status: 'confirmed' as const,
                 confirmedAt: action.payload.confirmedAt,
+                depositStatus: 'held' as const,
               }
             : r,
         ),
@@ -347,6 +350,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         chatMessages: [],
         reviews: mockReviews,
         lateReports: [],
+        hostNoShowStrikes: {},
         toast: null,
       };
 
@@ -509,6 +513,134 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'REPORT_HOST_NO_SHOW': {
+      const { outingId, hostId, strike, banned } = action.payload;
+      let currentUser = state.currentUser;
+      if (currentUser && currentUser.id === hostId) {
+        currentUser = {
+          ...currentUser,
+          hostNoShowCount: strike,
+          banned,
+          bannedReason: banned
+            ? '2e no-show hôte — compte suspendu (démo)'
+            : currentUser.bannedReason,
+        };
+      }
+      return {
+        ...state,
+        currentUser,
+        hostNoShowStrikes: {
+          ...state.hostNoShowStrikes,
+          [hostId]: strike,
+        },
+        outings: state.outings.map((o) =>
+          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+        ),
+      };
+    }
+
+    case 'SET_USER_BAN_STATE': {
+      const { userId, hostNoShowCount, banned, bannedReason } = action.payload;
+      // Current user
+      let currentUser = state.currentUser;
+      if (currentUser && currentUser.id === userId) {
+        currentUser = {
+          ...currentUser,
+          hostNoShowCount,
+          banned,
+          bannedReason,
+        };
+      }
+      return { ...state, currentUser };
+    }
+
+    case 'RETURN_DEPOSITS_FOR_OUTING': {
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          r.outingId === action.payload.outingId &&
+          r.status === 'confirmed' &&
+          (r.depositStatus === 'held' || !r.depositStatus)
+            ? { ...r, depositStatus: 'returned' as const }
+            : r,
+        ),
+      };
+    }
+
+    case 'REPORT_VENUE_CLOSED': {
+      const { outingId, alternate } = action.payload;
+      return {
+        ...state,
+        outings: state.outings.map((o) =>
+          o.id === outingId
+            ? {
+                ...o,
+                venueIssue: {
+                  status: 'alternate_proposed' as const,
+                  reportedAt: new Date().toISOString(),
+                  alternate,
+                  refusedByUserIds: [],
+                  acceptedByUserIds: [],
+                },
+              }
+            : o,
+        ),
+      };
+    }
+
+    case 'RESPOND_VENUE_ALTERNATE': {
+      const { outingId, userId, decision } = action.payload;
+      return {
+        ...state,
+        outings: state.outings.map((o) => {
+          if (o.id !== outingId || !o.venueIssue) return o;
+          const issue = o.venueIssue;
+          const accepted = new Set(issue.acceptedByUserIds ?? []);
+          const refused = new Set(issue.refusedByUserIds ?? []);
+          if (decision === 'accepted') {
+            accepted.add(userId);
+            refused.delete(userId);
+          } else {
+            refused.add(userId);
+            accepted.delete(userId);
+          }
+          const status =
+            decision === 'accepted'
+              ? ('alternate_accepted' as const)
+              : ('refused' as const);
+          return {
+            ...o,
+            venueIssue: {
+              ...issue,
+              status,
+              acceptedByUserIds: Array.from(accepted),
+              refusedByUserIds: Array.from(refused),
+            },
+            // Apply alternate venue if accepted
+            ...(decision === 'accepted' && issue.alternate
+              ? {
+                  venueName: issue.alternate.venueName,
+                  approxArea: issue.alternate.approxArea,
+                  exactAddress: issue.alternate.exactAddress,
+                  budgetMaxEuros: issue.alternate.budgetMaxEuros,
+                  neighborhood: issue.alternate.neighborhood,
+                }
+              : {}),
+          };
+        }),
+        requests:
+          decision === 'refused'
+            ? state.requests.map((r) =>
+                r.outingId === outingId &&
+                r.userId === userId &&
+                r.status === 'confirmed'
+                  ? { ...r, depositStatus: 'returned' as const }
+                  : r,
+              )
+            : state.requests,
+      };
+    }
+
     default:
       return state;
   }
@@ -516,6 +648,33 @@ function reducer(state: AppState, action: AppAction): AppState {
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Same neighborhood + similar budget (±15 €), else closest budget in quartier. */
+function pickAlternateVenue(outing: Outing): VenueAlternate {
+  const candidates = mockOutings.filter(
+    (o) =>
+      o.id !== outing.id &&
+      o.neighborhood === outing.neighborhood &&
+      Math.abs(o.budgetMaxEuros - outing.budgetMaxEuros) <= 15,
+  );
+  const pool =
+    candidates.length > 0
+      ? candidates
+      : mockOutings.filter(
+          (o) => o.id !== outing.id && o.neighborhood === outing.neighborhood,
+        );
+  const pick =
+    pool[0] ??
+    mockOutings.find((o) => o.id !== outing.id) ??
+    outing;
+  return {
+    venueName: pick.venueName + (pick === outing ? ' (bis)' : ''),
+    approxArea: pick.approxArea,
+    exactAddress: pick.exactAddress,
+    budgetMaxEuros: pick.budgetMaxEuros,
+    neighborhood: pick.neighborhood,
+  };
 }
 
 interface ChanceContextValue {
@@ -543,7 +702,9 @@ interface ChanceContextValue {
     topic?: string;
     excludedTopics?: string[];
     flexibleSlot?: boolean;
-  }) => { ok: true; outingId: string } | { ok: false; reason: 'no_user' | 'already_active' };
+  }) =>
+    | { ok: true; outingId: string }
+    | { ok: false; reason: 'no_user' | 'already_active' | 'banned' };
   closeOuting: (outingId: string) => void;
   joinOuting: (
     outingId: string,
@@ -654,6 +815,20 @@ interface ChanceContextValue {
   }[];
   getDisplayName: (userId: string) => string;
   showToast: (title: string, body: string) => void;
+  reportHostNoShow: (
+    outingId: string,
+  ) =>
+    | { ok: true; strike: number; banned: boolean }
+    | { ok: false; reason: string };
+  reportVenueClosed: (
+    outingId: string,
+  ) =>
+    | { ok: true; alternate: VenueAlternate }
+    | { ok: false; reason: string };
+  respondVenueAlternate: (
+    outingId: string,
+    decision: 'accepted' | 'refused',
+  ) => { ok: true } | { ok: false; reason: string };
 }
 
 const ChanceContext = createContext<ChanceContextValue | null>(null);
@@ -678,7 +853,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         trialEndsAt: trial.toISOString(),
         dispoSoir: !!input.dispoSoir,
         interests: input.interests,
-        customFilters: [],
+        customFilters: input.customFilters ?? [],
         photoUri: input.photoUri,
         dispoCategories: input.dispoSoir ? ['restaurant', 'bar', 'culture', 'autre'] : [],
         dispoSlot: input.dispoSoir ? '19:30' : undefined,
@@ -752,9 +927,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       topic?: string;
       excludedTopics?: string[];
       flexibleSlot?: boolean;
-    }): { ok: true; outingId: string } | { ok: false; reason: 'no_user' | 'already_active' } => {
+    }):
+      | { ok: true; outingId: string }
+      | { ok: false; reason: 'no_user' | 'already_active' | 'banned' } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
+      if (user.banned) return { ok: false, reason: 'banned' };
       const hasActive = state.outings.some(
         (o) =>
           o.hostId === user.id &&
@@ -1581,6 +1759,104 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     return state.requests.filter((r) => r.userId === user.id);
   }, [state.currentUser, state.requests]);
 
+
+  const reportHostNoShow = useCallback(
+    (
+      outingId: string,
+    ):
+      | { ok: true; strike: number; banned: boolean }
+      | { ok: false; reason: string } => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      const hostId = outing.hostId;
+      const prev = state.hostNoShowStrikes[hostId] ?? 0;
+      const strike = prev + 1;
+      const banned = strike >= 2;
+      dispatch({
+        type: 'REPORT_HOST_NO_SHOW',
+        payload: { outingId, hostId, strike, banned },
+      });
+      dispatch({
+        type: 'RETURN_DEPOSITS_FOR_OUTING',
+        payload: { outingId, reason: 'host_no_show' },
+      });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: banned ? 'Hôte banni (démo)' : 'Avertissement hôte',
+        body: banned
+          ? '2e no-show — compte suspendu. Cautions des invités remboursées.'
+          : '1er no-show — avertissement. Cautions des invités remboursées.',
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true, strike, banned };
+    },
+    [state.outings, state.hostNoShowStrikes],
+  );
+
+  const reportVenueClosed = useCallback(
+    (
+      outingId: string,
+    ):
+      | { ok: true; alternate: VenueAlternate }
+      | { ok: false; reason: string } => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      if (outing.venueIssue) return { ok: false, reason: 'already_reported' };
+      const alternate = pickAlternateVenue(outing);
+      dispatch({
+        type: 'REPORT_VENUE_CLOSED',
+        payload: { outingId, alternate },
+      });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: 'Restaurant fermé',
+        body: `Proposition : ${alternate.venueName} · ${alternate.neighborhood} · ≤ ${alternate.budgetMaxEuros} €`,
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true, alternate };
+    },
+    [state.outings],
+  );
+
+  const respondVenueAlternate = useCallback(
+    (
+      outingId: string,
+      decision: 'accepted' | 'refused',
+    ): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing?.venueIssue) return { ok: false, reason: 'no_issue' };
+      dispatch({
+        type: 'RESPOND_VENUE_ALTERNATE',
+        payload: { outingId, userId: user.id, decision },
+      });
+      if (decision === 'refused') {
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: 'Sortie annulée',
+          body: 'Tu refuses le lieu alternatif — caution remboursée (mock).',
+          createdAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+      } else {
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: 'Nouveau lieu accepté',
+          body: outing.venueIssue.alternate
+            ? `${outing.venueIssue.alternate.venueName} · caution conservée`
+            : 'Lieu mis à jour',
+          createdAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+      }
+      return { ok: true };
+    },
+    [state.currentUser, state.outings],
+  );
+
   const value = useMemo<ChanceContextValue>(
     () => ({
       state,
@@ -1631,6 +1907,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       getOutingsToRate,
       getDisplayName,
       showToast,
+      reportHostNoShow,
+      reportVenueClosed,
+      respondVenueAlternate,
     }),
     [
       state,
@@ -1681,6 +1960,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       getOutingsToRate,
       getDisplayName,
       showToast,
+      reportHostNoShow,
+      reportVenueClosed,
+      respondVenueAlternate,
     ],
   );
 

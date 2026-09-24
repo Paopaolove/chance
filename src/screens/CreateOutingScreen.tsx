@@ -158,12 +158,13 @@ export function CreateOutingScreen() {
     });
 
     if (!result.ok) {
-      Alert.alert(
-        'Impossible',
-        result.reason === 'already_active'
-          ? 'Tu as déjà une sortie en cours. Clôture-la pour en ouvrir une autre.'
-          : 'Profil manquant.',
-      );
+      const messages: Record<string, string> = {
+        already_active:
+          'Tu as déjà une sortie en cours. Clôture-la pour en ouvrir une autre.',
+        banned: 'Compte suspendu après 2 no-shows hôte (démo).',
+        no_user: 'Profil manquant.',
+      };
+      Alert.alert('Impossible', messages[result.reason] ?? result.reason);
       return;
     }
 

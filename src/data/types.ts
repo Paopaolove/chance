@@ -64,7 +64,36 @@ export interface User {
   notificationsGranted: boolean;
   locationGranted: boolean;
   createdAt: string;
+  /** Host no-shows: 1 = warning, 2+ = ban (mock). */
+  hostNoShowCount?: number;
+  /** Banned after 2nd host no-show (mock). */
+  banned?: boolean;
+  bannedReason?: string;
 }
+
+export type VenueIssueStatus =
+  | 'reported'
+  | 'alternate_proposed'
+  | 'alternate_accepted'
+  | 'refused';
+
+export type VenueAlternate = {
+  venueName: string;
+  approxArea: string;
+  exactAddress: string;
+  budgetMaxEuros: number;
+  neighborhood: string;
+};
+
+export type VenueIssue = {
+  status: VenueIssueStatus;
+  reportedAt: string;
+  alternate?: VenueAlternate;
+  /** Guests who refused the alternate (deposit returned). */
+  refusedByUserIds?: string[];
+  /** Guests who accepted the alternate. */
+  acceptedByUserIds?: string[];
+};
 
 export interface Outing {
   id: string;
@@ -94,6 +123,8 @@ export interface Outing {
   excludedTopics?: string[];
   /** Host is flexible on the exact time slot. */
   flexibleSlot?: boolean;
+  /** Restaurant closed edge-case (mock). */
+  venueIssue?: VenueIssue;
 }
 
 export interface Request {
@@ -109,6 +140,8 @@ export interface Request {
   acceptedAt?: string;
   confirmDeadlineAt?: string;
   confirmedAt?: string;
+  /** Caution mock: held at confirm, returned on host no-show / venue refuse. */
+  depositStatus?: 'none' | 'held' | 'returned' | 'forfeited';
 }
 
 
@@ -158,6 +191,8 @@ export interface AppState {
   reviews: Review[];
   /** Late signals — bandeau for other party(ies) in chat/outing UI. */
   lateReports: LateReport[];
+  /** Host id → no-show count (1=warning, 2+=ban). */
+  hostNoShowStrikes: Record<string, number>;
   /** In-app mock notification banner (e.g. late alert). */
   toast: AppToast | null;
 }
@@ -186,6 +221,8 @@ export type OnboardingInput = {
   neighborhood: string;
   bio: string;
   interests: string[];
+  /** Free-text centres d'intérêt / filtres descriptifs. */
+  customFilters?: string[];
   photoUri?: string;
   phone: string;
   authProvider: AuthProvider;
@@ -233,6 +270,40 @@ export type AppAction =
   | {
       type: 'REQUEST_HIDE_REVIEW_TEXT';
       payload: { reviewId: string; userId: string };
+    }
+  | {
+      type: 'REPORT_HOST_NO_SHOW';
+      payload: {
+        outingId: string;
+        hostId: string;
+        strike: number;
+        banned: boolean;
+      };
+    }
+  | {
+      type: 'SET_USER_BAN_STATE';
+      payload: {
+        userId: string;
+        hostNoShowCount: number;
+        banned: boolean;
+        bannedReason?: string;
+      };
+    }
+  | {
+      type: 'RETURN_DEPOSITS_FOR_OUTING';
+      payload: { outingId: string; reason: string };
+    }
+  | {
+      type: 'REPORT_VENUE_CLOSED';
+      payload: { outingId: string; alternate: VenueAlternate };
+    }
+  | {
+      type: 'RESPOND_VENUE_ALTERNATE';
+      payload: {
+        outingId: string;
+        userId: string;
+        decision: 'accepted' | 'refused';
+      };
     };
 
 export interface Review {
