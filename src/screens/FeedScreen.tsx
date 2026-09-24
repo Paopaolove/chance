@@ -1,5 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Slider from '@react-native-community/slider';
 import React, { useMemo, useRef, useState } from 'react';
 import {
   FlatList,
@@ -7,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,10 +18,7 @@ import { OutingCard } from '../components/OutingCard';
 import { PersonCard } from '../components/PersonCard';
 import { useChance } from '../data/ChanceContext';
 import { categoryLabels } from '../data/mockOutings';
-import {
-  RELEVANCE_MAX_MINUTES,
-  getTravelMinutes,
-} from '../data/travelTime';
+import { getTravelMinutes } from '../data/travelTime';
 import { Outing, OutingCategory, User } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
@@ -44,6 +43,11 @@ const BUDGET_FILTERS: { id: BudgetFilter; label: string }[] = [
   { id: 25, label: '≤ 25 €' },
   { id: 40, label: '≤ 40 €' },
 ];
+
+const TRAVEL_SHORTCUTS = [15, 30, 45, 60] as const;
+const TRAVEL_MIN_MINUTES = 5;
+const TRAVEL_MAX_MINUTES = 90;
+const TRAVEL_DEFAULT_MINUTES = 30;
 
 type OutingWithTravel = Outing & { travelMinutes: number; matchScore: number };
 
@@ -111,6 +115,12 @@ export function FeedScreen() {
   /** Annonces: prefer alignment with my Dispo prefs when toggled. */
   const [alignDispo, setAlignDispo] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [travelMaxMinutes, setTravelMaxMinutes] = useState(
+    TRAVEL_DEFAULT_MINUTES,
+  );
+
+  const clampTravelMinutes = (n: number) =>
+    Math.min(TRAVEL_MAX_MINUTES, Math.max(TRAVEL_MIN_MINUTES, Math.round(n)));
 
   const user = state.currentUser;
   const isDispo = !!user?.dispoSoir;
@@ -152,7 +162,7 @@ export function FeedScreen() {
       };
     });
 
-    list = list.filter((o) => o.travelMinutes <= RELEVANCE_MAX_MINUTES);
+    list = list.filter((o) => o.travelMinutes <= travelMaxMinutes);
 
     if (categoryFilter !== 'all') {
       list = list.filter((o) => o.category === categoryFilter);
@@ -185,6 +195,7 @@ export function FeedScreen() {
     visibleOutings,
     categoryFilter,
     budgetFilter,
+    travelMaxMinutes,
     userNeighborhood,
     alignDispo,
     isDispo,
@@ -212,7 +223,7 @@ export function FeedScreen() {
         ),
       };
     });
-    list = list.filter((x) => x.travelMinutes <= RELEVANCE_MAX_MINUTES);
+    list = list.filter((x) => x.travelMinutes <= travelMaxMinutes);
     if (categoryFilter !== 'all') {
       list = list.filter((x) =>
         x.person.dispoCategories?.includes(categoryFilter),
@@ -242,6 +253,7 @@ export function FeedScreen() {
     categoryFilter,
     budgetFilter,
     quartierFilter,
+    travelMaxMinutes,
     userNeighborhood,
     myDispoPrefs.categories,
     myDispoPrefs.budgetMax,
@@ -305,7 +317,8 @@ export function FeedScreen() {
   const filtersActive =
     budgetFilter !== 'all' ||
     alignDispo ||
-    (mode === 'dispos' && quartierFilter !== 'all');
+    (mode === 'dispos' && quartierFilter !== 'all') ||
+    travelMaxMinutes !== TRAVEL_DEFAULT_MINUTES;
 
   const categoryChips = (
     <View style={styles.categoryRow}>
@@ -419,6 +432,72 @@ export function FeedScreen() {
           })}
         </ScrollView>
       ) : null}
+      <View style={styles.travelBlock}>
+        <Text style={styles.travelLabel}>
+          Moins de {travelMaxMinutes} min
+        </Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+          style={styles.filtersScroll}
+        >
+          {TRAVEL_SHORTCUTS.map((m) => {
+            const selected = travelMaxMinutes === m;
+            return (
+              <Pressable
+                key={m}
+                onPress={() => setTravelMaxMinutes(m)}
+                style={[styles.chip, selected && styles.chipSelected]}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    selected && styles.chipTextSelected,
+                  ]}
+                >
+                  {m} min
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <View style={styles.travelSliderRow}>
+          <Slider
+            style={styles.travelSlider}
+            minimumValue={TRAVEL_MIN_MINUTES}
+            maximumValue={TRAVEL_MAX_MINUTES}
+            step={5}
+            value={travelMaxMinutes}
+            onValueChange={(v) => setTravelMaxMinutes(clampTravelMinutes(v))}
+            minimumTrackTintColor={colors.primary}
+            maximumTrackTintColor={colors.border}
+            thumbTintColor={colors.primary}
+          />
+          <View style={styles.travelInputWrap}>
+            <Text style={styles.travelInputPrefix}>max</Text>
+            <TextInput
+              style={styles.travelInput}
+              value={String(travelMaxMinutes)}
+              onChangeText={(t) => {
+                const digits = t.replace(/\D/g, '');
+                if (digits === '') return;
+                const n = parseInt(digits, 10);
+                if (!Number.isNaN(n)) {
+                  setTravelMaxMinutes(clampTravelMinutes(n));
+                }
+              }}
+              keyboardType="number-pad"
+              maxLength={2}
+              selectTextOnFocus
+              accessibilityLabel="Temps de trajet maximum en minutes"
+            />
+            <Text style={styles.travelInputSuffix}>min</Text>
+          </View>
+        </View>
+      </View>
     </View>
   ) : null;
 
@@ -457,8 +536,8 @@ export function FeedScreen() {
         <Text style={styles.title}>Autour de toi</Text>
         <Text style={styles.sub}>
           {userNeighborhood
-            ? `Depuis ${userNeighborhood} · ~${RELEVANCE_MAX_MINUTES} min`
-            : 'Paris intramuros · ~30–40 min'}
+            ? `Depuis ${userNeighborhood} · Moins de ${travelMaxMinutes} min`
+            : `Paris intramuros · Moins de ${travelMaxMinutes} min`}
         </Text>
       </View>
 
@@ -636,5 +715,55 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,
     flexGrow: 1,
+  },
+  travelBlock: {
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+  },
+  travelLabel: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  travelSliderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  travelSlider: {
+    flex: 1,
+    height: 40,
+  },
+  travelInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 0,
+  },
+  travelInputPrefix: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  travelInput: {
+    width: 44,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  travelInputSuffix: {
+    ...typography.caption,
+    color: colors.textMuted,
   },
 });
