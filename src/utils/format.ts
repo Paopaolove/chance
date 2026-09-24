@@ -57,6 +57,11 @@ export function formatRatingAverage(average: number): string {
   return average.toFixed(1).replace('.', ',');
 }
 
+/** Exact empty-reviews / new-user French copy. */
+export function newUserChanceCopy(firstName: string): string {
+  return `${firstName} vient d’arriver. Donne-lui sa Chance.`;
+}
+
 /** Profile / card line: « 4,6 · 12 sorties » or new-user copy. */
 export function formatRatingLine(
   firstName: string,
@@ -64,7 +69,7 @@ export function formatRatingLine(
   outingCount: number,
 ): string {
   if (outingCount <= 0 || average == null) {
-    return `${firstName} vient d’arriver. Donne-lui sa Chance.`;
+    return newUserChanceCopy(firstName);
   }
   const sorties = outingCount === 1 ? '1 sortie' : `${outingCount} sorties`;
   return `${formatRatingAverage(average)} · ${sorties}`;

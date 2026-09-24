@@ -16,7 +16,7 @@ import { useChance } from '../data/ChanceContext';
 import { Review } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
-import { formatRatingLine } from '../utils/format';
+import { formatRatingLine, newUserChanceCopy } from '../utils/format';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'Reviews'>;
@@ -80,7 +80,7 @@ export function ReviewsScreen() {
       {!reviews.length ? (
         <EmptyState
           title="Pas encore d’avis"
-          subtitle={`${userName} vient d’arriver. Donne-lui sa Chance.`}
+          subtitle={newUserChanceCopy(userName)}
         />
       ) : (
         reviews.map((review) => {
