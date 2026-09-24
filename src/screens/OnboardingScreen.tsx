@@ -52,7 +52,7 @@ const slides = [
     titlePrefix: 'Laisse une ',
     titleBold: 'Chance',
     titleSuffix: '',
-    body: 'Crée une sortie. Ou rejoins-en une. Le premier mois est ouvert.',
+    body: 'Crée une sortie. Ou rejoins-en une.\nLe premier mois est ouvert.',
   },
 ];
 
