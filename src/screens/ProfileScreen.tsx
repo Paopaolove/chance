@@ -12,7 +12,7 @@ import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import { mergeProfileTags } from '../data/interests';
 import { categoryLabels } from '../data/mockOutings';
-import { pricing } from '../data/pricing';
+import { describeDepositForfeitMoment, pricing } from '../data/pricing';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import { planLabel } from '../utils/format';
@@ -43,6 +43,7 @@ export function ProfileScreen() {
     completeOuting,
     simulateLocalNotifications,
     reportGuestNoShow,
+    hasJokerAvailable,
     reportHostNeverHonor,
     reportHostNoShow,
     simulateConfirmRace,
@@ -149,18 +150,25 @@ export function ProfileScreen() {
             <Text style={styles.warnTitle}>Priorité baissée</Text>
             <Text style={styles.warnBody}>
               {user.profileMention ??
-                'Ghost après confirmation — priorité réduite dans les files hôte.'}
+                'Absence après confirmation — priorité réduite dans les files hôte.'}
             </Text>
           </View>
         ) : (user.guestNoShowCount ?? 0) === 1 ? (
           <View style={styles.warnBanner}>
-            <Text style={styles.warnTitle}>Caution perdue (ghost)</Text>
+            <Text style={styles.warnTitle}>Caution perdue</Text>
             <Text style={styles.warnBody}>
-              1er ghost après confirmation. Un 2e baisse ta priorité + mention
-              profil.
+              1re absence après confirmation — {describeDepositForfeitMoment()}{' '}
+              Un 2e baisse ta priorité + mention profil.
             </Text>
           </View>
         ) : null}
+        <View style={styles.jokerBanner}>
+          <Text style={styles.jokerText}>
+            {hasJokerAvailable()
+              ? 'Joker du mois disponible (Europe/Paris).'
+              : 'Joker déjà utilisé ce mois (Europe/Paris).'}
+          </Text>
+        </View>
         <View style={styles.hero}>
           <Pressable onPress={onPickPhoto} accessibilityLabel="Photo de profil">
             <Avatar
@@ -652,18 +660,18 @@ export function ProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Démo QA · cas limites</Text>
           <Text style={styles.cardHint}>
-            Ghost invité, publication jamais honorée, course 2 confirmations,
+            Absence invité, publication jamais honorée, course 2 confirmations,
             no-show hôte (1er/2e).
           </Text>
           <Button
-            title="Simuler mon ghost (caution perdue)"
+            title="Simuler mon absence (caution perdue)"
             variant="ghost"
             onPress={() => {
               const req = outgoingRequests.find((r) => r.status === 'confirmed');
               if (!req) {
                 Alert.alert(
                   'Démo',
-                  'Il faut une place confirmée (outgoing) pour simuler un ghost.',
+                  'Il faut une place confirmée (outgoing) pour simuler une absence.',
                 );
                 return;
               }
@@ -673,14 +681,14 @@ export function ProfileScreen() {
                 Alert.alert(
                   r.lowerPriority ? 'Priorité baissée' : 'Caution perdue',
                   r.lowerPriority
-                    ? '2e ghost — priorité baissée + mention profil.'
-                    : '1er ghost — caution non remboursée.',
+                    ? '2e absence — priorité baissée + mention profil.'
+                    : `1re absence — ${describeDepositForfeitMoment()}`,
                 );
             }}
             style={{ marginTop: spacing.sm }}
           />
           <Button
-            title="Signaler ghost d’un invité"
+            title="Signaler l’absence d’un invité"
             variant="ghost"
             onPress={() => {
               const req = incomingRequests.find((r) => r.status === 'confirmed');
@@ -692,10 +700,10 @@ export function ProfileScreen() {
               if (!r.ok) Alert.alert('Impossible', r.reason);
               else
                 Alert.alert(
-                  'Ghost invité',
+                  'Absence invité',
                   r.lowerPriority
                     ? '2e — priorité baissée pour cet invité.'
-                    : 'Caution de l’invité perdue (mock).',
+                    : describeDepositForfeitMoment(),
                 );
             }}
             style={{ marginTop: spacing.sm }}
@@ -797,6 +805,15 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
+  jokerBanner: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  jokerText: { ...typography.caption, color: colors.primaryDark, fontFamily: fonts.semiBold },
   banBanner: {
     backgroundColor: colors.dangerSoft,
     borderRadius: 16,

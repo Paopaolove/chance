@@ -9,6 +9,12 @@ export function parisYmd(isoOrMs: string | number): string {
   return d.toLocaleDateString('en-CA', { timeZone: PARIS_TIMEZONE });
 }
 
+/** Calendar month key « YYYY-MM » in Europe/Paris (joker mensuel). */
+export function parisMonthKey(isoOrMs: string | number = Date.now()): string {
+  const ymd = parisYmd(isoOrMs);
+  return ymd ? ymd.slice(0, 7) : '';
+}
+
 /** « 20:00 » in Europe/Paris. */
 export function formatParisTime(iso: string): string {
   const d = new Date(iso);

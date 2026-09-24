@@ -622,27 +622,42 @@ export function OnboardingScreen() {
           {absencesExpanded ? (
             <View style={styles.rulesBox}>
               <Text style={styles.rulesLine}>
-                • Caution 20 € ≠ frais Chance ≠ invitation / addition.
+                La caution de 20 €, c’est ton engagement à venir.
               </Text>
               <Text style={styles.rulesLine}>
-                • Annulation ≥ 3 h avant → caution rendue.
+                Ce n’est pas l’addition du restaurant, ni l’abonnement Chance.
+              </Text>
+              <Text style={styles.rulesLine}>Si tu es là, on te la rend.</Text>
+              <Text style={[styles.rulesLine, styles.rulesGap]}>
+                Si tu annules au moins 3 heures avant, on te la rend aussi.
               </Text>
               <Text style={styles.rulesLine}>
-                • Annulation {'<'} 3 h ou ghost après confirm → caution perdue
-                (pas d’autre amende).
+                Si tu annules trop tard ou tu ne viens pas, tu la perds :
               </Text>
               <Text style={styles.rulesLine}>
-                • Imprévu (1× / sortie, motif + raison) : accepté → caution
-                rendue + sortie annulée (pas de no-show) ; refusé → règle des
-                3 h.
+                6,90 € pour Chance, 13,10 € pour l’hôte.
+              </Text>
+              <Text style={[styles.rulesLine, styles.rulesGap]}>
+                Un imprévu, tu peux le signaler une fois par sortie, avec une
+                phrase.
               </Text>
               <Text style={styles.rulesLine}>
-                • Deux absences invité → perte de priorité, puis le compte peut
-                être fermé.
+                Si l’hôte accepte : caution rendue, ce n’est pas une absence.
+              </Text>
+              <Text style={[styles.rulesLine, styles.rulesGap]}>
+                Tu as un joker par mois.
               </Text>
               <Text style={styles.rulesLine}>
-                • L’hôte ne vient pas → 1 avertissement, 2e fois compte fermé.
-                Les invités récupèrent la caution.
+                Même si l’hôte refuse, le joker rend la caution et ça ne compte
+                pas comme une absence. L’hôte ne touche rien.
+              </Text>
+              <Text style={[styles.rulesLine, styles.rulesGap]}>
+                Deux absences : tu passes après les autres. Encore une fois, le
+                compte peut être fermé.
+              </Text>
+              <Text style={styles.rulesLine}>
+                Si c’est l’hôte qui ne vient pas : un avertissement, puis compte
+                fermé. Les invités récupèrent leur caution.
               </Text>
             </View>
           ) : null}
@@ -1013,6 +1028,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   rulesLine: { ...typography.body, color: colors.textSecondary },
+  rulesGap: { marginTop: spacing.md },
   acceptRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

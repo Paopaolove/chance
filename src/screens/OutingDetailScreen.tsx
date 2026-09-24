@@ -14,6 +14,9 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
+import {
+  describeDepositForfeitMoment,
+} from '../data/pricing';
 import { budgetChipLabel, categoryLabels, mockHosts } from '../data/mockOutings';
 import { formatOutingCategoryLabel } from '../utils/categoryLabel';
 import {
@@ -52,6 +55,8 @@ export function OutingDetailScreen() {
     getPendingImprevuForMe,
     getMyImprevu,
     respondImprevu,
+    hasJokerAvailable,
+    useJokerOnImprevu,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
@@ -192,7 +197,7 @@ export function OutingDetailScreen() {
                 else
                   Alert.alert(
                     'Imprévu refusé',
-                    'Règle des 3 h : caution encore bloquée. Annulation ≥ 3 h → rendue ; < 3 h ou ghost → perdue. Pas d’amende.',
+                    'Caution encore bloquée. Annule au moins 3 heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Chance / 13,10 € hôte). L’invité peut utiliser son joker.',
                   );
               }}
               style={{ marginTop: spacing.sm }}
@@ -379,8 +384,8 @@ export function OutingDetailScreen() {
           <Text style={styles.hint}>Billets déjà achetés par l’hôte</Text>
         ) : null}
         <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-          Caution 20 € à la confirmation ≠ addition. Pas de transfert entre
-          personnes.
+          Caution 20 € à la confirmation — ce n’est pas l’addition. Pas de
+          transfert entre personnes.
         </Text>
       </View>
 
@@ -492,13 +497,15 @@ export function OutingDetailScreen() {
               {getMyImprevu(outing.id) ? (
                 <Text style={[styles.hint, { marginTop: spacing.md }]}>
                   Imprévu signalé ·{' '}
-                  {getMyImprevu(outing.id)!.status === 'pending'
-                    ? 'en attente'
-                    : getMyImprevu(outing.id)!.status === 'accepted'
-                      ? 'accepté — sortie annulée'
-                      : getMyImprevu(outing.id)!.status === 'auto_refused'
-                        ? 'sans réponse à l’heure'
-                        : 'refusé — règle des 3 h'}
+                  {getMyImprevu(outing.id)!.jokerUsed
+                    ? 'joker — caution rendue'
+                    : getMyImprevu(outing.id)!.status === 'pending'
+                      ? 'en attente'
+                      : getMyImprevu(outing.id)!.status === 'accepted'
+                        ? 'accepté — sortie annulée'
+                        : getMyImprevu(outing.id)!.status === 'auto_refused'
+                          ? 'sans réponse à l’heure'
+                          : 'refusé — au moins 3 heures / joker'}
                 </Text>
               ) : (
                 <Button
@@ -568,13 +575,15 @@ export function OutingDetailScreen() {
               {getMyImprevu(outing.id) ? (
                 <Text style={[styles.hint, { marginTop: spacing.sm }]}>
                   Imprévu signalé ·{' '}
-                  {getMyImprevu(outing.id)!.status === 'pending'
-                    ? 'en attente de réponse'
-                    : getMyImprevu(outing.id)!.status === 'accepted'
-                      ? 'accepté — caution rendue'
-                      : getMyImprevu(outing.id)!.status === 'auto_refused'
-                        ? 'sans réponse — absence'
-                        : 'refusé — règle des 3 h'}
+                  {getMyImprevu(outing.id)!.jokerUsed
+                    ? 'joker — caution rendue'
+                    : getMyImprevu(outing.id)!.status === 'pending'
+                      ? 'en attente de réponse'
+                      : getMyImprevu(outing.id)!.status === 'accepted'
+                        ? 'accepté — caution rendue'
+                        : getMyImprevu(outing.id)!.status === 'auto_refused'
+                          ? 'sans réponse — absence'
+                          : 'refusé — au moins 3 heures / joker'}
                 </Text>
               ) : (
                 <Button
@@ -597,16 +606,54 @@ export function OutingDetailScreen() {
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'forfeited' ? (
                 <Text style={styles.hint}>
-                  Caution 20 € perdue (mock) — pas d’amende supplémentaire.
+                  {describeDepositForfeitMoment()}
                 </Text>
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'held' ? (
                 <Text style={styles.hint}>
-                  Caution 20 € bloquée (mock, ≠ invitation). Rendue si ≥ 3 h /
-                  hôte annule / imprévu accepté ; perdue si annulation tardive
-                  ou ghost — pas d’autre amende.
+                  Caution 20 € bloquée (mock). Rendue si tu annules au moins 3
+                  heures avant, si l’hôte annule / imprévu accepté / joker ;
+                  perdue si trop tard ou absence (6,90 € Chance / 13,10 € hôte).
                 </Text>
               ) : null}
+
+              {(() => {
+                const mine = getMyImprevu(outing.id);
+                if (
+                  !mine ||
+                  mine.jokerUsed ||
+                  (mine.status !== 'refused' && mine.status !== 'auto_refused')
+                ) {
+                  return null;
+                }
+                if (!hasJokerAvailable()) {
+                  return (
+                    <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                      Joker déjà utilisé ce mois — caution selon la règle des 3
+                      heures.
+                    </Text>
+                  );
+                }
+                return (
+                  <Button
+                    title="Utiliser mon joker"
+                    variant="secondary"
+                    onPress={() => {
+                      const r = useJokerOnImprevu(mine.id);
+                      if (!r.ok) {
+                        Alert.alert('Impossible', r.reason);
+                        return;
+                      }
+                      Alert.alert(
+                        'Joker utilisé',
+                        'Caution rendue — ce n’est pas une absence. L’hôte ne touche rien.',
+                      );
+                    }}
+                    style={{ marginTop: spacing.sm }}
+                  />
+                );
+              })()}
+
               <Text style={styles.hint}>
                 {isChatUnlocked(outing.startsAt)
                   ? 'Le chat est ouvert (H−1).'
@@ -637,9 +684,9 @@ export function OutingDetailScreen() {
                     Alert.alert(
                       'Désistement',
                       res.depositReturned
-                        ? 'Place libérée — caution rendue (≥ 3 h, mock). Les autres confirmés restent.'
+                        ? 'Place libérée — caution rendue (au moins 3 heures avant, mock). Les autres confirmés restent.'
                         : res.depositForfeited
-                          ? 'Place libérée — caution perdue (< 3 h, mock). Les autres confirmés restent.'
+                          ? `Place libérée — ${describeDepositForfeitMoment()} Les autres confirmés restent.`
                           : 'Place libérée. Les autres confirmés restent.',
                     );
                     navigation.goBack();

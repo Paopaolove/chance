@@ -40,9 +40,13 @@ import {
   ConfirmGateResult,
   shouldConsumeCreditOnConfirm,
 } from '../utils/subscription';
-import { CANCEL_FREE_BEFORE_HOURS,
+import {
+  CANCEL_FREE_BEFORE_HOURS,
   DEPOSIT_EUROS as DEPOSIT_FROM_PRICING,
-  isCancelFreeWindow } from './pricing';
+  describeDepositForfeitMoment,
+  isCancelFreeWindow,
+} from './pricing';
+import { parisMonthKey } from '../utils/parisTime';
 import {
   chatThreadKey,
   lateLabel,
@@ -652,6 +656,33 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+
+    case 'USE_JOKER_ON_IMPREVU': {
+      const { imprevuId, requestId, monthKey } = action.payload;
+      const report = state.imprevuReports.find((r) => r.id === imprevuId);
+      if (!report) return state;
+      if (report.status !== 'refused' && report.status !== 'auto_refused') {
+        return state;
+      }
+      if (report.jokerUsed) return state;
+      let currentUser = state.currentUser;
+      if (currentUser && currentUser.id === report.reporterId) {
+        currentUser = { ...currentUser, jokerUsedMonthKey: monthKey };
+      }
+      return {
+        ...state,
+        currentUser,
+        imprevuReports: state.imprevuReports.map((r) =>
+          r.id === imprevuId ? { ...r, jokerUsed: true } : r,
+        ),
+        requests: state.requests.map((r) =>
+          r.id === requestId
+            ? { ...r, depositStatus: 'returned' as const }
+            : r,
+        ),
+      };
+    }
+
     case 'SET_TOAST':
       return {
         ...state,
@@ -923,7 +954,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           guestNoShowCount: strike,
           lowerPriority: lowerPriority || currentUser.lowerPriority,
           profileMention: lowerPriority
-            ? 'Ghost après confirmation (démo)'
+            ? 'Absence après confirmation (démo)'
             : currentUser.profileMention,
         };
       }
@@ -1320,7 +1351,32 @@ interface ChanceContextValue {
     outingId: string,
     decision: 'accepted' | 'refused',
   ) => { ok: true } | { ok: false; reason: string };
-  /** Confirmed guest ghosts: forfeit deposit; 2nd → lower priority + profile mention. */
+  /**
+   * Joker mensuel (1× / mois calendaire Europe/Paris).
+   * Disponible si jokerUsedMonthKey ≠ mois Paris courant.
+   */
+  hasJokerAvailable: () => boolean;
+  /**
+   * Après refus / auto_refus d’un imprévu (reporter = invité) :
+   * caution returned, pas d’absence, hôte 0 €, joker consommé ce mois Paris.
+   */
+  useJokerOnImprevu: (
+    imprevuId: string,
+  ) =>
+    | { ok: true }
+    | {
+        ok: false;
+        reason:
+          | 'no_user'
+          | 'not_found'
+          | 'not_reporter'
+          | 'wrong_status'
+          | 'already_used'
+          | 'no_joker'
+          | 'no_request'
+          | 'not_guest';
+      };
+  /** Confirmed guest absence: forfeit deposit; 2nd → lower priority + profile mention. */
   reportGuestNoShow: (
     requestId: string,
   ) =>
@@ -2329,7 +2385,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Imprévu refusé',
-        body: `Règle ${CANCEL_FREE_BEFORE_HOURS} h : caution encore bloquée tant que la sortie tient. Annulation ≥ ${CANCEL_FREE_BEFORE_HOURS} h → rendue ; sinon / ghost → perdue.`,
+        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Chance / 13,10 € hôte). Tu peux utiliser ton joker si tu en as un.`,
         createdAt: nowIso,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
@@ -3213,6 +3269,80 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
 
+
+  const hasJokerAvailable = useCallback((): boolean => {
+    const user = state.currentUser;
+    if (!user) return false;
+    const month = parisMonthKey();
+    if (!month) return false;
+    return user.jokerUsedMonthKey !== month;
+  }, [state.currentUser]);
+
+  const useJokerOnImprevu = useCallback(
+    (
+      imprevuId: string,
+    ):
+      | { ok: true }
+      | {
+          ok: false;
+          reason:
+            | 'no_user'
+            | 'not_found'
+            | 'not_reporter'
+            | 'wrong_status'
+            | 'already_used'
+            | 'no_joker'
+            | 'no_request'
+            | 'not_guest';
+        } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const report = state.imprevuReports.find((r) => r.id === imprevuId);
+      if (!report) return { ok: false, reason: 'not_found' };
+      if (report.reporterId !== user.id) {
+        return { ok: false, reason: 'not_reporter' };
+      }
+      if (report.status !== 'refused' && report.status !== 'auto_refused') {
+        return { ok: false, reason: 'wrong_status' };
+      }
+      if (report.jokerUsed) return { ok: false, reason: 'already_used' };
+      const month = parisMonthKey();
+      if (!month || user.jokerUsedMonthKey === month) {
+        return { ok: false, reason: 'no_joker' };
+      }
+      const outing = state.outings.find((o) => o.id === report.outingId);
+      if (!outing || outing.hostId === user.id) {
+        return { ok: false, reason: 'not_guest' };
+      }
+      const requestId =
+        report.requestId ??
+        state.requests.find(
+          (r) =>
+            r.outingId === report.outingId &&
+            r.userId === user.id &&
+            (r.status === 'confirmed' ||
+              r.status === 'cancelled' ||
+              r.depositStatus === 'held' ||
+              r.depositStatus === 'forfeited'),
+        )?.id;
+      if (!requestId) return { ok: false, reason: 'no_request' };
+
+      dispatch({
+        type: 'USE_JOKER_ON_IMPREVU',
+        payload: { imprevuId, requestId, monthKey: month },
+      });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: 'Joker utilisé',
+        body: 'Caution rendue — ce n’est pas une absence. L’hôte ne touche rien. Joker consommé pour ce mois.',
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true };
+    },
+    [state.currentUser, state.imprevuReports, state.outings, state.requests],
+  );
+
   const reportGuestNoShow = useCallback(
     (
       requestId: string,
@@ -3245,8 +3375,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         requestId,
         kind: 'system',
         text: lowerPriority
-          ? 'Note auto · 2e ghost invité — priorité baissée + mention profil. Caution perdue.'
-          : 'Note auto · ghost après confirmation — caution perdue (mock).',
+          ? 'Note auto · 2e absence invité — priorité baissée + mention profil. Caution perdue (6,90 € Chance / 13,10 € hôte).'
+          : 'Note auto · absence après confirmation — caution perdue (6,90 € Chance / 13,10 € hôte).',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
@@ -3255,7 +3385,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: lowerPriority ? 'Priorité baissée' : 'Caution perdue',
         body: lowerPriority
           ? '2e no-show invité — priorité baissée + mention sur le profil.'
-          : 'Ghost après confirmation — caution non remboursée (mock).',
+          : 'Absence après confirmation — caution perdue : 6,90 € pour Chance, 13,10 € pour l’hôte.',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
@@ -3453,6 +3583,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,
+      hasJokerAvailable,
+      useJokerOnImprevu,
       reportGuestNoShow,
       reportHostNeverHonor,
       simulateConfirmRace,
@@ -3526,6 +3658,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,
+      hasJokerAvailable,
+      useJokerOnImprevu,
       reportGuestNoShow,
       reportHostNeverHonor,
       simulateConfirmRace,

@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Slider from '@react-native-community/slider';
@@ -379,16 +380,16 @@ export function FeedScreen() {
           (showFilters || filtersActive) && styles.chipSelected,
         ]}
         accessibilityRole="button"
+        accessibilityLabel="Filtres"
         accessibilityState={{ selected: showFilters }}
       >
-        <Text
-          style={[
-            styles.chipText,
-            (showFilters || filtersActive) && styles.chipTextSelected,
-          ]}
-        >
-          Filtres
-        </Text>
+        <Ionicons
+          name="settings-outline"
+          size={18}
+          color={
+            showFilters || filtersActive ? colors.white : colors.primary
+          }
+        />
       </Pressable>
     </View>
   );

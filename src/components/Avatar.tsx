@@ -10,9 +10,9 @@ import {
 import { colors, fonts } from '../theme';
 
 const AVATAR_COLORS = [
-  '#F5E6DC',
+  '#FFE4C8',
   '#E4EFE7',
-  '#F0EBE4',
+  '#FFE8D1',
   '#F8E9C9',
   '#EDE4F0',
   '#E6F0ED',

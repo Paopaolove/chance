@@ -1,4 +1,8 @@
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  DefaultTheme,
+  NavigationContainer,
+  Theme,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { useChance } from '../data/ChanceContext';
@@ -21,15 +25,30 @@ import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+/** Override RN default blue (#007AFF) — orange 70s everywhere (gear, tint, links). */
+const chanceNavTheme: Theme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: colors.primary,
+    background: colors.background,
+    card: colors.surface,
+    text: colors.text,
+    border: colors.border,
+    notification: colors.primary,
+  },
+};
+
+
 export function RootNavigator() {
   const { state } = useChance();
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={chanceNavTheme}>
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.primaryDark,
+          headerTintColor: colors.primary,
           headerTitleStyle: { fontWeight: '600', color: colors.text },
           contentStyle: { backgroundColor: colors.background },
         }}

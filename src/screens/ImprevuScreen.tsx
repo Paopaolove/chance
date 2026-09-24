@@ -29,7 +29,8 @@ type R = RouteProp<RootStackParamList, 'Imprevu'>;
 export function ImprevuScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
-  const { reportImprevu, getMyImprevu } = useChance();
+  const { reportImprevu, getMyImprevu, hasJokerAvailable, useJokerOnImprevu } =
+    useChance();
   const { outingId, requestId } = route.params;
 
   const existing = getMyImprevu(outingId);
@@ -70,10 +71,12 @@ export function ImprevuScreen() {
       existing.status === 'pending'
         ? 'En attente de réponse'
         : existing.status === 'accepted'
-          ? 'Accepté — pas de no-show · caution rendue · sortie annulée'
-          : existing.status === 'auto_refused'
-            ? 'Sans réponse à l’heure — refus + absence (caution perdue si invité)'
-            : 'Refusé — caution toujours bloquée · règle des 3 h (pas d’amende)';
+          ? 'Accepté — ce n’est pas une absence · caution rendue · sortie annulée'
+          : existing.jokerUsed
+            ? 'Joker utilisé — caution rendue · ce n’est pas une absence · hôte 0 €'
+            : existing.status === 'auto_refused'
+              ? 'Sans réponse à l’heure — refus + absence (caution perdue : 6,90 € Chance / 13,10 € hôte si invité)'
+              : 'Refusé — caution encore bloquée · au moins 3 heures pour annuler sans perdre';
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.title}>Imprévu déjà signalé</Text>
@@ -86,6 +89,32 @@ export function ImprevuScreen() {
           <Text style={[styles.section, { marginTop: spacing.md }]}>Raison</Text>
           <Text style={styles.body}>{existing.reason}</Text>
         </View>
+
+        {existing.jokerUsed ? null : (existing.status === 'refused' ||
+          existing.status === 'auto_refused') && hasJokerAvailable() ? (
+          <Button
+            title="Utiliser mon joker"
+            onPress={() => {
+              const r = useJokerOnImprevu(existing.id);
+              if (!r.ok) {
+                Alert.alert('Impossible', r.reason);
+                return;
+              }
+              Alert.alert(
+                'Joker utilisé',
+                'Caution rendue — ce n’est pas une absence. L’hôte ne touche rien.',
+              );
+            }}
+            style={{ marginBottom: spacing.md }}
+          />
+        ) : (existing.status === 'refused' ||
+            existing.status === 'auto_refused') &&
+          !existing.jokerUsed ? (
+          <Text style={[styles.body, { marginBottom: spacing.md }]}>
+            Joker déjà utilisé ce mois — si tu annules trop tard ou tu ne viens
+            pas : 6,90 € pour Chance, 13,10 € pour l’hôte.
+          </Text>
+        ) : null}
         <Button
           title="Retour"
           variant="secondary"
@@ -105,8 +134,9 @@ export function ImprevuScreen() {
       <Text style={styles.body}>
         Une fois par personne et par sortie. Motif + raison écrite ; l’autre
         accepte ou refuse — pas de chat libre (réservé à H−1). Accepté → caution
-        20 € rendue et sortie annulée (pas de no-show). Refusé → règle des 3 h,
-        sans amende inventée.
+        20 € rendue et sortie annulée (ce n’est pas une absence). Refusé → tu
+        peux utiliser ton joker, sinon règle des 3 heures (trop tard / absence
+        → 6,90 € Chance / 13,10 € hôte).
       </Text>
 
       <Text style={[styles.section, { marginTop: spacing.lg }]}>Motif</Text>

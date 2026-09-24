@@ -5,7 +5,13 @@ export type PlanInterval = 'month' | 'year';
 /** Authoritative Chance pricing (post J+30 trial). */
 export const DEPOSIT_EUROS = 20;
 
-/** Annulation ≥ N heures avant startsAt → caution rendue (heure serveur). */
+/** Part plateforme quand la caution est perdue (annulation tardive / absence). */
+export const DEPOSIT_FORFEIT_CHANCE_EUROS = 6.9;
+
+/** Part hôte quand la caution est perdue. */
+export const DEPOSIT_FORFEIT_HOST_EUROS = 13.1;
+
+/** Annulation au moins N heures avant startsAt → caution rendue (heure serveur). */
 export const CANCEL_FREE_BEFORE_HOURS = 3;
 
 export function isCancelFreeWindow(
@@ -16,7 +22,6 @@ export function isCancelFreeWindow(
   if (!Number.isFinite(start)) return false;
   return start - nowMs >= CANCEL_FREE_BEFORE_HOURS * 60 * 60 * 1000;
 }
-
 
 export const ESSENTIEL_OUTINGS_PER_MONTH = 4;
 
@@ -114,6 +119,16 @@ export function formatPriceEuros(value: number): string {
   return value.toFixed(2).replace('.', ',') + ' €';
 }
 
+/** Libellé court du partage caution perdue (6,90 / 13,10). */
+export function describeDepositForfeitSplit(): string {
+  return `${formatPriceEuros(DEPOSIT_FORFEIT_CHANCE_EUROS)} pour Chance, ${formatPriceEuros(DEPOSIT_FORFEIT_HOST_EUROS)} pour l’hôte`;
+}
+
+/** Phrase UI au moment de la perte (Alert / bannière). */
+export function describeDepositForfeitMoment(): string {
+  return `Caution ${DEPOSIT_EUROS} € perdue : ${describeDepositForfeitSplit()}.`;
+}
+
 /** Libellés FR courts pour depositStatus (UI). */
 export const DEPOSIT_STATUS_LABELS = {
   none: 'Pas de caution',
@@ -125,19 +140,19 @@ export const DEPOSIT_STATUS_LABELS = {
 export type DepositStatusKey = keyof typeof DEPOSIT_STATUS_LABELS;
 
 /**
- * Phrase UI pour l’issue caution (mock). Ne mentionne que la caution 20 € —
- * pas d’amendes ni d’autres montants.
+ * Phrase UI pour l’issue caution (mock).
+ * Forfeit → split 6,90 Chance / 13,10 hôte (pas d’autre amende).
  */
 export function describeDepositOutcome(
   status: DepositStatusKey | undefined,
 ): string {
   switch (status) {
     case 'held':
-      return `Caution ${DEPOSIT_EUROS} € bloquée à la confirmation. Rendue si tu annules ≥ ${CANCEL_FREE_BEFORE_HOURS} h avant, si l’hôte annule / no-show, si un imprévu est accepté, ou si tu refuses un lieu alternatif. Perdue si annulation < ${CANCEL_FREE_BEFORE_HOURS} h ou ghost.`;
+      return `Caution ${DEPOSIT_EUROS} € bloquée à la confirmation. Rendue si tu annules au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant, si l’hôte annule / ne vient pas, si un imprévu est accepté (ou joker), ou si tu refuses un lieu alternatif. Perdue si annulation trop tard ou absence.`;
     case 'returned':
       return `Caution ${DEPOSIT_EUROS} € rendue.`;
     case 'forfeited':
-      return `Caution ${DEPOSIT_EUROS} € perdue (annulation tardive, ghost, ou absence après imprévu sans accord).`;
+      return describeDepositForfeitMoment();
     case 'none':
     default:
       return 'Aucune caution bloquée.';

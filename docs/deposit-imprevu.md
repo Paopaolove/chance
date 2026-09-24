@@ -1,18 +1,21 @@
-# Caution & imprévu — taxonomie (Lot C)
+# Caution & imprévu — taxonomie (Lot C+)
 
-> Mock local uniquement — **pas de Stripe**, pas de nouveaux montants au-delà de la **caution 20 €** (`DEPOSIT_EUROS`).  
-> Source de vérité runtime : `ChanceContext` + `src/data/pricing.ts` (`CANCEL_FREE_BEFORE_HOURS = 3`).
+> Mock local uniquement — **pas de Stripe live**.  
+> Caution **20 €** (`DEPOSIT_EUROS`). Split forfeit : **6,90 € Chance** + **13,10 € hôte** (`DEPOSIT_FORFEIT_*`).  
+> Source runtime : `ChanceContext` + `src/data/pricing.ts` (`CANCEL_FREE_BEFORE_HOURS = 3`).  
+> Joker : **1× / mois calendaire Europe/Paris** (`parisMonthKey` / `jokerUsedMonthKey`).
 
 ## Ce que la caution n’est pas
 
 | Notion | Rôle |
 |--------|------|
 | **Caution 20 €** | Garantie **invité** bloquée **une fois** à `confirmSlot`. Mock carte. |
-| **Frais Chance** | Abonnement / à-la-sortie (Essentiel, Illimité, Payg…) — **≠** caution, **≠** invitation. |
+| **Frais Chance** | Abonnement / à-la-sortie — ce n’est pas la caution, ni l’invitation. |
 | **Invitation (`budgetMaxEuros`)** | Plafond couvert **par l’hôte au lieu** — pas via l’app, pas un transfert P2P. |
 | **Addition** | Ce qui se règle sur place hors plafond — hors scope caution. |
 
-**Règle produit :** annulation libre invité **≥ 3 h** avant `startsAt` → caution **rendue**. Pas d’amendes inventées.
+**Règle produit :** annulation libre invité **au moins 3 heures** avant `startsAt` → caution **rendue**.  
+**Perdue** (trop tard / absence) → **6,90 € Chance + 13,10 € hôte**. Pas d’autres amendes inventées.
 
 ---
 
@@ -22,10 +25,10 @@
 |--------|----------------|
 | `none` | Pas de caution (demande non confirmée, ou jamais bloquée). |
 | `held` | Caution bloquée à la confirmation (idempotent : pas de double hold). |
-| `returned` | Caution rendue (invité non fautif / fenêtre libre / imprévu accepté…). |
-| `forfeited` | Caution perdue (annulation tardive, ghost, absence après refus imprévu auto…). |
+| `returned` | Caution rendue (invité non fautif / fenêtre libre / imprévu accepté / **joker**…). |
+| `forfeited` | Caution perdue — split **6,90 / 13,10** (annulation tardive, absence, auto_refuse imprévu…). |
 
-Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricing.ts`).
+Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT_STATUS_LABELS` (`src/data/pricing.ts`).
 
 ---
 
@@ -46,40 +49,43 @@ Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricin
 | **Annulation sortie** par l’hôte | `cancelOuting` — toutes les cautions held → returned |
 | **No-show hôte** | `reportHostNoShow` → `RETURN_DEPOSITS_FOR_OUTING` |
 | **Lieu alternatif refusé** par l’invité | `RESPOND_VENUE_ALTERNATE` refused → caution de *cet* invité rendue |
-| **Imprévu accepté** (hôte ou invité répondant) | `RESPOND_IMPREVU` accepted → cautions rendues + sortie fermée ; **pas** de strike no-show |
+| **Imprévu accepté** | `RESPOND_IMPREVU` accepted → cautions rendues + sortie fermée ; **pas** d’absence |
+| **Joker** après refus / auto_refus | `USE_JOKER_ON_IMPREVU` → caution returned, **pas** d’absence, **hôte 0 €**, joker consommé le mois Paris |
 | **Sortie terminée** (`completeOuting`) | Invité venu → cautions `held` → `returned` |
 
-### → `forfeited`
+### → `forfeited` (split 6,90 / 13,10)
 
 | Événement | Détail code |
 |-----------|-------------|
-| Annulation **invité** confirmé **< 3 h** | `cancelRequest` guest |
-| **Ghost** invité après confirm | `reportGuestNoShow` |
-| **Imprévu sans réponse à `startsAt`** (`auto_refused`) si le reporter est un **invité** | Traité comme absence → forfeit reporter (hôte n’a pas de caution) |
+| Annulation **invité** confirmé **trop tard** (< 3 h) | `cancelRequest` guest |
+| **Absence** invité après confirm | `reportGuestNoShow` |
+| **Imprévu sans réponse à `startsAt`** (`auto_refused`) si reporter **invité** | Forfeit reporter (sauf joker ensuite) |
 
-### Imprévu refusé (manuel) — règle des 3 h
+### Imprévu refusé (manuel) — règle des 3 h + joker
 
 | Décision | Effet caution | Sortie |
 |----------|---------------|--------|
-| **Accepté** | Toutes les cautions held de la sortie → `returned` ; pas de no-show | Outing `closed`, demandes actives cancelled |
-| **Refusé** (réponse explicite) | Caution **reste `held`** — règle normale des 3 h (annuler ≥3 h → rendu ; <3 h / ghost → perdu) | Sortie continue |
-| **Auto-refusé** à l’heure | Comme refus + **absence** : forfeit si reporter invité | Sortie non annulée par l’imprévu |
+| **Accepté** | Toutes les cautions held → `returned` ; pas d’absence | Outing `closed` |
+| **Refusé** | Caution **reste `held`** — règle 3 h ; **ou joker** → returned, hôte 0 € | Sortie continue |
+| **Auto-refusé** à l’heure | Comme refus + absence → forfeit si invité ; **ou joker** | Sortie non annulée par l’imprévu |
 
-Une seule déclaration d’imprévu **par personne et par sortie** (motif + raison écrite, accept/refus — pas de chat libre).
+Une seule déclaration d’imprévu **par personne et par sortie** (motif + raison écrite).  
+**1 joker / mois calendaire Paris** (`hasJokerAvailable` / `useJokerOnImprevu`).
 
 ---
 
 ## Non tranché — ne pas inventer
 
-Ne pas ajouter dans le code ni l’UI (marqué **« non tranché — ne pas inventer »**) :
+Ne pas ajouter dans le code ni l’UI :
 
-- Amendes, pénalités ou montants **autres que** la caution **20 €**
-- Destinataire / partage de la caution forfaite (plateforme ? hôte ?)
+- Amendes, pénalités ou montants **autres que** caution **20 €** et le split forfeit **6,90 / 13,10**
 - Remboursement des **frais Chance** / crédits sortie après forfeit ou imprévu
 - Délais Stripe / partial capture / litiges bancaires
 - Imprévu accepté pour **un seul** invité d’un groupe sans fermer toute la sortie (le mock actuel ferme toute la sortie)
-- Barème de « retards » monétaire (les retards signalés ≠ caution)
+- Barème de « retards » monétaire (les retards signalés ce n’est pas la caution)
 - Toute autre sanction argent hors strikes mock (avertissement / ban / priorité)
+
+> ~~Destinataire / partage de la caution forfaite~~ — **tranché** : 6,90 € Chance + 13,10 € hôte.
 
 ---
 
@@ -89,6 +95,8 @@ Ne pas ajouter dans le code ni l’UI (marqué **« non tranché — ne pas inve
 |---------|----------------|
 | Free cancel ≥ 3 h | `CANCEL_FREE_BEFORE_HOURS` + `isCancelFreeWindow` |
 | Caution 20 € | `DEPOSIT_EUROS` |
+| Forfeit split 6,90 / 13,10 | `DEPOSIT_FORFEIT_CHANCE_EUROS` / `DEPOSIT_FORFEIT_HOST_EUROS` |
+| Joker 1× / mois Paris | `jokerUsedMonthKey` + `parisMonthKey` |
 | Imprévu 1× / personne | garde `REPORT_IMPREVU` |
-| Accepté → pas no-show + caution rendue + sortie annulée | `cancelOuting: true`, pas de `report*NoShow` |
-| Refus → règle 3 h | **pas** de forfeit immédiat au refus manuel |
+| Accepté → pas absence + caution rendue + sortie annulée | `cancelOuting: true` |
+| Refus → règle 3 h (ou joker) | **pas** de forfeit immédiat au refus manuel |

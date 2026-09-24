@@ -189,9 +189,9 @@ export function ConfirmSlotScreen() {
           {countdown}
         </Text>
         <Text style={styles.depositSub}>
-          Caution {DEPOSIT_EUROS} € (≠ invitation). Rendue si tu viens, si tu
-          annules ≥ 3 h, ou si l’hôte annule. Perdue si annulation tardive /
-          ghost — pas d’autre amende.
+          Caution {DEPOSIT_EUROS} € (ce n’est pas l’invitation). Rendue si tu
+          viens, si tu annules au moins 3 heures avant, ou si l’hôte annule.
+          Perdue si trop tard ou absence : 6,90 € Chance / 13,10 € hôte.
         </Text>
       </View>
       <Button title="Je confirme" onPress={onConfirm} />

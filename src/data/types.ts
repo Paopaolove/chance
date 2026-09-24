@@ -88,17 +88,22 @@ export interface User {
   createdAt: string;
   /** Host no-shows: 1 = warning, 2+ = ban (mock). */
   hostNoShowCount?: number;
-  /** Guest ghost after confirm: 1 = forfeit deposit, 2+ = lower priority + profile mention. */
+  /** Guest absence after confirm: 1 = forfeit deposit, 2+ = lower priority + profile mention. */
   guestNoShowCount?: number;
   /** After 2nd guest no-show — deprioritized in host queues (mock). */
   lowerPriority?: boolean;
-  /** Visible profile mention after repeated guest ghost (mock). */
+  /** Visible profile mention after repeated guest absence (mock). */
   profileMention?: string;
   /** Publishes often / never honors: 1 = warning, 2+ = ban (mock). */
   hostPublishStrikeCount?: number;
   /** Banned after 2nd host no-show or never-honor (mock). */
   banned?: boolean;
   bannedReason?: string;
+  /**
+   * Paris calendar month (« YYYY-MM ») when the monthly joker was consumed.
+   * Empty / other month → joker available again.
+   */
+  jokerUsedMonthKey?: string;
 }
 
 export type VenueIssueStatus =
@@ -198,7 +203,7 @@ export interface Request {
    * - held: bloquée une fois à confirmSlot (idempotent, pas de double hold)
    * - returned: rendue (cancel ≥3h, host cancelOuting / no-show, venue alternate
    *   refused, imprévu accepté…)
-   * - forfeited: perdue (cancel <3h, ghost, auto_refuse imprévu invité à startsAt)
+   * - forfeited: perdue (annulation trop tard, absence, auto_refuse imprévu invité à startsAt) — split 6,90/13,10
    * Voir docs/deposit-imprevu.md. Pas d’amendes inventées.
    */
   depositStatus?: 'none' | 'held' | 'returned' | 'forfeited';
@@ -280,6 +285,8 @@ export interface ImprevuReport {
   createdAt: string;
   respondedAt?: string;
   respondedByUserId?: string;
+  /** Guest used monthly joker after refuse / auto_refuse → caution returned, pas d’absence. */
+  jokerUsed?: boolean;
 }
 
 export interface AppToast {
@@ -431,6 +438,14 @@ export type AppAction =
         forfeitReporterDeposit?: boolean;
         /** When accepted: return deposits + close outing (not a no-show). */
         cancelOuting?: boolean;
+      };
+    }
+  | {
+      type: 'USE_JOKER_ON_IMPREVU';
+      payload: {
+        imprevuId: string;
+        requestId: string;
+        monthKey: string;
       };
     }
   | { type: 'SET_TOAST'; payload: AppToast | null }

@@ -294,7 +294,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
 
           <Text style={styles.footer}>
             Pas de notif pour chaque nouvelle annonce du fil. Cas limites
-            (ghost, course, no-show…) : Profil → Démo QA.
+            (absence, course, no-show…) : Profil → Démo QA.
           </Text>
         </ScrollView>
       </View>

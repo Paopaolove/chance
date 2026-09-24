@@ -753,7 +753,7 @@ export function CreateOutingScreen() {
         <Text style={styles.publishFreeLabel}>Publication gratuite</Text>
         <Text style={styles.publishFreeHint}>
           L'hôte ne paie rien pour publier. L'invité paie les frais Chance +
-          caution 20 € à la confirmation (≠ addition).
+          caution 20 € à la confirmation (ce n’est pas l’addition).
         </Text>
         <Button title="Publier" onPress={onPublish} style={styles.cta} />
       </ScrollView>
