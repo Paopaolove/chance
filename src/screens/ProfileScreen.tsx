@@ -2,6 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import { ensureAndroidChannel } from '../utils/notifications';
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,6 +40,7 @@ export function ProfileScreen() {
     getOutingById,
     getOutingsToRate,
     completeOuting,
+    simulateLocalNotifications,
   } = useChance();
   const user = state.currentUser;
   const active = getActiveOutingForUser();
@@ -69,6 +71,7 @@ export function ProfileScreen() {
   const enableNotifications = async () => {
     setBusy(true);
     try {
+      await ensureAndroidChannel();
       const { status } = await Notifications.requestPermissionsAsync();
       setPermissions({ notificationsGranted: status === 'granted' });
       if (status !== 'granted') {
@@ -310,6 +313,36 @@ export function ProfileScreen() {
               style={{ marginTop: spacing.md }}
             />
           ) : null}
+          <Text style={[styles.cardHint, { marginTop: spacing.md }]}>
+            Locals : acceptation (délai 10 min), rappel à 3 min, chat à H−1.
+          </Text>
+          <Button
+            title="Démo · simuler les 3 notifs"
+            variant="ghost"
+            loading={busy}
+            onPress={async () => {
+              setBusy(true);
+              try {
+                const result = await simulateLocalNotifications('sortie démo');
+                if (!result.ok) {
+                  Alert.alert(
+                    'Notifications',
+                    result.reason === 'permission_denied'
+                      ? 'Autorise d’abord les notifications.'
+                      : result.reason,
+                  );
+                  return;
+                }
+                Alert.alert(
+                  'Démo',
+                  '3 notifs programmées (~1s / 4s / 7s) : accepté, rappel 3 min, chat H−1.',
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
         </View>
 
         <View style={styles.card}>

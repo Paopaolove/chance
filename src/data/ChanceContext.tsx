@@ -44,6 +44,12 @@ import {
   lateLabel,
   lateSystemText,
 } from '../utils/chat';
+import {
+  ensureAndroidChannel,
+  scheduleAcceptedConfirmNotifications,
+  scheduleChatUnlockNotification,
+  simulateDemoNotifications,
+} from '../utils/notifications';
 
 const CONFIRM_WINDOW_MS = 10 * 60 * 1000;
 
@@ -829,6 +835,10 @@ interface ChanceContextValue {
     outingId: string,
     decision: 'accepted' | 'refused',
   ) => { ok: true } | { ok: false; reason: string };
+  /** Demo: fire accepted / 3-min reminder / chat H−1 notifications quickly. */
+  simulateLocalNotifications: (
+    outingTitle?: string,
+  ) => Promise<{ ok: true } | { ok: false; reason: string }>;
 }
 
 const ChanceContext = createContext<ChanceContextValue | null>(null);
@@ -1037,18 +1047,34 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.outings, state.requests],
   );
 
-  const acceptRequest = useCallback((requestId: string) => {
-    const now = new Date();
-    const deadline = new Date(now.getTime() + CONFIRM_WINDOW_MS);
-    dispatch({
-      type: 'ACCEPT_REQUEST',
-      payload: {
-        requestId,
-        acceptedAt: now.toISOString(),
-        confirmDeadlineAt: deadline.toISOString(),
-      },
-    });
-  }, []);
+  const acceptRequest = useCallback(
+    (requestId: string) => {
+      const now = new Date();
+      const deadline = new Date(now.getTime() + CONFIRM_WINDOW_MS);
+      const req = state.requests.find((r) => r.id === requestId);
+      const outing = req
+        ? state.outings.find((o) => o.id === req.outingId)
+        : undefined;
+      dispatch({
+        type: 'ACCEPT_REQUEST',
+        payload: {
+          requestId,
+          acceptedAt: now.toISOString(),
+          confirmDeadlineAt: deadline.toISOString(),
+        },
+      });
+      if (req && outing) {
+        void ensureAndroidChannel();
+        void scheduleAcceptedConfirmNotifications({
+          outingTitle: outing.title,
+          hostName: outing.hostName,
+          confirmDeadlineAt: deadline.toISOString(),
+          requestId,
+        });
+      }
+    },
+    [state.requests, state.outings],
+  );
 
   const declineRequest = useCallback((requestId: string) => {
     dispatch({ type: 'DECLINE_REQUEST', payload: { requestId } });
@@ -1095,9 +1121,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         type: 'CONFIRM_SLOT',
         payload: { requestId, confirmedAt: new Date().toISOString() },
       });
+      const outingForChat = state.outings.find((o) => o.id === req.outingId);
+      if (outingForChat) {
+        void ensureAndroidChannel();
+        void scheduleChatUnlockNotification({
+          outingTitle: outingForChat.title,
+          startsAt: outingForChat.startsAt,
+          outingId: outingForChat.id,
+        });
+      }
       return { ok: true };
     },
-    [state.requests, state.currentUser],
+    [state.requests, state.currentUser, state.outings],
   );
 
   const setDispoSoir = useCallback((value: boolean) => {
@@ -1469,8 +1504,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         type: 'SHIFT_OUTING_START',
         payload: { outingId, startsAt },
       });
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (outing) {
+        void ensureAndroidChannel();
+        void scheduleChatUnlockNotification({
+          outingTitle: outing.title,
+          startsAt,
+          outingId,
+        });
+      }
     },
-    [],
+    [state.outings],
   );
 
 
@@ -1857,6 +1901,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.outings],
   );
 
+
+  const simulateLocalNotifications = useCallback(
+    async (outingTitle?: string) => {
+      void ensureAndroidChannel();
+      return simulateDemoNotifications(
+        outingTitle ? { outingTitle } : undefined,
+      );
+    },
+    [],
+  );
+
   const value = useMemo<ChanceContextValue>(
     () => ({
       state,
@@ -1910,6 +1965,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,
+      simulateLocalNotifications,
     }),
     [
       state,
@@ -1963,6 +2019,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,
+      simulateLocalNotifications,
     ],
   );
 
