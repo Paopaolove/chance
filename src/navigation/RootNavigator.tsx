@@ -54,7 +54,7 @@ export function RootNavigator() {
             <Stack.Screen
               name="ConfirmSlot"
               component={ConfirmSlotScreen}
-              options={{ title: 'Confirmation' }}
+              options={{ headerShown: false, title: 'Confirmation' }}
             />
             <Stack.Screen
               name="ChatPlaceholder"

@@ -14,9 +14,21 @@ import { MainTabParamList, RootStackParamList } from './types';
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export function MainTabs() {
-  const { state, clearEntryIntent } = useChance();
+  const { state, clearEntryIntent, incomingRequests, outgoingRequests } =
+    useChance();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const requestsBadge = (() => {
+    const pendingIncoming = incomingRequests.filter(
+      (r) => r.status === 'pending',
+    ).length;
+    const awaitingConfirm = outgoingRequests.filter(
+      (r) => r.status === 'accepted',
+    ).length;
+    const n = pendingIncoming + awaitingConfirm;
+    return n > 0 ? n : undefined;
+  })();
 
   useEffect(() => {
     if (state.entryIntent === 'dispo') {
@@ -68,7 +80,15 @@ export function MainTabs() {
       <Tab.Screen
         name="Requests"
         component={RequestsScreen}
-        options={{ title: 'Demandes' }}
+        options={{
+          title: 'Demandes',
+          tabBarBadge: requestsBadge,
+          tabBarBadgeStyle: {
+            backgroundColor: colors.primary,
+            color: colors.white,
+            fontSize: 11,
+          },
+        }}
       />
       <Tab.Screen
         name="Profile"
