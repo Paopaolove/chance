@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { useChance } from '../data/ChanceContext';
 import { ChatPlaceholderScreen } from '../screens/ChatPlaceholderScreen';
+import { ImprevuScreen } from '../screens/ImprevuScreen';
 import { ConfirmSlotScreen } from '../screens/ConfirmSlotScreen';
 import { DispoSoirScreen } from '../screens/DispoSoirScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
@@ -58,6 +59,11 @@ export function RootNavigator() {
               name="ChatPlaceholder"
               component={ChatPlaceholderScreen}
               options={{ title: 'Chat' }}
+            />
+            <Stack.Screen
+              name="Imprevu"
+              component={ImprevuScreen}
+              options={{ title: 'Imprévu' }}
             />
             <Stack.Screen
               name="Paywall"

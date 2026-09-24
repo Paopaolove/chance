@@ -1,4 +1,5 @@
-import { RouteProp, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -30,8 +31,10 @@ import {
 import { formatOutingWhen } from '../utils/format';
 
 type R = RouteProp<RootStackParamList, 'ChatPlaceholder'>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function ChatPlaceholderScreen() {
+  const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
   const {
     getOutingById,
@@ -47,6 +50,7 @@ export function ChatPlaceholderScreen() {
     reportHostNoShow,
     reportVenueClosed,
     respondVenueAlternate,
+    getMyImprevu,
   } = useChance();
 
   const outing = getOutingById(route.params.outingId);
@@ -149,6 +153,26 @@ export function ChatPlaceholderScreen() {
             </Text>
           ) : null}
         </View>
+
+        {confirmed ? (
+          getMyImprevu(outing.id) ? (
+            <Text style={[styles.lockHint, { marginTop: spacing.lg }]}>
+              Imprévu déjà signalé — pas de chat libre pour en discuter.
+            </Text>
+          ) : (
+            <Button
+              title="Imprévu"
+              variant="ghost"
+              onPress={() =>
+                navigation.navigate('Imprevu', {
+                  outingId: outing.id,
+                  requestId: request?.id,
+                })
+              }
+              style={{ marginTop: spacing.lg }}
+            />
+          )
+        ) : null}
 
         <View style={styles.demoBox}>
           <Text style={styles.demoLabel}>Démo QA</Text>

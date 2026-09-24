@@ -184,6 +184,37 @@ export interface LateReport {
   createdAt: string;
 }
 
+export type ImprevuMotive =
+  | 'annuler'
+  | 'gros_retard'
+  | 'lieu_ferme'
+  | 'autre';
+
+export type ImprevuStatus =
+  | 'pending'
+  | 'accepted'
+  | 'refused'
+  | 'auto_refused';
+
+/** One unexpected-event signal per person per outing (no free chat). */
+export interface ImprevuReport {
+  id: string;
+  outingId: string;
+  /** Confirmed request when the reporter is a guest. */
+  requestId?: string;
+  reporterId: string;
+  reporterName: string;
+  /** Who may accept/refuse (host and/or confirmed guests). First response wins. */
+  responderIds: string[];
+  motive: ImprevuMotive;
+  /** Required written reason (1–3 lines). */
+  reason: string;
+  status: ImprevuStatus;
+  createdAt: string;
+  respondedAt?: string;
+  respondedByUserId?: string;
+}
+
 export interface AppToast {
   id: string;
   title: string;
@@ -202,6 +233,8 @@ export interface AppState {
   reviews: Review[];
   /** Late signals — bandeau for other party(ies) in chat/outing UI. */
   lateReports: LateReport[];
+  /** Unexpected-event signals (once per person per outing). */
+  imprevuReports: ImprevuReport[];
   /** Host id → no-show count (1=warning, 2+=ban). */
   hostNoShowStrikes: Record<string, number>;
   /** Guest id → ghost-after-confirm count (1=forfeit, 2+=lower priority). */
@@ -277,6 +310,20 @@ export type AppAction =
   | { type: 'ADD_CHAT_MESSAGE'; payload: ChatMessage }
   | { type: 'SEED_CHAT_MESSAGES'; payload: ChatMessage[] }
   | { type: 'REPORT_LATE'; payload: LateReport }
+  | { type: 'REPORT_IMPREVU'; payload: ImprevuReport }
+  | {
+      type: 'RESPOND_IMPREVU';
+      payload: {
+        imprevuId: string;
+        decision: 'accepted' | 'refused' | 'auto_refused';
+        respondedAt: string;
+        respondedByUserId?: string;
+        /** When refused/auto and <3h: forfeit reporter guest deposit. */
+        forfeitReporterDeposit?: boolean;
+        /** When accepted: return deposits + close outing. */
+        cancelOuting?: boolean;
+      };
+    }
   | { type: 'SET_TOAST'; payload: AppToast | null }
   | { type: 'SHIFT_OUTING_START'; payload: { outingId: string; startsAt: string } }
   | { type: 'COMPLETE_OUTING'; payload: { outingId: string } }

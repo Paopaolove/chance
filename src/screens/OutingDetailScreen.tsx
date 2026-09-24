@@ -22,6 +22,7 @@ import {
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { isChatUnlocked, lateLabel } from '../utils/chat';
+import { imprevuMotiveLabel } from '../utils/imprevu';
 import { formatOutingWhen } from '../utils/format';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 
@@ -48,6 +49,10 @@ export function OutingDetailScreen() {
     reportVenueClosed,
     respondVenueAlternate,
     getRequestById,
+    getPendingImprevuForMe,
+    getMyImprevu,
+    respondImprevu,
+    simulateOtherImprevu,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
@@ -148,6 +153,51 @@ export function OutingDetailScreen() {
           ))}
         </View>
       ) : null}
+
+      {(() => {
+        const pending = getPendingImprevuForMe(outing.id);
+        if (!pending) return null;
+        return (
+          <View style={styles.imprevuCard}>
+            <Text style={styles.imprevuTitle}>
+              {pending.reporterName} signale un imprévu.
+            </Text>
+            <Text style={styles.imprevuBody}>
+              {imprevuMotiveLabel(pending.motive)}
+            </Text>
+            <Text style={styles.imprevuReason}>{pending.reason}</Text>
+            <Button
+              title="Accepter l’imprévu"
+              onPress={() => {
+                const r = respondImprevu(pending.id, 'accepted');
+                if (!r.ok) Alert.alert('Impossible', r.reason);
+                else
+                  Alert.alert(
+                    'Imprévu accepté. Caution rendue.',
+                    'La sortie est annulée — ce n’est pas une absence.',
+                  );
+              }}
+              style={{ marginTop: spacing.md }}
+            />
+            <Button
+              title="Refuser"
+              variant="secondary"
+              onPress={() => {
+                const r = respondImprevu(pending.id, 'refused');
+                if (!r.ok) Alert.alert('Impossible', r.reason);
+                else
+                  Alert.alert(
+                    'Imprévu refusé',
+                    r.depositForfeited
+                      ? 'Moins de 3 h avant le début — caution perdue si absence.'
+                      : 'Règle des 3 h : caution encore bloquée tant que la sortie tient.',
+                  );
+              }}
+              style={{ marginTop: spacing.sm }}
+            />
+          </View>
+        );
+      })()}
 
       {outing.venueIssue ? (
         <View style={styles.venueIssueCard}>
@@ -339,6 +389,37 @@ export function OutingDetailScreen() {
                 style={{ marginTop: spacing.md }}
               />
             ))}
+          {incomingRequests.some(
+            (r) => r.outingId === outing.id && r.status === 'confirmed',
+          ) ? (
+            <>
+              {getMyImprevu(outing.id) ? (
+                <Text style={[styles.hint, { marginTop: spacing.md }]}>
+                  Imprévu signalé ·{' '}
+                  {getMyImprevu(outing.id)!.status === 'pending'
+                    ? 'en attente'
+                    : getMyImprevu(outing.id)!.status === 'accepted'
+                      ? 'accepté'
+                      : 'refusé'}
+                </Text>
+              ) : (
+                <Button
+                  title="Imprévu"
+                  variant="ghost"
+                  onPress={() =>
+                    navigation.navigate('Imprevu', {
+                      outingId: outing.id,
+                      requestId: incomingRequests.find(
+                        (r) =>
+                          r.outingId === outing.id && r.status === 'confirmed',
+                      )?.id,
+                    })
+                  }
+                  style={{ marginTop: spacing.md }}
+                />
+              )}
+            </>
+          ) : null}
           {(outgoingRequests.some(
             (r) => r.outingId === outing.id && r.status === 'confirmed',
           ) ||
@@ -362,6 +443,15 @@ export function OutingDetailScreen() {
                 title="Simuler retard de l’autre"
                 variant="ghost"
                 onPress={() => simulateOtherLate(outing.id, 10)}
+                style={{ marginTop: spacing.sm }}
+              />
+              <Button
+                title="Simuler imprévu de l’autre"
+                variant="ghost"
+                onPress={() => {
+                  const r = simulateOtherImprevu(outing.id);
+                  if (!r.ok) Alert.alert('Impossible', r.reason);
+                }}
                 style={{ marginTop: spacing.sm }}
               />
               <Button
@@ -415,6 +505,28 @@ export function OutingDetailScreen() {
           {myRequest.status === 'confirmed' && (
             <>
               <Text style={styles.statusOk}>Place confirmée.</Text>
+              {getMyImprevu(outing.id) ? (
+                <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                  Imprévu signalé ·{' '}
+                  {getMyImprevu(outing.id)!.status === 'pending'
+                    ? 'en attente de réponse'
+                    : getMyImprevu(outing.id)!.status === 'accepted'
+                      ? 'accepté — caution rendue'
+                      : 'refusé — règle 3 h'}
+                </Text>
+              ) : (
+                <Button
+                  title="Imprévu"
+                  variant="ghost"
+                  onPress={() =>
+                    navigation.navigate('Imprevu', {
+                      outingId: outing.id,
+                      requestId: 'id' in myRequest ? myRequest.id : undefined,
+                    })
+                  }
+                  style={{ marginTop: spacing.md }}
+                />
+              )}
               {'id' in myRequest &&
               getRequestById(myRequest.id)?.depositStatus === 'returned' ? (
                 <Text style={styles.depositReturned}>
@@ -470,6 +582,20 @@ export function OutingDetailScreen() {
                       'id' in myRequest ? myRequest.id : undefined,
                     )
                   }
+                  style={{ marginTop: spacing.sm }}
+                />
+                <Button
+                  title="Simuler imprévu de l’autre"
+                  variant="ghost"
+                  onPress={() => {
+                    const r = simulateOtherImprevu(
+                      outing.id,
+                      undefined,
+                      undefined,
+                      'id' in myRequest ? myRequest.id : undefined,
+                    );
+                    if (!r.ok) Alert.alert('Impossible', r.reason);
+                  }}
                   style={{ marginTop: spacing.sm }}
                 />
                 <Button
@@ -660,6 +786,30 @@ const styles = StyleSheet.create({
     ...typography.bodyStrong,
     color: colors.warning,
     fontFamily: fonts.semiBold,
+  },
+  imprevuCard: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  imprevuTitle: {
+    ...typography.bodyStrong,
+    color: colors.warning,
+    fontFamily: fonts.semiBold,
+  },
+  imprevuBody: {
+    ...typography.body,
+    color: colors.text,
+    marginTop: spacing.sm,
+    fontFamily: fonts.semiBold,
+  },
+  imprevuReason: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
   },
   demoBox: {
     marginTop: spacing.lg,

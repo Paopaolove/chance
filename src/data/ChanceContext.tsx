@@ -20,6 +20,8 @@ import {
   ChatMessage,
   DispoProfileUpdate,
   LateReport,
+  ImprevuMotive,
+  ImprevuReport,
   OnboardingInput,
   VenueAlternate,
   Outing,
@@ -46,6 +48,11 @@ import {
   lateSystemText,
 } from '../utils/chat';
 import {
+  imprevuMotiveLabel,
+  imprevuNotifTitle,
+  normalizeImprevuReason,
+} from '../utils/imprevu';
+import {
   ensureAndroidChannel,
   scheduleAcceptedConfirmNotifications,
   scheduleChatUnlockNotification,
@@ -63,6 +70,7 @@ const initialState: AppState = {
   chatMessages: [],
   reviews: mockReviews,
   lateReports: [],
+  imprevuReports: [],
   hostNoShowStrikes: {},
   guestNoShowStrikes: {},
   hostPublishStrikes: {},
@@ -375,6 +383,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         chatMessages: [],
         reviews: mockReviews,
         lateReports: [],
+        imprevuReports: [],
         hostNoShowStrikes: {},
         guestNoShowStrikes: {},
         hostPublishStrikes: {},
@@ -411,6 +420,95 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         lateReports: [report, ...filtered],
+      };
+    }
+
+    case 'REPORT_IMPREVU': {
+      const report = action.payload;
+      const already = state.imprevuReports.some(
+        (r) =>
+          r.outingId === report.outingId && r.reporterId === report.reporterId,
+      );
+      if (already) return state;
+      return {
+        ...state,
+        imprevuReports: [report, ...state.imprevuReports],
+      };
+    }
+
+    case 'RESPOND_IMPREVU': {
+      const {
+        imprevuId,
+        decision,
+        respondedAt,
+        respondedByUserId,
+        forfeitReporterDeposit,
+        cancelOuting,
+      } = action.payload;
+      const report = state.imprevuReports.find((r) => r.id === imprevuId);
+      if (!report || report.status !== 'pending') return state;
+
+      const status =
+        decision === 'accepted'
+          ? ('accepted' as const)
+          : decision === 'auto_refused'
+            ? ('auto_refused' as const)
+            : ('refused' as const);
+
+      let requests = state.requests.map((r) => {
+        if (r.outingId !== report.outingId) return r;
+        if (cancelOuting && r.status === 'confirmed') {
+          if (r.depositStatus === 'held' || !r.depositStatus) {
+            return {
+              ...r,
+              depositStatus: 'returned' as const,
+              status: 'cancelled' as const,
+            };
+          }
+          return { ...r, status: 'cancelled' as const };
+        }
+        if (
+          forfeitReporterDeposit &&
+          r.userId === report.reporterId &&
+          r.status === 'confirmed' &&
+          (r.depositStatus === 'held' || !r.depositStatus)
+        ) {
+          return { ...r, depositStatus: 'forfeited' as const };
+        }
+        return r;
+      });
+
+      if (cancelOuting) {
+        requests = requests.map((r) =>
+          r.outingId === report.outingId &&
+          (r.status === 'pending' || r.status === 'accepted')
+            ? { ...r, status: 'cancelled' as const }
+            : r,
+        );
+      }
+
+      const outings = cancelOuting
+        ? state.outings.map((o) =>
+            o.id === report.outingId
+              ? { ...o, status: 'closed' as const }
+              : o,
+          )
+        : state.outings;
+
+      return {
+        ...state,
+        imprevuReports: state.imprevuReports.map((r) =>
+          r.id === imprevuId
+            ? {
+                ...r,
+                status,
+                respondedAt,
+                respondedByUserId,
+              }
+            : r,
+        ),
+        requests,
+        outings,
       };
     }
 
@@ -884,6 +982,43 @@ interface ChanceContextValue {
     minutes?: number,
     requestId?: string,
   ) => void;
+  /** Signal an unexpected event (once per person per outing). Available once confirmed, including before H−1. */
+  reportImprevu: (
+    outingId: string,
+    motive: ImprevuMotive,
+    reason: string,
+    requestId?: string,
+  ) =>
+    | { ok: true; imprevuId: string }
+    | {
+        ok: false;
+        reason:
+          | 'no_user'
+          | 'not_confirmed'
+          | 'already_reported'
+          | 'invalid_reason'
+          | 'outing_closed'
+          | 'no_responder';
+      };
+  /** Other party accepts or refuses a pending imprévu. */
+  respondImprevu: (
+    imprevuId: string,
+    decision: 'accepted' | 'refused',
+  ) =>
+    | { ok: true; depositReturned: boolean; depositForfeited: boolean }
+    | { ok: false; reason: string };
+  getImprevuForOuting: (outingId: string) => ImprevuReport[];
+  /** Pending imprévu aimed at the current user for this outing. */
+  getPendingImprevuForMe: (outingId: string) => ImprevuReport | undefined;
+  /** Current user's report on this outing (any status). */
+  getMyImprevu: (outingId: string) => ImprevuReport | undefined;
+  /** Demo QA: other party signals an imprévu so toast + card are visible. */
+  simulateOtherImprevu: (
+    outingId: string,
+    motive?: ImprevuMotive,
+    reason?: string,
+    requestId?: string,
+  ) => { ok: true } | { ok: false; reason: string };
   clearToast: () => void;
   /** Demo QA: set outing start to now + minutesAhead (e.g. 50 → chat unlocked). */
   simulateOutingInMinutes: (
@@ -1635,6 +1770,290 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.outings, state.requests, state.currentUser],
   );
 
+
+  const reportImprevu = useCallback(
+    (
+      outingId: string,
+      motive: ImprevuMotive,
+      reason: string,
+      requestId?: string,
+    ) => {
+      const user = state.currentUser;
+      if (!user) return { ok: false as const, reason: 'no_user' as const };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) {
+        return { ok: false as const, reason: 'outing_closed' as const };
+      }
+      if (outing.status === 'closed' || outing.status === 'completed') {
+        return { ok: false as const, reason: 'outing_closed' as const };
+      }
+      const normalized = normalizeImprevuReason(reason);
+      if (!normalized) {
+        return { ok: false as const, reason: 'invalid_reason' as const };
+      }
+      if (
+        state.imprevuReports.some(
+          (r) => r.outingId === outingId && r.reporterId === user.id,
+        )
+      ) {
+        return { ok: false as const, reason: 'already_reported' as const };
+      }
+
+      const isHost = outing.hostId === user.id;
+      const confirmedReqs = state.requests.filter(
+        (r) => r.outingId === outingId && r.status === 'confirmed',
+      );
+      if (!isHost) {
+        const mine = confirmedReqs.find((r) => r.userId === user.id);
+        if (!mine) {
+          return { ok: false as const, reason: 'not_confirmed' as const };
+        }
+      } else if (confirmedReqs.length === 0) {
+        return { ok: false as const, reason: 'not_confirmed' as const };
+      }
+
+      const responderIds = isHost
+        ? confirmedReqs.map((r) => r.userId)
+        : [outing.hostId];
+      if (!responderIds.length) {
+        return { ok: false as const, reason: 'no_responder' as const };
+      }
+
+      const linkedRequestId = isHost
+        ? requestId ?? confirmedReqs[0]?.id
+        : confirmedReqs.find((r) => r.userId === user.id)?.id ?? requestId;
+
+      const now = new Date().toISOString();
+      const report: ImprevuReport = {
+        id: uid('imprevu'),
+        outingId,
+        requestId: linkedRequestId,
+        reporterId: user.id,
+        reporterName: user.firstName,
+        responderIds,
+        motive,
+        reason: normalized,
+        status: 'pending',
+        createdAt: now,
+      };
+      dispatch({ type: 'REPORT_IMPREVU', payload: report });
+      return { ok: true as const, imprevuId: report.id };
+    },
+    [state.currentUser, state.outings, state.requests, state.imprevuReports],
+  );
+
+  const respondImprevu = useCallback(
+    (imprevuId: string, decision: 'accepted' | 'refused') => {
+      const user = state.currentUser;
+      if (!user) return { ok: false as const, reason: 'no_user' };
+      const report = state.imprevuReports.find((r) => r.id === imprevuId);
+      if (!report || report.status !== 'pending') {
+        return { ok: false as const, reason: 'not_pending' };
+      }
+      if (!report.responderIds.includes(user.id)) {
+        return { ok: false as const, reason: 'not_responder' };
+      }
+      const outing = state.outings.find((o) => o.id === report.outingId);
+      if (!outing) return { ok: false as const, reason: 'missing_outing' };
+
+      const nowIso = new Date().toISOString();
+      if (decision === 'accepted') {
+        dispatch({
+          type: 'RESPOND_IMPREVU',
+          payload: {
+            imprevuId,
+            decision: 'accepted',
+            respondedAt: nowIso,
+            respondedByUserId: user.id,
+            cancelOuting: true,
+          },
+        });
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: 'Imprévu accepté. Caution rendue.',
+          body: 'La sortie est annulée — ce n’est pas une absence.',
+          createdAt: nowIso,
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+        return {
+          ok: true as const,
+          depositReturned: true,
+          depositForfeited: false,
+        };
+      }
+
+      const forfeit =
+        report.reporterId !== outing.hostId &&
+        !isCancelFreeWindow(outing.startsAt);
+      dispatch({
+        type: 'RESPOND_IMPREVU',
+        payload: {
+          imprevuId,
+          decision: 'refused',
+          respondedAt: nowIso,
+          respondedByUserId: user.id,
+          forfeitReporterDeposit: forfeit,
+        },
+      });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: 'Imprévu refusé',
+        body: forfeit
+          ? `Refus à moins de ${CANCEL_FREE_BEFORE_HOURS} h — caution perdue si absence.`
+          : `Règle ${CANCEL_FREE_BEFORE_HOURS} h : caution encore bloquée tant que la sortie tient.`,
+        createdAt: nowIso,
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return {
+        ok: true as const,
+        depositReturned: false,
+        depositForfeited: forfeit,
+      };
+    },
+    [state.currentUser, state.imprevuReports, state.outings],
+  );
+
+  const getImprevuForOuting = useCallback(
+    (outingId: string) =>
+      state.imprevuReports.filter((r) => r.outingId === outingId),
+    [state.imprevuReports],
+  );
+
+  const getPendingImprevuForMe = useCallback(
+    (outingId: string) => {
+      const me = state.currentUser?.id;
+      if (!me) return undefined;
+      return state.imprevuReports.find(
+        (r) =>
+          r.outingId === outingId &&
+          r.status === 'pending' &&
+          r.responderIds.includes(me),
+      );
+    },
+    [state.imprevuReports, state.currentUser],
+  );
+
+  const getMyImprevu = useCallback(
+    (outingId: string) => {
+      const me = state.currentUser?.id;
+      if (!me) return undefined;
+      return state.imprevuReports.find(
+        (r) => r.outingId === outingId && r.reporterId === me,
+      );
+    },
+    [state.imprevuReports, state.currentUser],
+  );
+
+  const simulateOtherImprevu = useCallback(
+    (
+      outingId: string,
+      motive: ImprevuMotive = 'gros_retard',
+      reason: string = 'RER bloqué à Gare du Nord (démo).',
+      requestId?: string,
+    ) => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false as const, reason: 'missing_outing' };
+      const me = state.currentUser;
+      if (!me) return { ok: false as const, reason: 'no_user' };
+
+      let otherId = outing.hostId;
+      let otherName = outing.hostName;
+      let linkedRequestId = requestId;
+      const responderIds = [me.id];
+
+      if (outing.hostId === me.id) {
+        const guest = state.requests.find(
+          (r) =>
+            r.outingId === outingId &&
+            r.status === 'confirmed' &&
+            (!requestId || r.id === requestId),
+        );
+        if (!guest) {
+          return { ok: false as const, reason: 'no_confirmed_guest' };
+        }
+        otherId = guest.userId;
+        otherName = guest.userName;
+        linkedRequestId = guest.id;
+      } else {
+        const mine = state.requests.find(
+          (r) =>
+            r.outingId === outingId &&
+            r.userId === me.id &&
+            r.status === 'confirmed',
+        );
+        linkedRequestId = mine?.id ?? requestId;
+      }
+
+      if (
+        state.imprevuReports.some(
+          (r) => r.outingId === outingId && r.reporterId === otherId,
+        )
+      ) {
+        return { ok: false as const, reason: 'already_reported' };
+      }
+
+      const normalized = normalizeImprevuReason(reason) ?? reason.trim();
+      const now = new Date().toISOString();
+      const report: ImprevuReport = {
+        id: uid('imprevu'),
+        outingId,
+        requestId: linkedRequestId,
+        reporterId: otherId,
+        reporterName: otherName,
+        responderIds,
+        motive,
+        reason: normalized,
+        status: 'pending',
+        createdAt: now,
+      };
+      dispatch({ type: 'REPORT_IMPREVU', payload: report });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: imprevuNotifTitle(otherName),
+        body: `${imprevuMotiveLabel(motive)} · ${normalized}`,
+        createdAt: now,
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true as const };
+    },
+    [state.outings, state.requests, state.currentUser, state.imprevuReports],
+  );
+
+  /** No response by startsAt → treat as refuse (3h rule). Host must not stay blocked. */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const report of state.imprevuReports) {
+        if (report.status !== 'pending') continue;
+        const outing = state.outings.find((o) => o.id === report.outingId);
+        if (!outing) continue;
+        const startMs = new Date(outing.startsAt).getTime();
+        if (!Number.isFinite(startMs) || startMs > now) continue;
+        const forfeit =
+          report.reporterId !== outing.hostId &&
+          !isCancelFreeWindow(outing.startsAt, startMs);
+        dispatch({
+          type: 'RESPOND_IMPREVU',
+          payload: {
+            imprevuId: report.id,
+            decision: 'auto_refused',
+            respondedAt: new Date().toISOString(),
+            forfeitReporterDeposit: forfeit,
+          },
+        });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.imprevuReports, state.outings]);
+
   const clearToast = useCallback(() => {
     dispatch({ type: 'SET_TOAST', payload: null });
   }, []);
@@ -2291,6 +2710,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportLate,
       getLateReportsForOthers,
       simulateOtherLate,
+      reportImprevu,
+      respondImprevu,
+      getImprevuForOuting,
+      getPendingImprevuForMe,
+      getMyImprevu,
+      simulateOtherImprevu,
       clearToast,
       simulateOutingInMinutes,
       completeOuting,
@@ -2348,6 +2773,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportLate,
       getLateReportsForOthers,
       simulateOtherLate,
+      reportImprevu,
+      respondImprevu,
+      getImprevuForOuting,
+      getPendingImprevuForMe,
+      getMyImprevu,
+      simulateOtherImprevu,
       clearToast,
       simulateOutingInMinutes,
       completeOuting,

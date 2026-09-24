@@ -27,6 +27,7 @@ export type RootStackParamList = {
   OutingDetail: { outingId: string };
   ConfirmSlot: { requestId: string };
   ChatPlaceholder: { outingId: string; requestId?: string };
+  Imprevu: { outingId: string; requestId?: string };
   Paywall: { returnToConfirmRequestId?: string } | undefined;
   DispoSoir: undefined;
   EditProfile: undefined;
