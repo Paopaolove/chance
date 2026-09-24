@@ -176,6 +176,9 @@ export function CreateOutingScreen() {
     prefill?.excludedTopics ?? '',
   );
   const [flexibleSlot, setFlexibleSlot] = useState(!!prefill?.flexibleSlot);
+  const [inviteIncludes, setInviteIncludes] = useState('');
+  const [inviteExtras, setInviteExtras] = useState('');
+  const [ticketsAlreadyBought, setTicketsAlreadyBought] = useState(false);
   const [fromDispoBanner, setFromDispoBanner] = useState(!!prefill?.fromDispo);
 
   useEffect(() => {
@@ -292,6 +295,10 @@ export function CreateOutingScreen() {
         .map((s) => s.trim())
         .filter(Boolean),
       flexibleSlot,
+      inviteIncludes: inviteIncludes.trim() || undefined,
+      inviteExtras: inviteExtras.trim() || undefined,
+      ticketsAlreadyBought:
+        category === 'culture' ? ticketsAlreadyBought : undefined,
     });
 
     if (!result.ok) {
@@ -307,13 +314,16 @@ export function CreateOutingScreen() {
 
     Alert.alert(
       'Annonce publiée',
-      'Gratuit pour l’hôte. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Chance → Simuler demande Juliette.)',
+      'Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Chance → Simuler demande Juliette.)',
     );
     setVenueName('');
     setMessage('');
     setTopic('');
     setExcludedTopics('');
     setFlexibleSlot(false);
+    setInviteIncludes('');
+    setInviteExtras('');
+    setTicketsAlreadyBought(false);
     setCapacity(1);
     setBudgetMaxEuros(25);
     setCategoryDetail('');
@@ -372,7 +382,7 @@ export function CreateOutingScreen() {
       >
         <Text style={styles.title}>Créer une annonce</Text>
         <Text style={styles.sub}>
-          Gratuit pour l’hôte · 1 annonce active · adresse exacte après
+          Publication gratuite · 1 annonce active · adresse exacte après
           confirmation
         </Text>
         {fromDispoBanner ? (
@@ -560,7 +570,11 @@ export function CreateOutingScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>Budget approx. *</Text>
+        <Text style={styles.label}>J'invite jusqu'a *</Text>
+        <Text style={styles.inviteHint}>
+          Plafond par invité, réglé sur place au lieu (pas via l'app). Au-delà =
+          hors invitation. Pas de transfert entre personnes.
+        </Text>
         <View style={styles.row}>
           {category === 'autre' || category === 'culture' ? (
             <Button
@@ -589,7 +603,7 @@ export function CreateOutingScreen() {
         >
           {budgetMaxEuros === 0 ? (
             <Text style={styles.budgetFreeHint}>
-              Sortie gratuite — pas de montant à indiquer
+              Sortie gratuite — invitation sans plafond €
             </Text>
           ) : (
             <>
@@ -631,6 +645,43 @@ export function CreateOutingScreen() {
             </>
           )}
         </View>
+
+        <Text style={styles.label}>Ce que j'offre (optionnel)</Text>
+        <TextInput
+          style={styles.input}
+          value={inviteIncludes}
+          onChangeText={setInviteIncludes}
+          placeholder="Ex. plat + boisson, entrée spectacle…"
+          placeholderTextColor={colors.textMuted}
+        />
+
+        <Text style={styles.label}>Hors invitation (optionnel)</Text>
+        <TextInput
+          style={styles.input}
+          value={inviteExtras}
+          onChangeText={setInviteExtras}
+          placeholder="Ex. dessert, 2e verre…"
+          placeholderTextColor={colors.textMuted}
+        />
+
+        {category === 'culture' ? (
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.switchLabel}>Billets déjà achetés</Text>
+              <Text style={styles.switchHint}>
+                Tu as déjà les places / tickets pour tes invités
+              </Text>
+            </View>
+            <Switch
+              value={ticketsAlreadyBought}
+              onValueChange={setTicketsAlreadyBought}
+              trackColor={{ true: colors.primarySoft, false: colors.border }}
+              thumbColor={
+                ticketsAlreadyBought ? colors.primary : colors.surface
+              }
+            />
+          </View>
+        ) : null}
 
         <Text style={styles.label}>Message *</Text>
         <TextInput
@@ -677,7 +728,12 @@ export function CreateOutingScreen() {
           </View>
         ) : null}
 
-        <Button title="Publier (gratuit)" onPress={onPublish} style={styles.cta} />
+        <Text style={styles.publishFreeLabel}>Publication gratuite</Text>
+        <Text style={styles.publishFreeHint}>
+          L'hôte ne paie rien pour publier. L'invité paie les frais Chance +
+          caution 20 EUR à la confirmation (≠ addition).
+        </Text>
+        <Button title="Publier" onPress={onPublish} style={styles.cta} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -715,6 +771,24 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.sm,
     marginTop: spacing.md,
+  },
+  inviteHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  publishFreeLabel: {
+    ...typography.bodyStrong,
+    color: colors.success,
+    marginTop: spacing.xl,
+    textAlign: 'center',
+  },
+  publishFreeHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   input: {
     backgroundColor: colors.surface,

@@ -5,6 +5,24 @@ Pas de dating : un fil de vraies sorties (restaurant, bar, culture, autre), en 1
 
 > MVP démo avec état local mock — **pas de Supabase ni Stripe** pour l’instant.
 
+
+## Modèle d’invitation (Chance)
+
+Chance = **invitation plafonnée**, pas une addition partagée ni un repas illimité.
+
+- L’**hôte** couvre **jusqu’à X EUR par invité**, réglé **sur place au lieu** (pas via l’app). Au-delà du plafond = hors invitation.
+- **Publication gratuite** pour l’hôte.
+- L’**invité** paie les frais Chance + une **caution 20 EUR** à la confirmation (≠ addition). Pas de transfert entre personnes.
+- Champ `budgetMaxEuros` = plafond d’invitation (0 = Gratuit). Optionnels : `inviteIncludes`, `inviteExtras`, `ticketsAlreadyBought` (culture).
+
+### Démo vs simulé vs réel
+
+| Couche | Ce que c’est |
+|--------|----------------|
+| **Démo** | App Expo locale, mocks + Context React, parcours cliquable sans backend. |
+| **Simulé** | Paiements / caution / acceptation hôte : Alert + état local (pas de Stripe). |
+| **Réel** | Pas encore : Supabase (auth, sorties) + Stripe (abonnements, caution) à venir. |
+
 ## Lancer la démo
 
 ```bash

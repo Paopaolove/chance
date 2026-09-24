@@ -289,6 +289,12 @@ export function OutingDetailScreen() {
         </View>
       </Pressable>
 
+      <Text style={styles.inviteLine}>
+        {outing.hostName} t'invite
+        {outing.budgetMaxEuros <= 0
+          ? ' · Gratuit'
+          : ` · jusqu'a ${outing.budgetMaxEuros} EUR`}
+      </Text>
       <View style={styles.chips}>
         <View style={styles.chip}>
           <Text style={styles.chipText}>{formatOutingCategoryLabel(outing.category, outing.categoryDetail)}</Text>
@@ -347,6 +353,30 @@ export function OutingDetailScreen() {
             L’adresse exacte n’est visible qu’après confirmation.
           </Text>
         )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.section}>Invitation</Text>
+        <Text style={styles.body}>
+          {outing.budgetMaxEuros <= 0
+            ? 'Sortie gratuite — réglée sur place, pas via l’app.'
+            : `J'invite jusqu'a ${outing.budgetMaxEuros} EUR par personne, réglé sur place au lieu (pas via l'app). Au-delà = hors invitation.`}
+        </Text>
+        {outing.inviteIncludes ? (
+          <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+            Inclus · {outing.inviteIncludes}
+          </Text>
+        ) : null}
+        {outing.inviteExtras ? (
+          <Text style={styles.hint}>Hors invitation · {outing.inviteExtras}</Text>
+        ) : null}
+        {outing.ticketsAlreadyBought ? (
+          <Text style={styles.hint}>Billets déjà achetés par l’hôte</Text>
+        ) : null}
+        <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+          Caution 20 EUR à la confirmation ≠ addition. Pas de transfert entre
+          personnes.
+        </Text>
       </View>
 
       <View style={styles.card}>
@@ -573,6 +603,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  inviteLine: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
     marginBottom: spacing.sm,
   },
   title: { ...typography.title, color: colors.text },

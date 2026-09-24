@@ -174,17 +174,15 @@ export function FeedScreen() {
     if (categoryFilter !== 'all') {
       list = list.filter((o) => o.category === categoryFilter);
     }
-    if (budgetFilter !== 'all') {
-      list = list.filter((o) => o.budgetMaxEuros <= budgetFilter);
-    }
+    // Invitation model: do NOT hide outings when invite cap > guest budget
+    // preference (ex. 40 EUR invite stays visible under a 25 EUR filter).
+    // budgetFilter / dispo budgetMax are preference signals only — not used
+    // to hide higher host invitation caps.
     if (alignDispo && isDispo) {
       if (myDispoPrefs.categories?.length) {
         list = list.filter((o) =>
           myDispoPrefs.categories!.includes(o.category),
         );
-      }
-      if (myDispoPrefs.budgetMax != null) {
-        list = list.filter((o) => o.budgetMaxEuros <= myDispoPrefs.budgetMax!);
       }
     }
 

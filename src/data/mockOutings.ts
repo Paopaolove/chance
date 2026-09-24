@@ -319,7 +319,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'femme',
     title: 'Dîner simple au Marais',
     description:
-      'Petit resto italien cosy. On partage une pasta et on parle de tout sauf du boulot. Une place à table.',
+      "J'invite jusqu'a 45 EUR au resto — pasta + un verre, réglé sur place. Au-delà = hors invitation.",
     category: 'restaurant',
     neighborhood: 'Le Marais',
     venueName: 'Trattoria du pont',
@@ -330,6 +330,8 @@ export const mockOutings: Outing[] = [
     spotsLeft: 1,
     womenOnly: true,
     budgetMaxEuros: 45,
+    inviteIncludes: 'Pasta + un verre',
+    inviteExtras: 'Dessert, 2e verre',
     status: 'open',
     createdAt: daysFromNow(-1, 12, 0),
   },
@@ -341,7 +343,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'femme',
     title: 'Apéro vin nature Oberkampf',
     description:
-      'Bar à vins nature, ambiance calme. Idéal pour 2–3 personnes curieuses. On commande à partager.',
+      "Apéro vin nature — J'invite jusqu'a 20 EUR par personne, réglé au bar. Au-delà = hors invitation.",
     category: 'bar',
     neighborhood: 'Oberkampf',
     venueName: 'Cave du coin',
@@ -352,6 +354,7 @@ export const mockOutings: Outing[] = [
     spotsLeft: 2,
     womenOnly: false,
     budgetMaxEuros: 20,
+    inviteIncludes: '1 verre nature',
     status: 'open',
     createdAt: daysFromNow(-2, 18, 0),
   },
@@ -363,7 +366,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'homme',
     title: 'Jazz & bière à Bastille',
     description:
-      'Session live dans un petit club. Une place libre à côté de moi. Ambiance détendue.',
+      "Jazz live — J'invite jusqu'a 20 EUR (entrée + une bière). Billets déjà pris.",
     category: 'culture',
     neighborhood: 'Bastille',
     venueName: 'Cave à jazz',
@@ -374,6 +377,8 @@ export const mockOutings: Outing[] = [
     spotsLeft: 1,
     womenOnly: false,
     budgetMaxEuros: 20,
+    inviteIncludes: 'Entrée + une bière',
+    ticketsAlreadyBought: true,
     status: 'open',
     createdAt: daysFromNow(-1, 9, 0),
   },
@@ -451,7 +456,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'homme',
     title: 'Pièce de théâtre Opéra',
     description:
-      'J’ai une place en plus pour une comédie légère. On dîne ensuite si ça clique.',
+      "Place théâtre offerte (billets déjà achetés). J'invite jusqu'a 12 EUR pour un verre après.",
     category: 'culture',
     neighborhood: 'Opéra',
     venueName: 'Théâtre du Passage',
@@ -462,6 +467,9 @@ export const mockOutings: Outing[] = [
     spotsLeft: 1,
     womenOnly: false,
     budgetMaxEuros: 12,
+    inviteIncludes: 'Place théâtre',
+    inviteExtras: 'Dîner après = hors invitation',
+    ticketsAlreadyBought: true,
     status: 'open',
     createdAt: daysFromNow(-2, 11, 0),
   },
@@ -507,7 +515,17 @@ export const BUDGET_MIN_EUROS = 5;
 export const BUDGET_MAX_EUROS = 50;
 
 export const budgetChipLabel = (euros: number): string =>
-  euros <= 0 ? 'Gratuit' : `Budget max · ${euros} €`;
+  euros <= 0 ? 'Gratuit' : `J'invite jusqu'a ${euros} EUR`;
+
+/** Card / detail line: {firstName} t'invite · {venue} · jusqu'a X EUR (or Gratuit). */
+export const inviteOfferLine = (
+  firstName: string,
+  venue: string,
+  euros: number,
+): string => {
+  const cap = euros <= 0 ? 'Gratuit' : `jusqu'a ${euros} EUR`;
+  return `${firstName} t'invite · ${venue} · ${cap}`;
+};
 
 /** @deprecated Import from `./pricing` — re-exported for compatibility. */
 export { pricing, DEPOSIT_EUROS, PRICING } from './pricing';

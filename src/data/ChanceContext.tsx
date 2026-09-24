@@ -912,6 +912,9 @@ interface ChanceContextValue {
     topic?: string;
     excludedTopics?: string[];
     flexibleSlot?: boolean;
+    inviteIncludes?: string;
+    inviteExtras?: string;
+    ticketsAlreadyBought?: boolean;
   }) =>
     | { ok: true; outingId: string }
     | { ok: false; reason: 'no_user' | 'already_active' | 'banned' };
@@ -1226,6 +1229,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       topic?: string;
       excludedTopics?: string[];
       flexibleSlot?: boolean;
+      inviteIncludes?: string;
+      inviteExtras?: string;
+      ticketsAlreadyBought?: boolean;
     }):
       | { ok: true; outingId: string }
       | { ok: false; reason: 'no_user' | 'already_active' | 'banned' } => {
@@ -1243,6 +1249,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       const topic = input.topic?.trim();
       const categoryDetail = input.categoryDetail?.trim();
+      const inviteIncludes = input.inviteIncludes?.trim();
+      const inviteExtras = input.inviteExtras?.trim();
       const excluded = (input.excludedTopics ?? [])
         .map((t) => t.trim())
         .filter(Boolean);
@@ -1272,6 +1280,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         ...(topic ? { topic } : {}),
         ...(excluded.length ? { excludedTopics: excluded } : {}),
         ...(input.flexibleSlot ? { flexibleSlot: true } : {}),
+        ...(inviteIncludes ? { inviteIncludes } : {}),
+        ...(inviteExtras ? { inviteExtras } : {}),
+        ...(input.ticketsAlreadyBought ? { ticketsAlreadyBought: true } : {}),
       };
       dispatch({ type: 'CREATE_OUTING', payload: outing });
       // Juliette auto-request moved to hidden Démo menu (5 taps on logo).

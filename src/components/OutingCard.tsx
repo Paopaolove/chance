@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useChance } from '../data/ChanceContext';
-import { budgetChipLabel, mockHosts } from '../data/mockOutings';
+import { inviteOfferLine, mockHosts } from '../data/mockOutings';
 import {
   formatTravelMinutes,
   getTravelMinutes,
@@ -42,7 +42,11 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
     return mockHosts.find((h) => h.id === outing.hostId)?.photoUri;
   }, [state.currentUser, outing.hostId]);
 
-  const title = `${outing.venueName} · ${formatOutingWhen(outing.startsAt)}`;
+  const title = inviteOfferLine(
+    outing.hostName,
+    outing.venueName,
+    outing.budgetMaxEuros,
+  );
 
   const openHostProfile = () => {
     navigation.navigate('HostProfile', { userId: outing.hostId });
@@ -76,7 +80,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               {title}
             </Text>
             <Text style={styles.meta}>
-              {outing.neighborhood}
+              {formatOutingWhen(outing.startsAt)} · {outing.neighborhood}
               {minutes !== undefined
                 ? ` · ${formatTravelMinutes(minutes)}`
                 : ''}
@@ -94,7 +98,9 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
                     isFree ? styles.chipFreeText : styles.chipBudgetText,
                   ]}
                 >
-                  {budgetChipLabel(outing.budgetMaxEuros)}
+                  {isFree
+                    ? 'Gratuit'
+                    : `J'invite jusqu'a ${outing.budgetMaxEuros} EUR`}
                 </Text>
               </View>
             </View>

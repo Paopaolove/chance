@@ -126,8 +126,18 @@ export interface Outing {
   capacity: 1 | 2 | 3 | 4;
   spotsLeft: number;
   womenOnly: boolean;
-  /** Max spend in €; 0 = Gratuit. */
+  /**
+   * Invitation cap per guest in EUR, covered by the host at the venue (not via the app).
+   * 0 = free outing (Gratuit). Beyond the cap is outside the invitation.
+   * Not a split bill, not peer transfer, not an unlimited free meal.
+   */
   budgetMaxEuros: number;
+  /** What the invite covers (ex. plat + boisson). Optional. */
+  inviteIncludes?: string;
+  /** What stays outside the invite (ex. dessert, 2e verre). Optional. */
+  inviteExtras?: string;
+  /** Culture: host already bought tickets. Optional. */
+  ticketsAlreadyBought?: boolean;
   status: OutingStatus;
   createdAt: string;
   /** Optional conversation topic. */
