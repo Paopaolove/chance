@@ -158,10 +158,6 @@ export function ConfirmSlotScreen() {
       setExpired(true);
       return;
     }
-    showToast(
-      'C’est confirmé',
-      'Pense à noter après la sortie',
-    );
     setDone(true);
   };
 

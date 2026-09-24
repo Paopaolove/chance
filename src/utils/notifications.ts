@@ -12,24 +12,44 @@ Notifications.setNotificationHandler({
   }),
 });
 
+export type PriorityNotifType =
+  | 'new_request'
+  | 'accepted'
+  | 'confirm_reminder'
+  | 'confirmed'
+  | 'chat_unlock'
+  | 'late'
+  | 'cancellation'
+  | 'new_venue'
+  | 'rate_after';
+
 export type ScheduledNotifIds = {
   accepted?: string;
   reminder3min?: string;
   chatUnlock?: string;
 };
 
+export type PushResult = { pushOk: true; id: string } | { pushOk: false };
+
 let handlerConfigured = true;
 
 export async function ensureNotificationPermissions(): Promise<boolean> {
-  const current = await Notifications.getPermissionsAsync();
-  if (current.granted || current.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL) {
-    return true;
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (
+      current.granted ||
+      current.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+    ) {
+      return true;
+    }
+    const asked = await Notifications.requestPermissionsAsync();
+    return (
+      asked.granted ||
+      asked.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
+    );
+  } catch {
+    return false;
   }
-  const asked = await Notifications.requestPermissionsAsync();
-  return (
-    asked.granted ||
-    asked.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
-  );
 }
 
 async function scheduleAt(
@@ -38,9 +58,8 @@ async function scheduleAt(
   when: Date,
   data?: Record<string, string>,
 ): Promise<string | null> {
-  const triggerDate = when.getTime() <= Date.now() + 1500
-    ? new Date(Date.now() + 2000)
-    : when;
+  const triggerDate =
+    when.getTime() <= Date.now() + 1500 ? new Date(Date.now() + 2000) : when;
   try {
     const id = await Notifications.scheduleNotificationAsync({
       content: {
@@ -56,7 +75,6 @@ async function scheduleAt(
     });
     return id;
   } catch {
-    // Web / Expo Go limitations — fall back to immediate
     try {
       const id = await Notifications.scheduleNotificationAsync({
         content: { title, body, sound: true, data: data ?? {} },
@@ -105,6 +123,29 @@ async function scheduleInSeconds(
 }
 
 /**
+ * Try a local/push notification. Returns pushOk=false when permissions or
+ * Expo Go / web scheduling fails — caller should fall back to in-app toast + Alert.
+ */
+export async function sendPriorityPush(input: {
+  type: PriorityNotifType;
+  title: string;
+  body: string;
+  delaySeconds?: number;
+  data?: Record<string, string>;
+}): Promise<PushResult> {
+  const granted = await ensureNotificationPermissions();
+  if (!granted) return { pushOk: false };
+  const data = { type: input.type, ...(input.data ?? {}) };
+  const delay = input.delaySeconds ?? 0;
+  const id =
+    delay <= 0
+      ? await scheduleInSeconds(input.title, input.body, 1, data)
+      : await scheduleInSeconds(input.title, input.body, delay, data);
+  if (!id) return { pushOk: false };
+  return { pushOk: true, id };
+}
+
+/**
  * After host accepts: notify guest immediately (10 min confirm window)
  * + reminder at ~3 min left (7 min after accept).
  */
@@ -113,32 +154,34 @@ export async function scheduleAcceptedConfirmNotifications(input: {
   hostName: string;
   confirmDeadlineAt: string;
   requestId: string;
-}): Promise<ScheduledNotifIds> {
+}): Promise<ScheduledNotifIds & { pushOk: boolean }> {
   const ids: ScheduledNotifIds = {};
   const granted = await ensureNotificationPermissions();
-  if (!granted) return ids;
+  if (!granted) return { ...ids, pushOk: false };
 
-  ids.accepted =
-    (await scheduleInSeconds(
-      'Tu es accepté·e !',
-      `${input.hostName} t’a accepté·e pour « ${input.outingTitle} ». Confirme ta place dans 10 min.`,
-      1,
-      { type: 'accepted', requestId: input.requestId },
-    )) ?? undefined;
+  const accepted = await sendPriorityPush({
+    type: 'accepted',
+    title: 'Tu es accepté·e !',
+    body: `${input.hostName} t’a accepté·e pour « ${input.outingTitle} ». Confirme ta place dans 10 min.`,
+    delaySeconds: 1,
+    data: { requestId: input.requestId },
+  });
+  if (accepted.pushOk) ids.accepted = accepted.id;
 
   const deadlineMs = new Date(input.confirmDeadlineAt).getTime();
   const reminderAt = new Date(deadlineMs - 3 * 60 * 1000);
   const secondsUntilReminder = (reminderAt.getTime() - Date.now()) / 1000;
   if (secondsUntilReminder > 2) {
-    ids.reminder3min =
-      (await scheduleInSeconds(
-        'Plus que 3 min',
-        `Confirme ta place pour « ${input.outingTitle} » avant la fin du délai.`,
-        secondsUntilReminder,
-        { type: 'confirm_reminder', requestId: input.requestId },
-      )) ?? undefined;
+    const reminder = await sendPriorityPush({
+      type: 'confirm_reminder',
+      title: 'Plus que 3 min',
+      body: `Confirme ta place pour « ${input.outingTitle} » avant la fin du délai.`,
+      delaySeconds: secondsUntilReminder,
+      data: { requestId: input.requestId },
+    });
+    if (reminder.pushOk) ids.reminder3min = reminder.id;
   }
-  return ids;
+  return { ...ids, pushOk: !!ids.accepted };
 }
 
 /** Chat unlocks H−1 — schedule at getChatOpensAt(startsAt). */
@@ -150,6 +193,17 @@ export async function scheduleChatUnlockNotification(input: {
   const granted = await ensureNotificationPermissions();
   if (!granted) return null;
   const opensAt = getChatOpensAt(input.startsAt);
+  const seconds = (opensAt.getTime() - Date.now()) / 1000;
+  if (seconds > 2) {
+    const r = await sendPriorityPush({
+      type: 'chat_unlock',
+      title: 'Chat ouvert',
+      body: `Le chat pour « ${input.outingTitle} » est déverrouillé (H−1).`,
+      delaySeconds: seconds,
+      data: { outingId: input.outingId },
+    });
+    return r.pushOk ? r.id : null;
+  }
   return scheduleAt(
     'Chat ouvert',
     `Le chat pour « ${input.outingTitle} » est déverrouillé (H−1).`,
@@ -158,33 +212,88 @@ export async function scheduleChatUnlockNotification(input: {
   );
 }
 
-/** Demo QA: fire the 3 notification types quickly (1s / 4s / 7s). */
+/** Demo QA: fire all priority notification types quickly. */
 export async function simulateDemoNotifications(input?: {
   outingTitle?: string;
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+}): Promise<{ ok: true; pushOk: boolean } | { ok: false; reason: string }> {
   const title = input?.outingTitle ?? 'ta sortie';
   const granted = await ensureNotificationPermissions();
   if (!granted) return { ok: false, reason: 'permission_denied' };
 
-  await scheduleInSeconds(
-    'Tu es accepté·e !',
-    `Démo · confirme ta place dans 10 min pour « ${title} ».`,
-    1,
-    { type: 'accepted', demo: '1' },
-  );
-  await scheduleInSeconds(
-    'Plus que 3 min',
-    `Démo · rappel confirmation pour « ${title} ».`,
-    4,
-    { type: 'confirm_reminder', demo: '1' },
-  );
-  await scheduleInSeconds(
-    'Chat ouvert',
-    `Démo · le chat pour « ${title} » est déverrouillé (H−1).`,
-    7,
-    { type: 'chat_unlock', demo: '1' },
-  );
-  return { ok: true };
+  const steps: {
+    type: PriorityNotifType;
+    title: string;
+    body: string;
+    delay: number;
+  }[] = [
+    {
+      type: 'new_request',
+      title: 'Nouvelle demande',
+      body: `Démo · Juliette veut rejoindre « ${title} ».`,
+      delay: 1,
+    },
+    {
+      type: 'accepted',
+      title: 'Tu es accepté·e !',
+      body: `Démo · confirme ta place dans 10 min pour « ${title} ».`,
+      delay: 3,
+    },
+    {
+      type: 'confirm_reminder',
+      title: 'Plus que 3 min',
+      body: `Démo · rappel confirmation pour « ${title} ».`,
+      delay: 5,
+    },
+    {
+      type: 'confirmed',
+      title: 'Place confirmée',
+      body: `Démo · « ${title} » est confirmée.`,
+      delay: 7,
+    },
+    {
+      type: 'chat_unlock',
+      title: 'Chat ouvert',
+      body: `Démo · le chat pour « ${title} » est déverrouillé (H−1).`,
+      delay: 9,
+    },
+    {
+      type: 'late',
+      title: 'Retard',
+      body: `Démo · l’autre personne a un retard (10 min).`,
+      delay: 11,
+    },
+    {
+      type: 'cancellation',
+      title: 'Annulation',
+      body: `Démo · « ${title} » a été annulée.`,
+      delay: 13,
+    },
+    {
+      type: 'new_venue',
+      title: 'Nouveau lieu',
+      body: `Démo · un lieu alternatif est proposé pour « ${title} ».`,
+      delay: 15,
+    },
+    {
+      type: 'rate_after',
+      title: 'Noter la sortie',
+      body: `Démo · comment s’est passée « ${title} » ?`,
+      delay: 17,
+    },
+  ];
+
+  let anyOk = false;
+  for (const s of steps) {
+    const r = await sendPriorityPush({
+      type: s.type,
+      title: s.title,
+      body: s.body,
+      delaySeconds: s.delay,
+      data: { demo: '1' },
+    });
+    if (r.pushOk) anyOk = true;
+  }
+  return { ok: true, pushOk: anyOk };
 }
 
 export async function cancelAllChanceNotifications(): Promise<void> {

@@ -342,10 +342,13 @@ export function ProfileScreen() {
             />
           ) : null}
           <Text style={[styles.cardHint, { marginTop: spacing.md }]}>
-            Locals : acceptation (délai 10 min), rappel à 3 min, chat à H−1.
+            Prioritaires : nouvelle demande, accepté (+10 min), rappel ~3 min,
+            confirmé, chat H−1, retard, annulation, nouveau lieu, noter après.
+            Pas de notif pour chaque annonce du fil. Fallback : bandeau + Alert
+            si push indisponible.
           </Text>
           <Button
-            title="Démo · simuler les 3 notifs"
+            title="Démo · simuler les notifs prioritaires"
             variant="ghost"
             loading={busy}
             onPress={async () => {
@@ -363,7 +366,9 @@ export function ProfileScreen() {
                 }
                 Alert.alert(
                   'Démo',
-                  '3 notifs programmées (~1s / 4s / 7s) : accepté, rappel 3 min, chat H−1.',
+                  result.pushOk
+                    ? 'Notifs prioritaires programmées (~1–17 s).'
+                    : 'Push partiel — bandeaux in-app si besoin.',
                 );
               } finally {
                 setBusy(false);
@@ -573,8 +578,9 @@ export function ProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Démo QA · chat</Text>
           <Text style={styles.cardHint}>
-            « Simuler J−50 min » place une sortie confirmée dans ~50 min pour
-            déverrouiller le chat sans attendre.
+            Aussi via 5 taps sur le logo Chance (menu Démo caché). « Simuler
+            J−50 min » place une sortie confirmée dans ~50 min pour déverrouiller
+            le chat sans attendre.
           </Text>
           {(() => {
             const confirmed = [

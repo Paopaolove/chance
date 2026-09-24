@@ -45,11 +45,6 @@ export function ChatPlaceholderScreen() {
     sendChatMessage,
     reportLate,
     getLateReportsForOthers,
-    simulateOtherLate,
-    simulateOutingInMinutes,
-    reportHostNoShow,
-    reportVenueClosed,
-    respondVenueAlternate,
     getMyImprevu,
   } = useChance();
 
@@ -174,17 +169,7 @@ export function ChatPlaceholderScreen() {
           )
         ) : null}
 
-        <View style={styles.demoBox}>
-          <Text style={styles.demoLabel}>Démo QA</Text>
-          <Text style={styles.demoHint}>
-            Simule « dans moins d’1 h » sans attendre le vrai créneau.
-          </Text>
-          <Button
-            title="Simuler J−50 min"
-            variant="secondary"
-            onPress={() => simulateOutingInMinutes(outing.id, 50)}
-          />
-        </View>
+
       </View>
     );
   }
@@ -339,61 +324,7 @@ export function ChatPlaceholderScreen() {
         )}
 
 
-        <View style={styles.demoBox}>
-          <Text style={styles.demoLabel}>Démo QA</Text>
-          <Button
-            title="Simuler retard de l’autre (bandeau)"
-            variant="ghost"
-            onPress={() => simulateOtherLate(outing.id, 15, request?.id)}
-          />
-          <Button
-            title="Simuler restaurant fermé"
-            variant="ghost"
-            onPress={() => {
-              const r = reportVenueClosed(outing.id);
-              if (!r.ok) Alert.alert('Impossible', r.reason);
-              else
-                Alert.alert(
-                  'Restaurant fermé',
-                  `Alternatif : ${r.alternate.venueName} (même quartier)`,
-                );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
-          <Button
-            title="Signaler no-show hôte"
-            variant="ghost"
-            onPress={() => {
-              const r = reportHostNoShow(outing.id);
-              if (!r.ok) Alert.alert('Impossible', r.reason);
-              else
-                Alert.alert(
-                  r.banned ? 'Hôte banni' : 'Avertissement',
-                  r.banned
-                    ? '2e no-show — ban + cautions remboursées.'
-                    : '1er no-show — warning + cautions remboursées.',
-                );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
-          {outing.venueIssue?.status === 'alternate_proposed' &&
-          outing.hostId !== state.currentUser?.id ? (
-            <>
-              <Button
-                title="Accepter lieu alternatif"
-                variant="secondary"
-                onPress={() => respondVenueAlternate(outing.id, 'accepted')}
-                style={{ marginTop: spacing.sm }}
-              />
-              <Button
-                title="Refuser (caution OK)"
-                variant="ghost"
-                onPress={() => respondVenueAlternate(outing.id, 'refused')}
-                style={{ marginTop: spacing.sm }}
-              />
-            </>
-          ) : null}
-        </View>
+
 
         <View style={styles.composer}>
           <TextInput
@@ -496,22 +427,6 @@ const styles = StyleSheet.create({
   },
   infoLabel: { ...typography.caption, color: colors.textMuted },
   infoValue: { ...typography.bodyStrong, color: colors.text, marginTop: 2 },
-  demoBox: {
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  demoLabel: {
-    ...typography.caption,
-    color: colors.warning,
-    fontFamily: fonts.semiBold,
-  },
-  demoHint: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
   thread: { flex: 1 },
   threadContent: { paddingBottom: spacing.md, gap: spacing.sm },
   bubbleSystem: {

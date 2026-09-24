@@ -43,16 +43,11 @@ export function OutingDetailScreen() {
     incomingRequests,
     closeOuting,
     getLateReportsForOthers,
-    simulateOtherLate,
-    simulateOutingInMinutes,
-    reportHostNoShow,
-    reportVenueClosed,
     respondVenueAlternate,
     getRequestById,
     getPendingImprevuForMe,
     getMyImprevu,
     respondImprevu,
-    simulateOtherImprevu,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
@@ -420,72 +415,6 @@ export function OutingDetailScreen() {
               )}
             </>
           ) : null}
-          {(outgoingRequests.some(
-            (r) => r.outingId === outing.id && r.status === 'confirmed',
-          ) ||
-            incomingRequests.some(
-              (r) => r.outingId === outing.id && r.status === 'confirmed',
-            )) && (
-            <View style={styles.demoBox}>
-              <Text style={styles.demoLabel}>Démo QA</Text>
-              <Button
-                title="Simuler J−50 min (ouvrir le chat)"
-                variant="ghost"
-                onPress={() => {
-                  simulateOutingInMinutes(outing.id, 50);
-                  Alert.alert(
-                    'Démo',
-                    'Sortie placée dans ~50 min — le chat est déverrouillé.',
-                  );
-                }}
-              />
-              <Button
-                title="Simuler retard de l’autre"
-                variant="ghost"
-                onPress={() => simulateOtherLate(outing.id, 10)}
-                style={{ marginTop: spacing.sm }}
-              />
-              <Button
-                title="Simuler imprévu de l’autre"
-                variant="ghost"
-                onPress={() => {
-                  const r = simulateOtherImprevu(outing.id);
-                  if (!r.ok) Alert.alert('Impossible', r.reason);
-                }}
-                style={{ marginTop: spacing.sm }}
-              />
-              <Button
-                title="Simuler restaurant fermé"
-                variant="ghost"
-                onPress={() => {
-                  const r = reportVenueClosed(outing.id);
-                  if (!r.ok) Alert.alert('Impossible', r.reason);
-                  else
-                    Alert.alert(
-                      'Restaurant fermé',
-                      `Alternatif : ${r.alternate.venueName} · ${r.alternate.neighborhood}`,
-                    );
-                }}
-                style={{ marginTop: spacing.sm }}
-              />
-              <Button
-                title="Simuler no-show hôte (1er/2e)"
-                variant="ghost"
-                onPress={() => {
-                  const r = reportHostNoShow(outing.id);
-                  if (!r.ok) Alert.alert('Impossible', r.reason);
-                  else
-                    Alert.alert(
-                      r.banned ? 'Bannissement' : 'Avertissement',
-                      r.banned
-                        ? '2e no-show — hôte banni. Cautions remboursées.'
-                        : '1er no-show — avertissement. Cautions remboursées.',
-                    );
-                }}
-                style={{ marginTop: spacing.sm }}
-              />
-            </View>
-          )}
         </View>
       ) : myRequest ? (
         <View style={styles.actions}>
@@ -559,76 +488,7 @@ export function OutingDetailScreen() {
                 }
                 style={{ marginTop: spacing.md }}
               />
-              <View style={styles.demoBox}>
-                <Text style={styles.demoLabel}>Démo QA</Text>
-                <Button
-                  title="Simuler J−50 min"
-                  variant="ghost"
-                  onPress={() => {
-                    simulateOutingInMinutes(outing.id, 50);
-                    Alert.alert(
-                      'Démo',
-                      'Sortie placée dans ~50 min — le chat est déverrouillé.',
-                    );
-                  }}
-                />
-                <Button
-                  title="Simuler retard de l’autre"
-                  variant="ghost"
-                  onPress={() =>
-                    simulateOtherLate(
-                      outing.id,
-                      10,
-                      'id' in myRequest ? myRequest.id : undefined,
-                    )
-                  }
-                  style={{ marginTop: spacing.sm }}
-                />
-                <Button
-                  title="Simuler imprévu de l’autre"
-                  variant="ghost"
-                  onPress={() => {
-                    const r = simulateOtherImprevu(
-                      outing.id,
-                      undefined,
-                      undefined,
-                      'id' in myRequest ? myRequest.id : undefined,
-                    );
-                    if (!r.ok) Alert.alert('Impossible', r.reason);
-                  }}
-                  style={{ marginTop: spacing.sm }}
-                />
-                <Button
-                  title="Simuler restaurant fermé"
-                  variant="ghost"
-                  onPress={() => {
-                    const r = reportVenueClosed(outing.id);
-                    if (!r.ok) Alert.alert('Impossible', r.reason);
-                    else
-                      Alert.alert(
-                        'Restaurant fermé',
-                        `Alternatif proposé : ${r.alternate.venueName}`,
-                      );
-                  }}
-                  style={{ marginTop: spacing.sm }}
-                />
-                <Button
-                  title="Signaler no-show hôte"
-                  variant="ghost"
-                  onPress={() => {
-                    const r = reportHostNoShow(outing.id);
-                    if (!r.ok) Alert.alert('Impossible', r.reason);
-                    else
-                      Alert.alert(
-                        r.banned ? 'Hôte banni' : 'Avertissement hôte',
-                        r.banned
-                          ? '2e no-show — ban. Ta caution est remboursée.'
-                          : '1er no-show — warning. Ta caution est remboursée.',
-                      );
-                  }}
-                  style={{ marginTop: spacing.sm }}
-                />
-              </View>
+
             </>
           )}
         </View>
@@ -810,17 +670,5 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     marginTop: spacing.xs,
-  },
-  demoBox: {
-    marginTop: spacing.lg,
-    backgroundColor: colors.warningSoft,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  demoLabel: {
-    ...typography.caption,
-    color: colors.warning,
-    fontFamily: fonts.semiBold,
-    marginBottom: spacing.sm,
   },
 });

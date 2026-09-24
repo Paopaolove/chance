@@ -256,7 +256,7 @@ export function CreateOutingScreen() {
 
     Alert.alert(
       'Annonce publiée',
-      'Gratuit pour l’hôte. Une demande démo (Juliette) a été ajoutée dans Demandes. L’adresse exacte reste cachée jusqu’à confirmation.',
+      'Gratuit pour l’hôte. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Chance → Simuler demande Juliette.)',
     );
     setVenueName('');
     setMessage('');

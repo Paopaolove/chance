@@ -6,7 +6,7 @@ import React, {
   useMemo,
   useReducer,
 } from 'react';
-import { AppState as RNAppState } from 'react-native';
+import { Alert, AppState as RNAppState } from 'react-native';
 import {
   isPastLocalMidnight,
   nextLocalMidnight,
@@ -57,6 +57,8 @@ import {
   scheduleAcceptedConfirmNotifications,
   scheduleChatUnlockNotification,
   simulateDemoNotifications,
+  sendPriorityPush,
+  type PriorityNotifType,
 } from '../utils/notifications';
 
 const CONFIRM_WINDOW_MS = 10 * 60 * 1000;
@@ -1098,10 +1100,24 @@ interface ChanceContextValue {
         loserRequestId: string;
       }
     | { ok: false; reason: string };
-  /** Demo: fire accepted / 3-min reminder / chat H−1 notifications quickly. */
+  /** Demo: fire all priority notifications quickly (push + in-app fallback). */
   simulateLocalNotifications: (
     outingTitle?: string,
-  ) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  ) => Promise<
+    | { ok: true; pushOk: boolean }
+    | { ok: false; reason: string }
+  >;
+  /**
+   * Priority notif: in-app toast always; try push; Alert if push impossible.
+   * Optional delaySeconds schedules the toast/Alert (and push) later.
+   */
+  notifyPriority: (input: {
+    type: PriorityNotifType;
+    title: string;
+    body: string;
+    delaySeconds?: number;
+    data?: Record<string, string>;
+  }) => Promise<void>;
 }
 
 const ChanceContext = createContext<ChanceContextValue | null>(null);
@@ -1244,19 +1260,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         ...(input.flexibleSlot ? { flexibleSlot: true } : {}),
       };
       dispatch({ type: 'CREATE_OUTING', payload: outing });
-      // Demande démo pour tester le flux hôte (même tick reducer)
-      const demoRequest: Request = {
-        id: uid('req'),
-        outingId: outing.id,
-        userId: 'demo-guest-1',
-        userName: 'Juliette',
-        userAge: 27,
-        userGender: 'femme',
-        message: 'Super idée, je suis dispo ! (demande démo)',
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-      };
-      dispatch({ type: 'JOIN_OUTING', payload: demoRequest });
+      // Juliette auto-request moved to hidden Démo menu (5 taps on logo).
       return { ok: true, outingId: outing.id };
     },
     [state.currentUser, state.outings],
@@ -1328,12 +1332,40 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       });
       if (req && outing) {
         void ensureAndroidChannel();
-        void scheduleAcceptedConfirmNotifications({
-          outingTitle: outing.title,
-          hostName: outing.hostName,
-          confirmDeadlineAt: deadline.toISOString(),
-          requestId,
-        });
+        void (async () => {
+          const scheduled = await scheduleAcceptedConfirmNotifications({
+            outingTitle: outing.title,
+            hostName: outing.hostName,
+            confirmDeadlineAt: deadline.toISOString(),
+            requestId,
+          });
+          // In-app toast for « accepté + fenêtre 10 min »
+          const toast: AppToast = {
+            id: uid('toast'),
+            title: 'Tu es accepté·e !',
+            body: `${outing.hostName} t’a accepté·e pour « ${outing.title} ». Confirme ta place dans 10 min.`,
+            createdAt: new Date().toISOString(),
+          };
+          dispatch({ type: 'SET_TOAST', payload: toast });
+          if (!scheduled.pushOk) {
+            Alert.alert(toast.title, toast.body);
+            // Fallback rappel ~3 min left
+            const deadlineMs = deadline.getTime();
+            const reminderIn = (deadlineMs - 3 * 60 * 1000 - Date.now()) / 1000;
+            if (reminderIn > 2) {
+              setTimeout(() => {
+                const t: AppToast = {
+                  id: uid('toast'),
+                  title: 'Plus que 3 min',
+                  body: `Confirme ta place pour « ${outing.title} » avant la fin du délai.`,
+                  createdAt: new Date().toISOString(),
+                };
+                dispatch({ type: 'SET_TOAST', payload: t });
+                Alert.alert(t.title, t.body);
+              }, reminderIn * 1000);
+            }
+          }
+        })();
       }
     },
     [state.requests, state.outings],
@@ -1400,11 +1432,49 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outingForChat = state.outings.find((o) => o.id === req.outingId);
       if (outingForChat) {
         void ensureAndroidChannel();
-        void scheduleChatUnlockNotification({
-          outingTitle: outingForChat.title,
-          startsAt: outingForChat.startsAt,
-          outingId: outingForChat.id,
-        });
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: 'Place confirmée',
+          body: `« ${outingForChat.title} » est confirmée. Chat à H−1.`,
+          createdAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+        void (async () => {
+          const push = await sendPriorityPush({
+            type: 'confirmed',
+            title: toast.title,
+            body: toast.body,
+            data: { requestId, outingId: outingForChat.id },
+          });
+          if (!push.pushOk) {
+            Alert.alert(toast.title, toast.body);
+          }
+          const chatId = await scheduleChatUnlockNotification({
+            outingTitle: outingForChat.title,
+            startsAt: outingForChat.startsAt,
+            outingId: outingForChat.id,
+          });
+          if (!chatId) {
+            // Fallback H−1 in-app when push scheduling fails
+            const opensIn =
+              (new Date(outingForChat.startsAt).getTime() -
+                60 * 60 * 1000 -
+                Date.now()) /
+              1000;
+            if (opensIn > 2 && opensIn < 48 * 3600) {
+              setTimeout(() => {
+                const t: AppToast = {
+                  id: uid('toast'),
+                  title: 'Chat ouvert',
+                  body: `Le chat pour « ${outingForChat.title} » est déverrouillé (H−1).`,
+                  createdAt: new Date().toISOString(),
+                };
+                dispatch({ type: 'SET_TOAST', payload: t });
+                Alert.alert(t.title, t.body);
+              }, opensIn * 1000);
+            }
+          }
+        })();
       }
       return { ok: true };
     },
@@ -1573,6 +1643,23 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'JOIN_OUTING', payload: request });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: 'Nouvelle demande',
+        body: `${request.userName} veut rejoindre « ${outing.title} ».`,
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      void (async () => {
+        void ensureAndroidChannel();
+        const push = await sendPriorityPush({
+          type: 'new_request',
+          title: toast.title,
+          body: toast.body,
+          data: { outingId, requestId: request.id },
+        });
+        if (!push.pushOk) Alert.alert(toast.title, toast.body);
+      })();
     },
     [state.outings, state.currentUser, state.requests],
   );
@@ -1761,11 +1848,21 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: sys });
       const toast: AppToast = {
         id: uid('toast'),
-        title: 'Retard signalé',
+        title: 'Retard',
         body: `${otherName} a un retard (${lateLabel(minutes)}).`,
         createdAt: now,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
+      void (async () => {
+        void ensureAndroidChannel();
+        const push = await sendPriorityPush({
+          type: 'late',
+          title: toast.title,
+          body: toast.body,
+          data: { outingId },
+        });
+        if (!push.pushOk) Alert.alert(toast.title, toast.body);
+      })();
     },
     [state.outings, state.requests, state.currentUser],
   );
@@ -1870,11 +1967,21 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         });
         const toast: AppToast = {
           id: uid('toast'),
-          title: 'Imprévu accepté. Caution rendue.',
-          body: 'La sortie est annulée — ce n’est pas une absence.',
+          title: 'Annulation',
+          body: 'Imprévu accepté. Caution rendue — la sortie est annulée.',
           createdAt: nowIso,
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
+        void (async () => {
+          void ensureAndroidChannel();
+          const push = await sendPriorityPush({
+            type: 'cancellation',
+            title: toast.title,
+            body: toast.body,
+            data: { outingId: report.outingId },
+          });
+          if (!push.pushOk) Alert.alert(toast.title, toast.body);
+        })();
         return {
           ok: true as const,
           depositReturned: true,
@@ -2083,7 +2190,26 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const completeOuting = useCallback((outingId: string) => {
     dispatch({ type: 'COMPLETE_OUTING', payload: { outingId } });
-  }, []);
+    const outing = state.outings.find((o) => o.id === outingId);
+    const title = outing?.title ?? 'ta sortie';
+    const toast: AppToast = {
+      id: uid('toast'),
+      title: 'Noter la sortie',
+      body: `Comment s’est passée « ${title} » ? Laisse une note.`,
+      createdAt: new Date().toISOString(),
+    };
+    dispatch({ type: 'SET_TOAST', payload: toast });
+    void (async () => {
+      void ensureAndroidChannel();
+      const push = await sendPriorityPush({
+        type: 'rate_after',
+        title: toast.title,
+        body: toast.body,
+        data: { outingId },
+      });
+      if (!push.pushOk) Alert.alert(toast.title, toast.body);
+    })();
+  }, [state.outings]);
 
   const getDisplayName = useCallback(
     (userId: string) => {
@@ -2279,6 +2405,57 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_TOAST', payload: toast });
   }, []);
 
+  /**
+   * Priority in-app toast always. Try local push; if push impossible, Alert
+   * (immediate) or schedule toast+Alert after delaySeconds.
+   */
+  const notifyPriority = useCallback(
+    async (input: {
+      type: PriorityNotifType;
+      title: string;
+      body: string;
+      delaySeconds?: number;
+      data?: Record<string, string>;
+    }) => {
+      const delay = Math.max(0, input.delaySeconds ?? 0);
+      const fireInApp = () => {
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: input.title,
+          body: input.body,
+          createdAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+      };
+
+      void ensureAndroidChannel();
+      const push = await sendPriorityPush({
+        type: input.type,
+        title: input.title,
+        body: input.body,
+        delaySeconds: delay > 0 ? delay : 0,
+        data: input.data,
+      });
+
+      if (delay <= 0) {
+        fireInApp();
+        if (!push.pushOk) {
+          Alert.alert(input.title, input.body);
+        }
+        return;
+      }
+
+      // Delayed: push may handle it; if not, schedule in-app + Alert.
+      if (!push.pushOk) {
+        setTimeout(() => {
+          fireInApp();
+          Alert.alert(input.title, input.body);
+        }, delay * 1000);
+      }
+    },
+    [],
+  );
+
   const getOutingsToRate = useCallback(() => {
     const user = state.currentUser;
     if (!user) return [];
@@ -2453,11 +2630,21 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       });
       const toast: AppToast = {
         id: uid('toast'),
-        title: 'Restaurant fermé',
-        body: `Proposition : ${alternate.venueName} · ${alternate.neighborhood} · ≤ ${alternate.budgetMaxEuros} €`,
+        title: 'Nouveau lieu',
+        body: `Restaurant fermé — proposition : ${alternate.venueName} · ${alternate.neighborhood} · ≤ ${alternate.budgetMaxEuros} €`,
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
+      void (async () => {
+        void ensureAndroidChannel();
+        const push = await sendPriorityPush({
+          type: 'new_venue',
+          title: toast.title,
+          body: toast.body,
+          data: { outingId },
+        });
+        if (!push.pushOk) Alert.alert(toast.title, toast.body);
+      })();
       return { ok: true, alternate };
     },
     [state.outings],
@@ -2479,21 +2666,41 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (decision === 'refused') {
         const toast: AppToast = {
           id: uid('toast'),
-          title: 'Sortie annulée',
-          body: 'Tu refuses le lieu alternatif — caution remboursée (mock).',
+          title: 'Annulation',
+          body: 'Tu refuses le lieu alternatif — sortie annulée, caution remboursée (mock).',
           createdAt: new Date().toISOString(),
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
+        void (async () => {
+          void ensureAndroidChannel();
+          const push = await sendPriorityPush({
+            type: 'cancellation',
+            title: toast.title,
+            body: toast.body,
+            data: { outingId },
+          });
+          if (!push.pushOk) Alert.alert(toast.title, toast.body);
+        })();
       } else {
         const toast: AppToast = {
           id: uid('toast'),
-          title: 'Nouveau lieu accepté',
+          title: 'Nouveau lieu',
           body: outing.venueIssue.alternate
             ? `${outing.venueIssue.alternate.venueName} · caution conservée`
             : 'Lieu mis à jour',
           createdAt: new Date().toISOString(),
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
+        void (async () => {
+          void ensureAndroidChannel();
+          const push = await sendPriorityPush({
+            type: 'new_venue',
+            title: toast.title,
+            body: toast.body,
+            data: { outingId },
+          });
+          if (!push.pushOk) Alert.alert(toast.title, toast.body);
+        })();
       }
       return { ok: true };
     },
@@ -2728,6 +2935,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       getOutingsToRate,
       getDisplayName,
       showToast,
+      notifyPriority,
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,
@@ -2791,6 +2999,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       getOutingsToRate,
       getDisplayName,
       showToast,
+      notifyPriority,
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,

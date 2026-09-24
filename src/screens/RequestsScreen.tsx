@@ -37,10 +37,8 @@ export function RequestsScreen() {
     acceptRequest,
     declineRequest,
     expireRequestIfNeeded,
-    simulateHostAccept,
     state,
     completeOuting,
-    getOutingsToRate,
   } = useChance();
 
   useEffect(() => {
@@ -94,17 +92,7 @@ export function RequestsScreen() {
               }
               style={{ marginTop: spacing.md }}
             />
-            {outing.status !== 'completed' ? (
-              <Button
-                title="Simuler sortie terminée"
-                variant="ghost"
-                onPress={() => {
-                  completeOuting(outing.id);
-                  Alert.alert('Sortie terminée', 'Tu peux noter ton invité.');
-                }}
-                style={{ marginTop: spacing.sm }}
-              />
-            ) : (
+            {outing.status === 'completed' ? (
               <Button
                 title={`Noter ${r.userName}`}
                 variant="secondary"
@@ -117,7 +105,7 @@ export function RequestsScreen() {
                 }
                 style={{ marginTop: spacing.sm }}
               />
-            )}
+            ) : null}
           </>
         ) : null}
       </View>
@@ -147,17 +135,6 @@ export function RequestsScreen() {
         <Text style={styles.cardMeta}>
           chez {outing?.hostName} · {statusLabels[r.status]}
         </Text>
-        {r.status === 'pending' ? (
-          <Button
-            title="Démo · simuler acceptation"
-            variant="ghost"
-            onPress={() => {
-              simulateHostAccept(r.id);
-              navigation.navigate('ConfirmSlot', { requestId: r.id });
-            }}
-            style={{ marginTop: spacing.md }}
-          />
-        ) : null}
         {r.status === 'accepted' ? (
           <Text style={styles.actionHint}>Touche pour confirmer (10 min)</Text>
         ) : null}
@@ -166,20 +143,7 @@ export function RequestsScreen() {
             <Text style={styles.actionHint}>
               Touche pour le chat (ouvert 1 h avant)
             </Text>
-            {outing.status !== 'completed' ? (
-              <Button
-                title="Simuler sortie terminée"
-                variant="ghost"
-                onPress={() => {
-                  completeOuting(outing.id);
-                  Alert.alert(
-                    'Sortie terminée',
-                    'Tu peux noter l’hôte depuis Profil → Mes sorties à noter, ou ici.',
-                  );
-                }}
-                style={{ marginTop: spacing.sm }}
-              />
-            ) : (
+            {outing.status === 'completed' ? (
               <Button
                 title="Noter la sortie"
                 variant="secondary"
@@ -192,7 +156,7 @@ export function RequestsScreen() {
                 }
                 style={{ marginTop: spacing.sm }}
               />
-            )}
+            ) : null}
           </>
         ) : null}
       </Pressable>

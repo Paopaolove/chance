@@ -290,25 +290,6 @@ export function DispoSoirScreen() {
         Même règles qu’une sortie : 10 min pour confirmer, caution 20 €,
         adresse exacte après confirmation.
       </Text>
-      {user?.dispoSoir ? (
-        <Button
-          title="Simuler minuit (démo)"
-          variant="ghost"
-          onPress={() => {
-            setDispoProfile({
-              dispoSoir: false,
-              dispoExpiresAt: null,
-            });
-            setOn(false);
-            Alert.alert(
-              'Dispo expirée',
-              'Simulation : minuit local — tu n’es plus visible dans Dispo ce soir.',
-            );
-            navigation.goBack();
-          }}
-          style={{ marginTop: spacing.lg }}
-        />
-      ) : null}
     </ScrollView>
   );
 }

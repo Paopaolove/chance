@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { DemoMenuModal } from '../components/DemoMenuModal';
 import { EmptyState } from '../components/EmptyState';
 import { OutingCard } from '../components/OutingCard';
 import { PersonCard } from '../components/PersonCard';
@@ -88,6 +89,21 @@ function dispoMatchScore(
 export function FeedScreen() {
   const navigation = useNavigation<Nav>();
   const { visibleOutings, peopleDispo, state } = useChance();
+  const [demoMenuOpen, setDemoMenuOpen] = useState(false);
+  const logoTaps = useRef(0);
+  const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onLogoTap = () => {
+    logoTaps.current += 1;
+    if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
+    if (logoTaps.current >= 5) {
+      logoTaps.current = 0;
+      setDemoMenuOpen(true);
+      return;
+    }
+    logoTapTimer.current = setTimeout(() => {
+      logoTaps.current = 0;
+    }, 1200);
+  };
   const [mode, setMode] = useState<FeedMode>('sorties');
   const [categoryFilter, setCategoryFilter] = useState<FilterId>('all');
   const [budgetFilter, setBudgetFilter] = useState<BudgetFilter>('all');
@@ -435,7 +451,9 @@ export function FeedScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.brand}>Chance</Text>
+        <Pressable onPress={onLogoTap} hitSlop={8}>
+          <Text style={styles.brand}>Chance</Text>
+        </Pressable>
         <Text style={styles.title}>Autour de toi</Text>
         <Text style={styles.sub}>
           {userNeighborhood
@@ -502,6 +520,10 @@ export function FeedScreen() {
           )}
         />
       )}
+      <DemoMenuModal
+        visible={demoMenuOpen}
+        onClose={() => setDemoMenuOpen(false)}
+      />
     </SafeAreaView>
   );
 }
