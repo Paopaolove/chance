@@ -26,6 +26,8 @@ import {
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+const BUDGET_PRESETS = [15, 25, 40] as const;
+
 export function DispoSoirScreen() {
   const navigation = useNavigation<Nav>();
   const { state, setDispoProfile } = useChance();
@@ -204,17 +206,26 @@ export function DispoSoirScreen() {
       {hint ? <Text style={styles.error}>{hint}</Text> : null}
 
       <Text style={styles.section}>Quartier *</Text>
-      <Pressable
-        onPress={() => setShowQuartiers((v) => !v)}
+      <Text style={styles.sectionHint}>
+        Choisis une suggestion ou écris n’importe quel quartier.
+      </Text>
+      <TextInput
         style={styles.input}
-      >
-        <Text style={{ ...typography.body, color: colors.text }}>
-          {quartier}
-        </Text>
-      </Pressable>
+        value={quartier}
+        onChangeText={(t) => {
+          setQuartier(t);
+          setShowQuartiers(true);
+        }}
+        onFocus={() => setShowQuartiers(true)}
+        placeholder="Écris ton quartier…"
+        placeholderTextColor={colors.textMuted}
+        autoCorrect={false}
+      />
       {showQuartiers ? (
         <View style={styles.quartierList}>
-          {PARIS_NEIGHBORHOODS.map((q) => (
+          {PARIS_NEIGHBORHOODS.filter((q) =>
+            q.toLowerCase().includes(quartier.trim().toLowerCase()),
+          ).map((q) => (
             <Pressable
               key={q}
               onPress={() => {
@@ -244,7 +255,7 @@ export function DispoSoirScreen() {
         Ce que tu es prêt à mettre pour une sortie ce soir.
       </Text>
       <View style={styles.chips}>
-        {[15, 25, 40].map((b) => {
+        {BUDGET_PRESETS.map((b) => {
           const selected = budgetMax === b;
           return (
             <Pressable
@@ -259,6 +270,26 @@ export function DispoSoirScreen() {
           );
         })}
       </View>
+      <Text style={styles.sectionHint}>Autre budget max</Text>
+      <TextInput
+        style={styles.input}
+        value={
+          (BUDGET_PRESETS as readonly number[]).includes(budgetMax)
+            ? ''
+            : String(budgetMax)
+        }
+        onChangeText={(t) => {
+          const digits = t.replace(/\D/g, '');
+          if (digits === '') return;
+          const n = parseInt(digits, 10);
+          if (!Number.isNaN(n)) setBudgetMax(n);
+        }}
+        placeholder="Ex. 30"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="number-pad"
+        maxLength={4}
+        selectTextOnFocus
+      />
 
       <Text style={styles.section}>Sujet (optionnel)</Text>
       <TextInput

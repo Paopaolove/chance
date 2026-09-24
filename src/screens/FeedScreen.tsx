@@ -237,11 +237,13 @@ export function FeedScreen() {
       );
     }
     if (quartierFilter !== 'all') {
-      list = list.filter(
-        (x) =>
-          (x.person.dispoNeighborhood ?? x.person.neighborhood) ===
-          quartierFilter,
-      );
+      const needle = quartierFilter.trim().toLowerCase();
+      list = list.filter((x) => {
+        const q = (
+          x.person.dispoNeighborhood ?? x.person.neighborhood ?? ''
+        ).toLowerCase();
+        return q === needle || (needle.length >= 3 && q.includes(needle));
+      });
     }
     list.sort((a, b) => {
       if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
@@ -407,30 +409,52 @@ export function FeedScreen() {
         })}
       </ScrollView>
       {mode === 'dispos' ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filters}
-          style={styles.filtersScroll}
-        >
-          {quartierOptions.map((q) => {
-            const selected = quartierFilter === q;
-            const label = q === 'all' ? 'Quartier' : q;
-            return (
-              <Pressable
-                key={q}
-                onPress={() => setQuartierFilter(q)}
-                style={[styles.chip, selected && styles.chipSelected]}
-              >
-                <Text
-                  style={[styles.chipText, selected && styles.chipTextSelected]}
+        <>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+            style={styles.filtersScroll}
+          >
+            {quartierOptions.map((q) => {
+              const selected = quartierFilter === q;
+              const label = q === 'all' ? 'Quartier' : q;
+              return (
+                <Pressable
+                  key={q}
+                  onPress={() => setQuartierFilter(q)}
+                  style={[styles.chip, selected && styles.chipSelected]}
                 >
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selected && styles.chipTextSelected,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Text style={styles.quartierFreeLabel}>Autre quartier</Text>
+          <TextInput
+            style={styles.quartierFreeInput}
+            value={
+              quartierFilter === 'all' || quartierOptions.includes(quartierFilter)
+                ? ''
+                : quartierFilter
+            }
+            onChangeText={(t) => {
+              const trimmed = t.trimStart();
+              setQuartierFilter(trimmed === '' ? 'all' : trimmed);
+            }}
+            placeholder="Écris un quartier…"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            accessibilityLabel="Filtrer par quartier saisi"
+          />
+        </>
       ) : null}
       <View style={styles.travelBlock}>
         <Text style={styles.travelLabel}>
@@ -715,6 +739,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xxxl,
     flexGrow: 1,
+  },
+  quartierFreeLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  quartierFreeInput: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    ...typography.body,
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   travelBlock: {
     marginTop: spacing.xs,

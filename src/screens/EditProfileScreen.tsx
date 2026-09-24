@@ -140,6 +140,19 @@ export function EditProfileScreen() {
           );
         })}
       </View>
+      <Text style={styles.label}>Autre quartier</Text>
+      <TextInput
+        style={styles.input}
+        value={
+          (PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
+            ? ''
+            : neighborhood
+        }
+        onChangeText={setNeighborhood}
+        placeholder="Écris ton quartier…"
+        placeholderTextColor={colors.textMuted}
+        autoCorrect={false}
+      />
 
       <Text style={styles.label}>Bio</Text>
       <TextInput
