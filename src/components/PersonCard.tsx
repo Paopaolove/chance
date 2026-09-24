@@ -19,7 +19,7 @@ interface Props {
   onPropose?: () => void;
 }
 
-export function PersonCard({ person, onPress, onPropose }: Props) {
+export function PersonCard({ person, onPropose }: Props) {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { state } = useChance();
@@ -30,40 +30,42 @@ export function PersonCard({ person, onPress, onPropose }: Props) {
   const quartier = person.dispoNeighborhood ?? person.neighborhood;
   const slot = dispoSlotLabel(person.dispoSlot);
 
-  const handlePress = () => {
-    if (onPress) {
-      onPress();
-      return;
-    }
-    if (onPropose) {
-      onPropose();
-    }
+  const openHostProfile = () => {
+    navigation.navigate('HostProfile', { userId: person.id });
   };
 
   return (
-    <Pressable
-      onPress={handlePress}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-    >
+    <View style={styles.card}>
       <View style={styles.header}>
-        <Avatar
-          name={person.firstName}
-          photoUri={person.photoUri}
-          seed={person.id}
-          size={photoSize}
-        />
+        <Pressable
+          onPress={openHostProfile}
+          accessibilityRole="button"
+          accessibilityLabel={`Profil de ${person.firstName}`}
+          hitSlop={6}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Avatar
+            name={person.firstName}
+            photoUri={person.photoUri}
+            seed={person.id}
+            size={photoSize}
+          />
+        </Pressable>
         <View style={styles.headerText}>
-          <Text style={styles.name}>
-            {person.firstName} · {person.age}
-          </Text>
+          <Pressable
+            onPress={openHostProfile}
+            accessibilityRole="button"
+            accessibilityLabel={`Profil de ${person.firstName}`}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Text style={styles.name}>
+              {person.firstName} · {person.age}
+            </Text>
+          </Pressable>
           <RatingLine
             userId={person.id}
             firstName={person.firstName}
-            onPress={() =>
-              navigation.navigate('HostProfile', {
-                userId: person.id,
-              })
-            }
+            onPress={openHostProfile}
           />
           <Text style={styles.neighborhood}>
             {quartier}
@@ -115,7 +117,7 @@ export function PersonCard({ person, onPress, onPropose }: Props) {
           <Text style={styles.ctaText}>Proposer une sortie</Text>
         </Pressable>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 

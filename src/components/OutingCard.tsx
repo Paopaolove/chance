@@ -44,54 +44,69 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
 
   const title = `${outing.venueName} · ${formatOutingWhen(outing.startsAt)}`;
 
+  const openHostProfile = () => {
+    navigation.navigate('HostProfile', { userId: outing.hostId });
+  };
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-    >
+    <View style={styles.card}>
       <View style={styles.mainRow}>
-        <Avatar
-          name={outing.hostName}
-          photoUri={photoUri}
-          seed={outing.hostId}
-          size={photoSize}
-        />
+        <Pressable
+          onPress={openHostProfile}
+          accessibilityRole="button"
+          accessibilityLabel={`Profil de ${outing.hostName}`}
+          hitSlop={6}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Avatar
+            name={outing.hostName}
+            photoUri={photoUri}
+            seed={outing.hostId}
+            size={photoSize}
+          />
+        </Pressable>
         <View style={styles.mainText}>
-          <Text style={styles.title} numberOfLines={2}>
-            {title}
-          </Text>
-          <Text style={styles.meta}>
-            {outing.neighborhood}
-            {minutes !== undefined
-              ? ` · ${formatTravelMinutes(minutes)}`
-              : ''}
-          </Text>
-          <View style={styles.chipsRow}>
-            <View
-              style={[styles.chip, isFree ? styles.chipFree : styles.chipBudget]}
-            >
-              <Text
+          <Pressable
+            onPress={onPress}
+            accessibilityRole="button"
+            accessibilityLabel={`Sortie ${outing.venueName}`}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Text style={styles.title} numberOfLines={2}>
+              {title}
+            </Text>
+            <Text style={styles.meta}>
+              {outing.neighborhood}
+              {minutes !== undefined
+                ? ` · ${formatTravelMinutes(minutes)}`
+                : ''}
+            </Text>
+            <View style={styles.chipsRow}>
+              <View
                 style={[
-                  styles.chipText,
-                  isFree ? styles.chipFreeText : styles.chipBudgetText,
+                  styles.chip,
+                  isFree ? styles.chipFree : styles.chipBudget,
                 ]}
               >
-                {budgetChipLabel(outing.budgetMaxEuros)}
-              </Text>
+                <Text
+                  style={[
+                    styles.chipText,
+                    isFree ? styles.chipFreeText : styles.chipBudgetText,
+                  ]}
+                >
+                  {budgetChipLabel(outing.budgetMaxEuros)}
+                </Text>
+              </View>
             </View>
-          </View>
+          </Pressable>
           <RatingLine
             userId={outing.hostId}
             firstName={outing.hostName}
-            onPress={() =>
-              navigation.navigate('HostProfile', {
-                userId: outing.hostId,
-              })
-            }
+            onPress={openHostProfile}
           />
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
