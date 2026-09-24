@@ -113,3 +113,33 @@ export const PLAN_OFFERS: PlanOffer[] = [
 export function formatPriceEuros(value: number): string {
   return value.toFixed(2).replace('.', ',') + ' €';
 }
+
+/** Libellés FR courts pour depositStatus (UI). */
+export const DEPOSIT_STATUS_LABELS = {
+  none: 'Pas de caution',
+  held: 'Caution bloquée',
+  returned: 'Caution rendue',
+  forfeited: 'Caution perdue',
+} as const;
+
+export type DepositStatusKey = keyof typeof DEPOSIT_STATUS_LABELS;
+
+/**
+ * Phrase UI pour l’issue caution (mock). Ne mentionne que la caution 20 € —
+ * pas d’amendes ni d’autres montants.
+ */
+export function describeDepositOutcome(
+  status: DepositStatusKey | undefined,
+): string {
+  switch (status) {
+    case 'held':
+      return `Caution ${DEPOSIT_EUROS} € bloquée à la confirmation. Rendue si tu annules ≥ ${CANCEL_FREE_BEFORE_HOURS} h avant, si l’hôte annule / no-show, si un imprévu est accepté, ou si tu refuses un lieu alternatif. Perdue si annulation < ${CANCEL_FREE_BEFORE_HOURS} h ou ghost.`;
+    case 'returned':
+      return `Caution ${DEPOSIT_EUROS} € rendue.`;
+    case 'forfeited':
+      return `Caution ${DEPOSIT_EUROS} € perdue (annulation tardive, ghost, ou absence après imprévu sans accord).`;
+    case 'none':
+    default:
+      return 'Aucune caution bloquée.';
+  }
+}

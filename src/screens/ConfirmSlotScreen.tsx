@@ -189,7 +189,9 @@ export function ConfirmSlotScreen() {
           {countdown}
         </Text>
         <Text style={styles.depositSub}>
-          {DEPOSIT_EUROS} € bloqués, rendus si tu viens.
+          Caution {DEPOSIT_EUROS} € (≠ invitation). Rendue si tu viens, si tu
+          annules ≥ 3 h, ou si l’hôte annule. Perdue si annulation tardive /
+          ghost — pas d’autre amende.
         </Text>
       </View>
       <Button title="Je confirme" onPress={onConfirm} />

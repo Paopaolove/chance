@@ -1,3 +1,4 @@
+/** Imprévu helpers — taxonomie caution : docs/deposit-imprevu.md */
 import { ImprevuMotive } from '../data/types';
 
 export const IMPREVU_MOTIVES: { id: ImprevuMotive; label: string }[] = [

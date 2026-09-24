@@ -571,22 +571,27 @@ export function OnboardingScreen() {
           {absencesExpanded ? (
             <View style={styles.rulesBox}>
               <Text style={styles.rulesLine}>
-                • Annulation au moins 3h avant → caution rendue.
+                • Caution 20 € ≠ frais Chance ≠ invitation / addition.
               </Text>
               <Text style={styles.rulesLine}>
-                • Annulation trop tard ou absence → caution perdue.
+                • Annulation ≥ 3 h avant → caution rendue.
               </Text>
               <Text style={styles.rulesLine}>
-                • Un imprévu peut être signalé (avec une raison). Il ne lève la
-                caution que si l’hôte accepte.
+                • Annulation {'<'} 3 h ou ghost après confirm → caution perdue
+                (pas d’autre amende).
               </Text>
               <Text style={styles.rulesLine}>
-                • Deux absences → perte de priorité, puis le compte peut être
-                fermé.
+                • Imprévu (1× / sortie, motif + raison) : accepté → caution
+                rendue + sortie annulée (pas de no-show) ; refusé → règle des
+                3 h.
+              </Text>
+              <Text style={styles.rulesLine}>
+                • Deux absences invité → perte de priorité, puis le compte peut
+                être fermé.
               </Text>
               <Text style={styles.rulesLine}>
                 • L’hôte ne vient pas → 1 avertissement, 2e fois compte fermé.
-                Les autres récupèrent la caution.
+                Les invités récupèrent la caution.
               </Text>
             </View>
           ) : null}

@@ -187,9 +187,7 @@ export function OutingDetailScreen() {
                 else
                   Alert.alert(
                     'Imprévu refusé',
-                    r.depositForfeited
-                      ? 'Moins de 3 h avant le début — caution perdue si absence.'
-                      : 'Règle des 3 h : caution encore bloquée tant que la sortie tient.',
+                    'Règle des 3 h : caution encore bloquée. Annulation ≥ 3 h → rendue ; < 3 h ou ghost → perdue. Pas d’amende.',
                   );
               }}
               style={{ marginTop: spacing.sm }}
@@ -492,8 +490,10 @@ export function OutingDetailScreen() {
                   {getMyImprevu(outing.id)!.status === 'pending'
                     ? 'en attente'
                     : getMyImprevu(outing.id)!.status === 'accepted'
-                      ? 'accepté'
-                      : 'refusé'}
+                      ? 'accepté — sortie annulée'
+                      : getMyImprevu(outing.id)!.status === 'auto_refused'
+                        ? 'sans réponse à l’heure'
+                        : 'refusé — règle des 3 h'}
                 </Text>
               ) : (
                 <Button
@@ -567,7 +567,9 @@ export function OutingDetailScreen() {
                     ? 'en attente de réponse'
                     : getMyImprevu(outing.id)!.status === 'accepted'
                       ? 'accepté — caution rendue'
-                      : 'refusé — règle 3 h'}
+                      : getMyImprevu(outing.id)!.status === 'auto_refused'
+                        ? 'sans réponse — absence'
+                        : 'refusé — règle des 3 h'}
                 </Text>
               ) : (
                 <Button
@@ -588,10 +590,16 @@ export function OutingDetailScreen() {
                   Caution remboursée (mock).
                 </Text>
               ) : 'id' in myRequest &&
+                getRequestById(myRequest.id)?.depositStatus === 'forfeited' ? (
+                <Text style={styles.hint}>
+                  Caution 20 € perdue (mock) — pas d’amende supplémentaire.
+                </Text>
+              ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'held' ? (
                 <Text style={styles.hint}>
-                  Caution 20 € bloquée (mock). Rendue si tu annules ≥ 3 h
-                  avant, sinon perdue.
+                  Caution 20 € bloquée (mock, ≠ invitation). Rendue si ≥ 3 h /
+                  hôte annule / imprévu accepté ; perdue si annulation tardive
+                  ou ghost — pas d’autre amende.
                 </Text>
               ) : null}
               <Text style={styles.hint}>

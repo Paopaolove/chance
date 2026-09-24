@@ -30,6 +30,23 @@ Machine à places par demande (`RequestStatus`) + cycle de l’annonce (`OutingS
 
 Affichage horaires : **Europe/Paris** (`src/utils/parisTime.ts`). Stockage : UTC. Annulation invité confirmé : caution rendue si ≥ `CANCEL_FREE_BEFORE_HOURS` (3 h) avant `startsAt`, sinon perdue.
 
+### Caution & imprévu (Lot C)
+
+Taxonomie détaillée : [`docs/deposit-imprevu.md`](docs/deposit-imprevu.md).
+
+| `depositStatus` | Sens |
+|-----------------|------|
+| `none` | Pas de caution |
+| `held` | Bloquée à la confirmation (20 € mock, une fois) |
+| `returned` | Rendue (cancel ≥3 h, hôte annule / no-show, lieu alt. refusé, imprévu accepté, sortie terminée…) |
+| `forfeited` | Perdue (cancel &lt;3 h, ghost, auto-refus imprévu invité à l’heure) |
+
+- Caution **≠** frais Chance **≠** invitation / addition.
+- Imprévu **1× / personne / sortie** : accepté → caution rendue + sortie annulée (**pas** de no-show) ; refusé → **règle des 3 h** (pas de forfeit immédiat).
+- **Non tranché — ne pas inventer** : amendes hors 20 €, destinataire de la forfaite, remboursements abonnement, Stripe.
+
+Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricing.ts`).
+
 ### Démo vs simulé vs réel
 
 | Couche | Ce que c’est |

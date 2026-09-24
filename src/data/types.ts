@@ -191,9 +191,13 @@ export interface Request {
   /** ISO UTC — when guest confirmed (deposit held, credit consumed). */
   confirmedAt?: string;
   /**
-   * Caution mock: held once at confirm; never double-held on idempotent re-confirm.
-   * Returned on free cancel (≥ CANCEL_FREE_BEFORE_HOURS), host cancelOuting,
-   * host no-show / venue refuse; forfeited on late guest cancel / ghost.
+   * Caution mock (20 €, DEPOSIT_EUROS) — ≠ frais Chance, ≠ invitation / addition.
+   * - none: pas bloquée (non confirmé)
+   * - held: bloquée une fois à confirmSlot (idempotent, pas de double hold)
+   * - returned: rendue (cancel ≥3h, host cancelOuting / no-show, venue alternate
+   *   refused, imprévu accepté…)
+   * - forfeited: perdue (cancel <3h, ghost, auto_refuse imprévu invité à startsAt)
+   * Voir docs/deposit-imprevu.md. Pas d’amendes inventées.
    */
   depositStatus?: 'none' | 'held' | 'returned' | 'forfeited';
 }
@@ -230,19 +234,34 @@ export interface LateReport {
   createdAt: string;
 }
 
+/**
+ * Motif d’imprévu (signal structuré, 1× / personne / sortie).
+ * Pas de chat libre — motif + raison écrite + accept/refus.
+ */
 export type ImprevuMotive =
   | 'annuler'
   | 'gros_retard'
   | 'lieu_ferme'
   | 'autre';
 
+/**
+ * Cycle imprévu :
+ * - pending: en attente de la 1re réponse d’un responderId
+ * - accepted: accord → caution(s) returned + sortie annulée (pas de no-show)
+ * - refused: refus explicite → caution reste held, règle des 3 h normale
+ * - auto_refused: aucune réponse à startsAt → traité comme refus + absence
+ *   (forfeit si reporter invité)
+ */
 export type ImprevuStatus =
   | 'pending'
   | 'accepted'
   | 'refused'
   | 'auto_refused';
 
-/** One unexpected-event signal per person per outing (no free chat). */
+/**
+ * Signal imprévu — une fois par personne et par sortie (pas de fil libre).
+ * Accepté ≠ no-show. Refus ≠ forfeit immédiat (règle 3 h). Voir docs/deposit-imprevu.md.
+ */
 export interface ImprevuReport {
   id: string;
   outingId: string;
@@ -386,9 +405,12 @@ export type AppAction =
         decision: 'accepted' | 'refused' | 'auto_refused';
         respondedAt: string;
         respondedByUserId?: string;
-        /** When refused/auto and <3h: forfeit reporter guest deposit. */
+        /**
+         * Forfeit reporter guest deposit — used for auto_refused at startsAt
+         * (absence). Manual refuse must NOT set this (règle 3 h).
+         */
         forfeitReporterDeposit?: boolean;
-        /** When accepted: return deposits + close outing. */
+        /** When accepted: return deposits + close outing (not a no-show). */
         cancelOuting?: boolean;
       };
     }

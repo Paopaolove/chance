@@ -70,10 +70,10 @@ export function ImprevuScreen() {
       existing.status === 'pending'
         ? 'En attente de réponse'
         : existing.status === 'accepted'
-          ? 'Accepté — caution rendue, sortie annulée'
+          ? 'Accepté — pas de no-show · caution rendue · sortie annulée'
           : existing.status === 'auto_refused'
-            ? 'Sans réponse à l’heure — traité comme un refus'
-            : 'Refusé — règle des 3 h applicable';
+            ? 'Sans réponse à l’heure — refus + absence (caution perdue si invité)'
+            : 'Refusé — caution toujours bloquée · règle des 3 h (pas d’amende)';
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.title}>Imprévu déjà signalé</Text>
@@ -103,8 +103,10 @@ export function ImprevuScreen() {
     >
       <Text style={styles.title}>Signaler un imprévu</Text>
       <Text style={styles.body}>
-        Une fois par sortie. L’autre personne accepte ou refuse — pas de fil de
-        discussion libre. Le chat reste réservé à H−1.
+        Une fois par personne et par sortie. Motif + raison écrite ; l’autre
+        accepte ou refuse — pas de chat libre (réservé à H−1). Accepté → caution
+        20 € rendue et sortie annulée (pas de no-show). Refusé → règle des 3 h,
+        sans amende inventée.
       </Text>
 
       <Text style={[styles.section, { marginTop: spacing.lg }]}>Motif</Text>

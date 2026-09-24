@@ -707,12 +707,19 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'COMPLETE_OUTING': {
+      // Guest attended (outing ended) → held deposits returned (product: « rendue si tu viens »).
+      const { outingId } = action.payload;
       return {
         ...state,
         outings: state.outings.map((o) =>
-          o.id === action.payload.outingId
-            ? { ...o, status: 'completed' as const }
-            : o,
+          o.id === outingId ? { ...o, status: 'completed' as const } : o,
+        ),
+        requests: state.requests.map((r) =>
+          r.outingId === outingId &&
+          r.status === 'confirmed' &&
+          (r.depositStatus === 'held' || !r.depositStatus)
+            ? { ...r, depositStatus: 'returned' as const }
+            : r,
         ),
       };
     }
@@ -2233,9 +2240,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      const forfeit =
-        report.reporterId !== outing.hostId &&
-        !isCancelFreeWindow(outing.startsAt);
+      // Manual refuse → normal 3h rule: deposit stays held (no immediate forfeit).
+      // Forfeit on absence is via auto_refused at startsAt or later cancel/ghost.
       dispatch({
         type: 'RESPOND_IMPREVU',
         payload: {
@@ -2243,22 +2249,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           decision: 'refused',
           respondedAt: nowIso,
           respondedByUserId: user.id,
-          forfeitReporterDeposit: forfeit,
+          forfeitReporterDeposit: false,
         },
       });
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Imprévu refusé',
-        body: forfeit
-          ? `Refus à moins de ${CANCEL_FREE_BEFORE_HOURS} h — caution perdue si absence.`
-          : `Règle ${CANCEL_FREE_BEFORE_HOURS} h : caution encore bloquée tant que la sortie tient.`,
+        body: `Règle ${CANCEL_FREE_BEFORE_HOURS} h : caution encore bloquée tant que la sortie tient. Annulation ≥ ${CANCEL_FREE_BEFORE_HOURS} h → rendue ; sinon / ghost → perdue.`,
         createdAt: nowIso,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
       return {
         ok: true as const,
         depositReturned: false,
-        depositForfeited: forfeit,
+        depositForfeited: false,
       };
     },
     [state.currentUser, state.imprevuReports, state.outings],
@@ -2370,7 +2374,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.outings, state.requests, state.currentUser, state.imprevuReports],
   );
 
-  /** No response by startsAt → treat as refuse (3h rule). Host must not stay blocked. */
+  /** No response by startsAt → auto_refused (= refus + absence). Guest reporter → forfeit. */
   useEffect(() => {
     const tick = () => {
       const now = Date.now();
@@ -3319,3 +3323,7 @@ export { CONFIRM_WINDOW_MS };
 
 export const DEPOSIT_EUROS = DEPOSIT_FROM_PRICING;
 export { CANCEL_FREE_BEFORE_HOURS, isCancelFreeWindow };
+export {
+  DEPOSIT_STATUS_LABELS,
+  describeDepositOutcome,
+} from './pricing';
