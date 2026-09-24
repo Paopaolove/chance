@@ -10,10 +10,25 @@ Pas de dating : un fil de vraies sorties (restaurant, bar, culture, autre), en 1
 
 Chance = **invitation plafonnée**, pas une addition partagée ni un repas illimité.
 
-- L’**hôte** couvre **jusqu’à X EUR par invité**, réglé **sur place au lieu** (pas via l’app). Au-delà du plafond = hors invitation.
+- L’**hôte** couvre **jusqu’à X € par invité**, réglé **sur place au lieu** (pas via l’app). Au-delà du plafond = hors invitation.
 - **Publication gratuite** pour l’hôte.
-- L’**invité** paie les frais Chance + une **caution 20 EUR** à la confirmation (≠ addition). Pas de transfert entre personnes.
+- L’**invité** paie les frais Chance + une **caution 20 €** à la confirmation (≠ addition). Pas de transfert entre personnes.
 - Champ `budgetMaxEuros` = plafond d’invitation (0 = Gratuit). Optionnels : `inviteIncludes`, `inviteExtras`, `ticketsAlreadyBought` (culture).
+
+### Réservations / états (Lot B)
+
+Machine à places par demande (`RequestStatus`) + cycle de l’annonce (`OutingStatus`) :
+
+| Action | Effet |
+|--------|--------|
+| **accept** | Réserve une place (`spotsLeft--`), fenêtre **10 min** (`CONFIRM_WINDOW_MS`) ; deadline en **ISO UTC** |
+| **confirmSlot** | Idempotent (2e confirm → ok, pas de double caution / crédit) ; après deadline → expire ; course capacité → `race_lost` |
+| **cancel** (`cancelRequest`) | Invité retire *sa* demande (pending/accepted/confirmed) — ne casse pas les autres confirmés |
+| **closeOuting** | Hôte ferme les inscriptions ; confirmés **gardent** leur place |
+| **cancelOuting** | Hôte annule toute la sortie (y compris confirmés) ; cautions rendues |
+| **completeOuting** | Sortie terminée (après `startsAt` / démo) → `completed` |
+
+Affichage horaires : **Europe/Paris** (`src/utils/parisTime.ts`). Stockage : UTC. Annulation invité confirmé : caution rendue si ≥ `CANCEL_FREE_BEFORE_HOURS` (3 h) avant `startsAt`, sinon perdue.
 
 ### Démo vs simulé vs réel
 

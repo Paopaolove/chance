@@ -63,7 +63,24 @@ import {
   type PriorityNotifType,
 } from '../utils/notifications';
 
+/**
+ * Guest confirm hold after host accept (~10 min).
+ * Deadlines are stored as ISO UTC (Date.toISOString()); display via parisTime (Europe/Paris).
+ */
 const CONFIRM_WINDOW_MS = 10 * 60 * 1000;
+
+/** Restore one reserved seat (after expire / cancel accepted|confirmed). Never reopen closed/completed. */
+function withRestoredSeat(o: Outing): Outing {
+  if (o.status === 'closed' || o.status === 'completed') {
+    return { ...o, spotsLeft: Math.min(o.capacity, o.spotsLeft + 1) };
+  }
+  const spotsLeft = Math.min(o.capacity, o.spotsLeft + 1);
+  return {
+    ...o,
+    spotsLeft,
+    status: spotsLeft > 0 && o.status === 'full' ? ('open' as const) : o.status,
+  };
+}
 
 const initialState: AppState = {
   onboardingDone: false,
@@ -113,19 +130,112 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'CLOSE_OUTING': {
+      // Host closes listing only: confirmed guests keep their seats.
+      // Pending/accepted cancelled; accepted seats restored (spotsLeft).
+      const outingId = action.payload.outingId;
+      const acceptedCount = state.requests.filter(
+        (r) => r.outingId === outingId && r.status === 'accepted',
+      ).length;
       return {
         ...state,
-        outings: state.outings.map((o) =>
-          o.id === action.payload.outingId
-            ? { ...o, status: 'closed' as const }
-            : o,
-        ),
+        outings: state.outings.map((o) => {
+          if (o.id !== outingId) return o;
+          let spotsLeft = o.spotsLeft;
+          for (let i = 0; i < acceptedCount; i++) {
+            spotsLeft = Math.min(o.capacity, spotsLeft + 1);
+          }
+          return { ...o, status: 'closed' as const, spotsLeft };
+        }),
         requests: state.requests.map((r) =>
-          r.outingId === action.payload.outingId &&
+          r.outingId === outingId &&
           (r.status === 'pending' || r.status === 'accepted')
             ? { ...r, status: 'cancelled' as const }
             : r,
         ),
+      };
+    }
+
+    case 'CANCEL_OUTING': {
+      // Host cancels the whole outing (incl. confirmed). Distinct from CLOSE_OUTING.
+      // Deposits: host-initiated → always returned (guests not at fault).
+      // Guest free-cancel window is CANCEL_FREE_BEFORE_HOURS (≥3h) via isCancelFreeWindow
+      // on CANCEL_REQUEST; host cancel never forfeits guest deposits.
+      const { outingId } = action.payload;
+      return {
+        ...state,
+        outings: state.outings.map((o) =>
+          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+        ),
+        requests: state.requests.map((r) => {
+          if (r.outingId !== outingId) return r;
+          if (r.status === 'confirmed') {
+            return {
+              ...r,
+              status: 'cancelled' as const,
+              depositStatus:
+                r.depositStatus === 'held' || !r.depositStatus
+                  ? ('returned' as const)
+                  : r.depositStatus,
+            };
+          }
+          if (r.status === 'pending' || r.status === 'accepted') {
+            return { ...r, status: 'cancelled' as const };
+          }
+          return r;
+        }),
+      };
+    }
+
+    case 'CANCEL_REQUEST': {
+      // Guest withdraws one seat OR host cancels one accepted hold.
+      // Never closes the outing / never cancels other confirmed guests.
+      const { requestId, cancelledAt, by } = action.payload;
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req) return state;
+      if (
+        req.status !== 'pending' &&
+        req.status !== 'accepted' &&
+        req.status !== 'confirmed'
+      ) {
+        return state;
+      }
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      const heldSeat = req.status === 'accepted' || req.status === 'confirmed';
+      let depositStatus = req.depositStatus;
+      if (req.status === 'confirmed') {
+        const free =
+          outing &&
+          isCancelFreeWindow(
+            outing.startsAt,
+            new Date(cancelledAt).getTime(),
+          );
+        if (by === 'host') {
+          // Host dropping one guest: return deposit
+          depositStatus =
+            req.depositStatus === 'held' || !req.depositStatus
+              ? 'returned'
+              : req.depositStatus;
+        } else {
+          // Guest cancel: returned if ≥ CANCEL_FREE_BEFORE_HOURS, else forfeited
+          depositStatus = free ? 'returned' : 'forfeited';
+        }
+      }
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          r.id === requestId
+            ? {
+                ...r,
+                status: 'cancelled' as const,
+                ...(req.status === 'confirmed' ? { depositStatus } : {}),
+              }
+            : r,
+        ),
+        outings: heldSeat
+          ? state.outings.map((o) =>
+              o.id === req.outingId ? withRestoredSeat(o) : o,
+            )
+          : state.outings,
       };
     }
 
@@ -205,13 +315,15 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'CONFIRM_SLOT': {
       const req = state.requests.find((r) => r.id === action.payload.requestId);
+      // Idempotent: already confirmed → no double deposit / no double credit
+      if (req && req.status === 'confirmed') return state;
       if (!req || req.status !== 'accepted') return state;
       if (
         req.confirmDeadlineAt &&
         new Date(action.payload.confirmedAt).getTime() >
           new Date(req.confirmDeadlineAt).getTime()
       ) {
-        // Too late — treat as expire
+        // Too late — expire, free seat
         return reducer(state, {
           type: 'EXPIRE_REQUEST',
           payload: { requestId: action.payload.requestId },
@@ -225,7 +337,7 @@ function reducer(state: AppState, action: AppAction): AppState {
             r.status === 'confirmed' &&
             r.id !== req.id,
         );
-        // Capacity race: first confirmedAt wins; later confirms lose the seat.
+        // Capacity race: other confirms already filled capacity → race_lost
         if (alreadyConfirmed.length >= outingForRace.capacity) {
           return reducer(state, {
             type: 'EXPIRE_REQUEST',
@@ -233,18 +345,31 @@ function reducer(state: AppState, action: AppAction): AppState {
           });
         }
       }
-      const nextUser =
-        state.currentUser &&
-        (state.currentUser.id === req.userId ||
+      let nextUser = state.currentUser;
+      if (
+        nextUser &&
+        (nextUser.id === req.userId ||
           state.outings.some(
-            (o) => o.id === req.outingId && o.hostId === state.currentUser!.id,
+            (o) => o.id === req.outingId && o.hostId === nextUser!.id,
           ))
-          ? {
-              ...state.currentUser,
-              dispoSoir: false,
-              dispoExpiresAt: undefined,
-            }
-          : state.currentUser;
+      ) {
+        nextUser = {
+          ...nextUser,
+          dispoSoir: false,
+          dispoExpiresAt: undefined,
+        };
+      }
+      // Consume credit once on accepted→confirmed only (idempotent path returned above)
+      if (
+        action.payload.consumeCredit &&
+        nextUser &&
+        (nextUser.outingCredits ?? 0) > 0
+      ) {
+        nextUser = {
+          ...nextUser,
+          outingCredits: (nextUser.outingCredits ?? 0) - 1,
+        };
+      }
       return {
         ...state,
         currentUser: nextUser,
@@ -254,7 +379,9 @@ function reducer(state: AppState, action: AppAction): AppState {
                 ...r,
                 status: 'confirmed' as const,
                 confirmedAt: action.payload.confirmedAt,
-                depositStatus: 'held' as const,
+                // Hold deposit once (already held stays held)
+                depositStatus:
+                  r.depositStatus === 'held' ? r.depositStatus : ('held' as const),
               }
             : r,
         ),
@@ -262,6 +389,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'EXPIRE_REQUEST': {
+      // Confirm window missed or race_lost — free the reserved seat.
       const req = state.requests.find((r) => r.id === action.payload.requestId);
       if (!req || req.status !== 'accepted') return state;
       return {
@@ -272,13 +400,7 @@ function reducer(state: AppState, action: AppAction): AppState {
             : r,
         ),
         outings: state.outings.map((o) =>
-          o.id === req.outingId
-            ? {
-                ...o,
-                spotsLeft: o.spotsLeft + 1,
-                status: o.status === 'full' ? ('open' as const) : o.status,
-              }
-            : o,
+          o.id === req.outingId ? withRestoredSeat(o) : o,
         ),
       };
     }
@@ -830,8 +952,8 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'RUN_CONFIRM_RACE_DEMO': {
-      // Demo: inject two accepted seats, confirm first timestamp, expire the other.
-      const { winner, loser, winnerConfirmedAt } = action.payload;
+      // Demo: 2 users last seat — winner confirms, loser expires (race_lost).
+      const { outingId, winner, loser, winnerConfirmedAt } = action.payload;
       const without = state.requests.filter(
         (r) => r.id !== winner.id && r.id !== loser.id,
       );
@@ -847,6 +969,16 @@ function reducer(state: AppState, action: AppAction): AppState {
           { ...loser, status: 'expired' as const },
           ...without,
         ],
+        outings: state.outings.map((o) =>
+          o.id === outingId
+            ? {
+                ...o,
+                // Winner keeps the seat; loser never held a lasting reservation
+                spotsLeft: 0,
+                status: 'full' as const,
+              }
+            : o,
+        ),
       };
     }
 
@@ -918,13 +1050,39 @@ interface ChanceContextValue {
   }) =>
     | { ok: true; outingId: string }
     | { ok: false; reason: 'no_user' | 'already_active' | 'banned' };
+  /**
+   * Host closes listing (no new requests). Confirmed guests stay.
+   * Pending/accepted cancelled + seats restored. ≠ cancelOuting / completeOuting.
+   */
   closeOuting: (outingId: string) => void;
+  /**
+   * Host cancels the whole outing including confirmed guests; deposits returned.
+   * ≠ closeOuting (keeps confirmed) / completeOuting (ends after start).
+   */
+  cancelOuting: (
+    outingId: string,
+  ) => { ok: true } | { ok: false; reason: string };
+  /**
+   * Guest withdraws own pending/accepted/confirmed request (or host drops one
+   * accepted/confirmed seat). Does NOT cancel other confirmed guests / outing.
+   */
+  cancelRequest: (
+    requestId: string,
+    by?: 'guest' | 'host',
+  ) =>
+    | { ok: true; depositReturned?: boolean; depositForfeited?: boolean }
+    | { ok: false; reason: string };
   joinOuting: (
     outingId: string,
     message?: string,
   ) => { ok: true; requestId: string } | { ok: false; reason: string };
   acceptRequest: (requestId: string) => void;
+  /** Host declines a pending request (no seat was reserved). */
   declineRequest: (requestId: string) => void;
+  /**
+   * Confirm seat. Idempotent: already-confirmed → { ok: true } (no double
+   * deposit / credit). After deadline → expire + expired. Capacity race → race_lost.
+   */
   confirmSlot: (
     requestId: string,
   ) =>
@@ -1295,6 +1453,60 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'CLOSE_OUTING', payload: { outingId } });
   }, []);
 
+  const cancelOuting = useCallback(
+    (outingId: string): { ok: true } | { ok: false; reason: string } => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      if (outing.status === 'completed') {
+        return { ok: false, reason: 'already_completed' };
+      }
+      dispatch({
+        type: 'CANCEL_OUTING',
+        payload: { outingId, cancelledAt: new Date().toISOString() },
+      });
+      return { ok: true };
+    },
+    [state.outings],
+  );
+
+  const cancelRequest = useCallback(
+    (
+      requestId: string,
+      by: 'guest' | 'host' = 'guest',
+    ):
+      | { ok: true; depositReturned?: boolean; depositForfeited?: boolean }
+      | { ok: false; reason: string } => {
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req) return { ok: false, reason: 'not_found' };
+      if (
+        req.status !== 'pending' &&
+        req.status !== 'accepted' &&
+        req.status !== 'confirmed'
+      ) {
+        return { ok: false, reason: 'invalid_status' };
+      }
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      const cancelledAt = new Date().toISOString();
+      let depositReturned: boolean | undefined;
+      let depositForfeited: boolean | undefined;
+      if (req.status === 'confirmed' && outing) {
+        if (by === 'host') {
+          depositReturned = true;
+        } else if (isCancelFreeWindow(outing.startsAt)) {
+          depositReturned = true;
+        } else {
+          depositForfeited = true;
+        }
+      }
+      dispatch({
+        type: 'CANCEL_REQUEST',
+        payload: { requestId, cancelledAt, by },
+      });
+      return { ok: true, depositReturned, depositForfeited };
+    },
+    [state.requests, state.outings],
+  );
+
   const joinOuting = useCallback(
     (
       outingId: string,
@@ -1422,11 +1634,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'invalid' };
+      const req = state.requests.find((r) => r.id === requestId);
+      // Idempotent double-tap: already confirmed → ok (no deposit/credit again)
+      if (req && req.status === 'confirmed') {
+        return { ok: true };
+      }
       const gate = gateCanConfirmOuting(user);
       if (!gate.ok) {
         return { ok: false, reason: 'paywall' };
       }
-      const req = state.requests.find((r) => r.id === requestId);
       if (!req || req.status !== 'accepted') {
         return { ok: false, reason: 'invalid' };
       }
@@ -1447,12 +1663,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           return { ok: false, reason: 'race_lost' };
         }
       }
-      if (shouldConsumeCreditOnConfirm(user)) {
-        dispatch({ type: 'CONSUME_OUTING_CREDIT' });
-      }
+      // Credit consumed inside CONFIRM_SLOT reducer on accepted→confirmed only
+      const consumeCredit = shouldConsumeCreditOnConfirm(user);
       dispatch({
         type: 'CONFIRM_SLOT',
-        payload: { requestId, confirmedAt: new Date().toISOString() },
+        payload: {
+          requestId,
+          confirmedAt: new Date().toISOString(),
+          consumeCredit,
+        },
       });
       const outingForChat = state.outings.find((o) => o.id === req.outingId);
       if (outingForChat) {
@@ -2954,6 +3173,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       resetDemo,
       createOuting,
       closeOuting,
+      cancelOuting,
+      cancelRequest,
       joinOuting,
       acceptRequest,
       declineRequest,
@@ -3020,6 +3241,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       resetDemo,
       createOuting,
       closeOuting,
+      cancelOuting,
+      cancelRequest,
       joinOuting,
       acceptRequest,
       declineRequest,

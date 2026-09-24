@@ -36,6 +36,7 @@ export function RequestsScreen() {
     getOutingById,
     acceptRequest,
     declineRequest,
+    cancelRequest,
     expireRequestIfNeeded,
     state,
     completeOuting,
@@ -136,7 +137,18 @@ export function RequestsScreen() {
           chez {outing?.hostName} · {statusLabels[r.status]}
         </Text>
         {r.status === 'accepted' ? (
-          <Text style={styles.actionHint}>Touche pour confirmer (10 min)</Text>
+          <>
+            <Text style={styles.actionHint}>Touche pour confirmer (10 min)</Text>
+            <Button
+              title="Libérer ma place"
+              variant="ghost"
+              onPress={() => {
+                cancelRequest(r.id, 'guest');
+                Alert.alert('Place libérée', 'La place est de nouveau disponible.');
+              }}
+              style={{ marginTop: spacing.sm }}
+            />
+          </>
         ) : null}
         {r.status === 'confirmed' && outing ? (
           <>

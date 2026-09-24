@@ -1,27 +1,18 @@
-export function formatOutingWhen(iso: string): string {
+import {
+  formatParisTime,
+  isParisSameDay,
+  isParisTomorrow,
+} from './parisTime';
+
+export function formatOutingWhen(iso: string, nowMs = Date.now()): string {
+  const time = formatParisTime(iso);
+
+  if (isParisSameDay(iso, nowMs)) return `Ce soir · ${time}`;
+  if (isParisTomorrow(iso, nowMs)) return `Demain · ${time}`;
+
   const d = new Date(iso);
-  const now = new Date();
-  const sameDay =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  const isTomorrow =
-    d.getFullYear() === tomorrow.getFullYear() &&
-    d.getMonth() === tomorrow.getMonth() &&
-    d.getDate() === tomorrow.getDate();
-
-  const time = d.toLocaleTimeString('fr-FR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  if (sameDay) return `Ce soir · ${time}`;
-  if (isTomorrow) return `Demain · ${time}`;
-
   const date = d.toLocaleDateString('fr-FR', {
+    timeZone: 'Europe/Paris',
     weekday: 'short',
     day: 'numeric',
     month: 'short',

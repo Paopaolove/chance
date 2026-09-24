@@ -100,7 +100,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
                 >
                   {isFree
                     ? 'Gratuit'
-                    : `J'invite jusqu'a ${outing.budgetMaxEuros} EUR`}
+                    : `J'invite jusqu'à ${outing.budgetMaxEuros} €`}
                 </Text>
               </View>
             </View>

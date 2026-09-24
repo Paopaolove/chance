@@ -44,6 +44,8 @@ export function OutingDetailScreen() {
     outgoingRequests,
     incomingRequests,
     closeOuting,
+    cancelOuting,
+    cancelRequest,
     getLateReportsForOthers,
     respondVenueAlternate,
     getRequestById,
@@ -293,7 +295,7 @@ export function OutingDetailScreen() {
         {outing.hostName} t'invite
         {outing.budgetMaxEuros <= 0
           ? ' · Gratuit'
-          : ` · jusqu'a ${outing.budgetMaxEuros} EUR`}
+          : ` · jusqu'à ${outing.budgetMaxEuros} €`}
       </Text>
       <View style={styles.chips}>
         <View style={styles.chip}>
@@ -360,7 +362,7 @@ export function OutingDetailScreen() {
         <Text style={styles.body}>
           {outing.budgetMaxEuros <= 0
             ? 'Sortie gratuite — réglée sur place, pas via l’app.'
-            : `J'invite jusqu'a ${outing.budgetMaxEuros} EUR par personne, réglé sur place au lieu (pas via l'app). Au-delà = hors invitation.`}
+            : `J'invite jusqu'à ${outing.budgetMaxEuros} € par personne, réglé sur place au lieu (pas via l'app). Au-delà = hors invitation.`}
         </Text>
         {outing.inviteIncludes ? (
           <Text style={[styles.hint, { marginTop: spacing.sm }]}>
@@ -374,7 +376,7 @@ export function OutingDetailScreen() {
           <Text style={styles.hint}>Billets déjà achetés par l’hôte</Text>
         ) : null}
         <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-          Caution 20 EUR à la confirmation ≠ addition. Pas de transfert entre
+          Caution 20 € à la confirmation ≠ addition. Pas de transfert entre
           personnes.
         </Text>
       </View>
@@ -401,17 +403,68 @@ export function OutingDetailScreen() {
       {isHost ? (
         <View style={styles.actions}>
           {outing.status === 'open' || outing.status === 'full' ? (
-            <Button
-              title="Clôturer cette sortie"
-              variant="danger"
-              onPress={() => {
-                closeOuting(outing.id);
-                Alert.alert('Clôturée', 'Ta sortie est fermée.');
-                navigation.goBack();
-              }}
-            />
+            <>
+              <Button
+                title="Clôturer les inscriptions"
+                variant="secondary"
+                onPress={() => {
+                  Alert.alert(
+                    'Clôturer les inscriptions ?',
+                    'Plus de nouvelles demandes. Les invités déjà confirmés gardent leur place.',
+                    [
+                      { text: 'Retour', style: 'cancel' },
+                      {
+                        text: 'Clôturer',
+                        onPress: () => {
+                          closeOuting(outing.id);
+                          Alert.alert(
+                            'Inscriptions closes',
+                            'Les confirmés gardent leur place.',
+                          );
+                        },
+                      },
+                    ],
+                  );
+                }}
+              />
+              <Button
+                title="Annuler la sortie"
+                variant="danger"
+                onPress={() => {
+                  const hasConfirmed = incomingRequests.some(
+                    (r) =>
+                      r.outingId === outing.id && r.status === 'confirmed',
+                  );
+                  Alert.alert(
+                    'Annuler toute la sortie ?',
+                    hasConfirmed
+                      ? 'Les places confirmées seront annulées et les cautions rendues (mock).'
+                      : 'La sortie sera fermée et les demandes en cours annulées.',
+                    [
+                      { text: 'Retour', style: 'cancel' },
+                      {
+                        text: 'Annuler la sortie',
+                        style: 'destructive',
+                        onPress: () => {
+                          const res = cancelOuting(outing.id);
+                          if (res.ok) {
+                            Alert.alert('Sortie annulée', 'Cautions rendues si besoin (mock).');
+                            navigation.goBack();
+                          }
+                        },
+                      },
+                    ],
+                  );
+                }}
+                style={{ marginTop: spacing.md }}
+              />
+            </>
           ) : (
-            <Text style={styles.hint}>Sortie clôturée.</Text>
+            <Text style={styles.hint}>
+              {outing.status === 'completed'
+                ? 'Sortie terminée.'
+                : 'Sortie clôturée / annulée.'}
+            </Text>
           )}
           {incomingRequests
             .filter((r) => r.outingId === outing.id && r.status === 'confirmed')
@@ -464,17 +517,45 @@ export function OutingDetailScreen() {
       ) : myRequest ? (
         <View style={styles.actions}>
           {myRequest.status === 'pending' && (
-            <Text style={styles.statusOk}>Demande envoyée — en attente.</Text>
+            <>
+              <Text style={styles.statusOk}>Demande envoyée — en attente.</Text>
+              {'id' in myRequest ? (
+                <Button
+                  title="Annuler ma demande"
+                  variant="ghost"
+                  onPress={() => {
+                    cancelRequest(myRequest.id, 'guest');
+                    Alert.alert('Demande annulée', 'Tu peux en rejoindre une autre.');
+                    navigation.goBack();
+                  }}
+                  style={{ marginTop: spacing.md }}
+                />
+              ) : null}
+            </>
           )}
           {myRequest.status === 'accepted' && (
-            <Button
-              title="Confirmer ma place"
-              onPress={() =>
-                navigation.navigate('ConfirmSlot', {
-                  requestId: 'id' in myRequest ? myRequest.id : joinedId!,
-                })
-              }
-            />
+            <>
+              <Button
+                title="Confirmer ma place"
+                onPress={() =>
+                  navigation.navigate('ConfirmSlot', {
+                    requestId: 'id' in myRequest ? myRequest.id : joinedId!,
+                  })
+                }
+              />
+              {'id' in myRequest ? (
+                <Button
+                  title="Libérer ma place"
+                  variant="ghost"
+                  onPress={() => {
+                    cancelRequest(myRequest.id, 'guest');
+                    Alert.alert('Place libérée', 'La place est de nouveau disponible.');
+                    navigation.goBack();
+                  }}
+                  style={{ marginTop: spacing.md }}
+                />
+              ) : null}
+            </>
           )}
           {myRequest.status === 'confirmed' && (
             <>
@@ -533,7 +614,26 @@ export function OutingDetailScreen() {
                 }
                 style={{ marginTop: spacing.md }}
               />
-
+              {'id' in myRequest ? (
+                <Button
+                  title="Me désister"
+                  variant="ghost"
+                  onPress={() => {
+                    const res = cancelRequest(myRequest.id, 'guest');
+                    if (!res.ok) return;
+                    Alert.alert(
+                      'Désistement',
+                      res.depositReturned
+                        ? 'Place libérée — caution rendue (≥ 3 h, mock). Les autres confirmés restent.'
+                        : res.depositForfeited
+                          ? 'Place libérée — caution perdue (< 3 h, mock). Les autres confirmés restent.'
+                          : 'Place libérée. Les autres confirmés restent.',
+                    );
+                    navigation.goBack();
+                  }}
+                  style={{ marginTop: spacing.md }}
+                />
+              ) : null}
             </>
           )}
         </View>

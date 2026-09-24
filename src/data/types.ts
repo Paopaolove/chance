@@ -4,8 +4,28 @@ export type AuthProvider = 'apple' | 'google' | 'email';
 
 export type OutingCategory = 'restaurant' | 'bar' | 'culture' | 'autre';
 
+/**
+ * Outing lifecycle (listing-level — distinct from per-guest RequestStatus):
+ * - open: accepts new join requests while spotsLeft > 0
+ * - full: spotsLeft === 0 (all seats reserved via accept); no new joins
+ * - closed: host closed listing (closeOuting) — no new requests; existing
+ *   confirmed guests keep their seats unless individually cancelled
+ * - completed: outing ended (after startsAt / demo completeOuting)
+ */
 export type OutingStatus = 'open' | 'full' | 'closed' | 'completed';
 
+/**
+ * Per-guest reservation states (seat machine):
+ * - pending: join request; does NOT reserve a seat
+ * - accepted: host accepted → seat reserved (spotsLeft--); guest has
+ *   CONFIRM_WINDOW_MS (~10 min) to confirm; deadline stored as ISO UTC
+ * - confirmed: guest confirmed in time → deposit held once; credit consumed once
+ * - expired: confirm window missed OR capacity race_lost → seat restored
+ * - declined: host refused a pending request (no seat was held)
+ * - cancelled: guest withdrew (pending/accepted/confirmed) OR host cancelOuting
+ *   cancelled this seat — NOT the same as closeOuting (listing closed) or
+ *   completed (outing ended). One guest cancel never cancels other confirmed seats.
+ */
 export type RequestStatus =
   | 'pending'
   | 'accepted'
@@ -159,11 +179,22 @@ export interface Request {
   userGender: Gender;
   message: string;
   status: RequestStatus;
+  /** ISO UTC. */
   createdAt: string;
+  /** ISO UTC — when host accepted (seat reserved). */
   acceptedAt?: string;
+  /**
+   * ISO UTC deadline for confirmSlot (acceptedAt + CONFIRM_WINDOW_MS).
+   * Store UTC; display in Europe/Paris via parisTime helpers.
+   */
   confirmDeadlineAt?: string;
+  /** ISO UTC — when guest confirmed (deposit held, credit consumed). */
   confirmedAt?: string;
-  /** Caution mock: held at confirm, returned on host no-show / venue refuse. */
+  /**
+   * Caution mock: held once at confirm; never double-held on idempotent re-confirm.
+   * Returned on free cancel (≥ CANCEL_FREE_BEFORE_HOURS), host cancelOuting,
+   * host no-show / venue refuse; forfeited on late guest cancel / ghost.
+   */
   depositStatus?: 'none' | 'held' | 'returned' | 'forfeited';
 }
 
@@ -301,11 +332,32 @@ export type AppAction =
   | { type: 'COMPLETE_ONBOARDING'; payload: User; entryIntent: EntryIntent }
   | { type: 'CLEAR_ENTRY_INTENT' }
   | { type: 'CREATE_OUTING'; payload: Outing }
+  /**
+   * Host closes listing: no new requests; pending/accepted cancelled (seats
+   * restored); confirmed guests KEEP their seats. Distinct from CANCEL_OUTING.
+   */
   | { type: 'CLOSE_OUTING'; payload: { outingId: string } }
+  /**
+   * Host cancels the whole outing (including confirmed guests). Cancels all
+   * active requests; restores deposits per product (≥3h free window / host-
+   * initiated). Distinct from CLOSE_OUTING and COMPLETE_OUTING.
+   */
+  | { type: 'CANCEL_OUTING'; payload: { outingId: string; cancelledAt: string } }
+  /**
+   * Guest withdraws own pending/accepted/confirmed request, OR host cancels
+   * one accepted seat. Does NOT cancel the outing for other confirmed guests.
+   * Accepted/confirmed → restore seat. Confirmed deposit: returned if free
+   * cancel window, else forfeited (guest-initiated).
+   */
+  | { type: 'CANCEL_REQUEST'; payload: { requestId: string; cancelledAt: string; by: 'guest' | 'host' } }
   | { type: 'JOIN_OUTING'; payload: Request }
   | { type: 'ACCEPT_REQUEST'; payload: { requestId: string; acceptedAt: string; confirmDeadlineAt: string } }
   | { type: 'DECLINE_REQUEST'; payload: { requestId: string } }
-  | { type: 'CONFIRM_SLOT'; payload: { requestId: string; confirmedAt: string } }
+  /**
+   * Confirm seat. Idempotent: already-confirmed → no-op (no double deposit /
+   * no double credit). consumeCredit only on accepted→confirmed transition.
+   */
+  | { type: 'CONFIRM_SLOT'; payload: { requestId: string; confirmedAt: string; consumeCredit?: boolean } }
   | { type: 'EXPIRE_REQUEST'; payload: { requestId: string } }
   | { type: 'SET_DISPO_SOIR'; payload: boolean }
   | { type: 'SET_DISPO_PROFILE'; payload: DispoProfileUpdate }
@@ -342,6 +394,7 @@ export type AppAction =
     }
   | { type: 'SET_TOAST'; payload: AppToast | null }
   | { type: 'SHIFT_OUTING_START'; payload: { outingId: string; startsAt: string } }
+  /** End outing after startsAt / demo — status completed (reviews unlock). */
   | { type: 'COMPLETE_OUTING'; payload: { outingId: string } }
   | { type: 'ADD_REVIEW'; payload: Review }
   | { type: 'REPLY_TO_REVIEW'; payload: { reviewId: string; reply: string } }

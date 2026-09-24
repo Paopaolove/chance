@@ -570,7 +570,7 @@ export function CreateOutingScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>J'invite jusqu'a *</Text>
+        <Text style={styles.label}>J'invite jusqu'à *</Text>
         <Text style={styles.inviteHint}>
           Plafond par invité, réglé sur place au lieu (pas via l'app). Au-delà =
           hors invitation. Pas de transfert entre personnes.
@@ -731,7 +731,7 @@ export function CreateOutingScreen() {
         <Text style={styles.publishFreeLabel}>Publication gratuite</Text>
         <Text style={styles.publishFreeHint}>
           L'hôte ne paie rien pour publier. L'invité paie les frais Chance +
-          caution 20 EUR à la confirmation (≠ addition).
+          caution 20 € à la confirmation (≠ addition).
         </Text>
         <Button title="Publier" onPress={onPublish} style={styles.cta} />
       </ScrollView>
