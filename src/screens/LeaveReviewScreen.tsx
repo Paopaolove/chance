@@ -59,8 +59,8 @@ export function LeaveReviewScreen() {
     >
       <Text style={styles.hero}>Noter {toUserName}</Text>
       <Text style={styles.body}>
-        Simple : 1 à 5 étoiles, commentaire optionnel. Pas de modification après
-        envoi.
+        Simple : 1 à 5 étoiles, commentaire optionnel. Pas de sous-critères.
+        Commentaire non modifiable après envoi.
       </Text>
 
       <Text style={styles.label}>Note</Text>

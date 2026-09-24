@@ -1612,6 +1612,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!review) return { ok: false, reason: 'not_found' };
       if (review.toUserId !== user.id) return { ok: false, reason: 'not_owner' };
       if (review.reply) return { ok: false, reason: 'already_replied' };
+      if (review.textHidden) return { ok: false, reason: 'text_hidden' };
       const trimmed = reply.trim();
       if (!trimmed) return { ok: false, reason: 'empty' };
       dispatch({

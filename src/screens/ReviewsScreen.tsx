@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -11,12 +11,11 @@ import {
   View,
 } from 'react-native';
 import { Button } from '../components/Button';
-import { EmptyState } from '../components/EmptyState';
 import { useChance } from '../data/ChanceContext';
 import { Review } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
-import { formatRatingLine, newUserChanceCopy } from '../utils/format';
+import { formatRatingAverage } from '../utils/format';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'Reviews'>;
@@ -43,10 +42,7 @@ export function ReviewsScreen() {
   const me = state.currentUser;
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
 
-  const header = useMemo(
-    () => formatRatingLine(userName, stats.average, stats.outingCount),
-    [userName, stats],
-  );
+  const isNew = stats.outingCount <= 0 || stats.average == null;
 
   const onReply = (review: Review) => {
     const text = (replyDrafts[review.id] ?? '').trim();
@@ -56,7 +52,15 @@ export function ReviewsScreen() {
     }
     const result = replyToReview(review.id, text);
     if (!result.ok) {
-      Alert.alert('Impossible', result.reason);
+      const messages: Record<string, string> = {
+        already_replied: 'Une seule réponse est autorisée.',
+        not_owner: 'Seul le profil noté peut répondre.',
+        text_hidden: 'Texte masqué — réponse impossible.',
+        empty: 'Écris une courte réponse.',
+        not_found: 'Avis introuvable.',
+        no_user: 'Profil manquant.',
+      };
+      Alert.alert('Impossible', messages[result.reason] ?? result.reason);
       return;
     }
     setReplyDrafts((d) => {
@@ -64,6 +68,10 @@ export function ReviewsScreen() {
       delete next[review.id];
       return next;
     });
+    Alert.alert(
+      'Réponse publiée',
+      'Une seule réponse, non modifiable.',
+    );
   };
 
   return (
@@ -72,17 +80,35 @@ export function ReviewsScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.header}>{header}</Text>
+      {isNew ? (
+        <Text style={[styles.header, styles.headerNew]}>
+          {`${userName} vient d’arriver. Donne-lui sa `}
+          <Text style={styles.chanceBrand}>Chance</Text>
+          {'.'}
+        </Text>
+      ) : (
+        <Text style={styles.header}>
+          {`${formatRatingAverage(stats.average!)} · ${
+            stats.outingCount === 1
+              ? '1 sortie'
+              : `${stats.outingCount} sorties`
+          }`}
+        </Text>
+      )}
       <Text style={styles.sub}>
-        Les notes restent visibles. Le texte peut être masqué d’un commun
-        accord (démo).
+        Commentaire et réponse non modifiables. Le texte peut être masqué
+        d’un commun accord — la note et le nombre de sorties restent.
       </Text>
 
       {!reviews.length ? (
-        <EmptyState
-          title="Pas encore d’avis"
-          subtitle={newUserChanceCopy(userName)}
-        />
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyTitle}>Pas encore d’avis</Text>
+          <Text style={styles.emptySub}>
+            {`${userName} vient d’arriver. Donne-lui sa `}
+            <Text style={styles.chanceBrand}>Chance</Text>
+            {'.'}
+          </Text>
+        </View>
       ) : (
         reviews.map((review) => {
           const fromName = getDisplayName(review.fromUserId);
@@ -246,11 +272,35 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fonts.semiBold,
   },
+  headerNew: {
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+  },
+  chanceBrand: {
+    color: colors.primary,
+    fontFamily: fonts.bold,
+  },
   sub: {
     ...typography.caption,
     color: colors.textMuted,
     marginTop: spacing.sm,
     marginBottom: spacing.lg,
+  },
+  emptyWrap: {
+    paddingVertical: spacing.xxl,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  emptySub: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
   },
   card: {
     backgroundColor: colors.surface,
