@@ -26,7 +26,6 @@ import {
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-const BUDGET_PRESETS = [15, 25, 40] as const;
 
 export function DispoSoirScreen() {
   const navigation = useNavigation<Nav>();
@@ -49,9 +48,6 @@ export function DispoSoirScreen() {
     user?.dispoNeighborhood ?? user?.neighborhood ?? 'Le Marais',
   );
   const [showQuartiers, setShowQuartiers] = useState(false);
-  const [budgetMax, setBudgetMax] = useState<number>(
-    user?.dispoBudgetMax ?? 25,
-  );
   const [topic, setTopic] = useState(user?.dispoTopic ?? '');
   const [exclusions, setExclusions] = useState(
     (user?.dispoExclusions ?? []).join(', '),
@@ -89,7 +85,7 @@ export function DispoSoirScreen() {
           : null,
       dispoSlot: forceOn ? slot : null,
       dispoNeighborhood: forceOn ? quartier : null,
-      dispoBudgetMax: forceOn ? budgetMax : null,
+      dispoBudgetMax: null,
       dispoTopic: forceOn ? topic.trim() || null : null,
       dispoExclusions: forceOn ? (excl.length ? excl : null) : null,
       dispoExpiresAt: forceOn
@@ -114,8 +110,8 @@ export function DispoSoirScreen() {
     Alert.alert(
       on ? 'Tu es dispo ce soir' : 'Dispo désactivée',
       on
-        ? `Visible jusqu’à minuit (Europe/Paris) · ${dispoSlotLabel(slot)} · ${quartier}. Expire aussi à la confirmation d’une sortie.`
-        : 'Tu n’es plus signalé comme dispo.',
+        ? 'Tu es visible ce soir. Ça s’arrête à minuit, ou dès que tu confirmes une table.'
+        : 'Invisible pour l’instant.',
     );
     navigation.goBack();
   };
@@ -149,7 +145,6 @@ export function DispoSoirScreen() {
         categoryDetail:
           primaryCat === 'autre' ? categoryDetail.trim() : undefined,
         neighborhood: quartier,
-        budgetMaxEuros: budgetMax,
         topic: topic.trim() || undefined,
         excludedTopics: exclusions.trim() || undefined,
         timeLabel: slot === 'flexible' ? '19:30' : slot,
@@ -166,10 +161,7 @@ export function DispoSoirScreen() {
     >
       <Text style={styles.title}>Dispo ce soir</Text>
       <Text style={styles.body}>
-        Signale ta disponibilité pour une sortie improvisée ce soir
-        (créneau, catégorie, quartier, budget). Pas un fil social — juste
-        pour se retrouver IRL. Expire à minuit (Europe/Paris) ou à la
-        confirmation.
+        {`Tu es libre ce soir ? Les autres peuvent te proposer une sortie.\nÇa s’arrête à minuit, ou dès que tu confirmes une table.`}
       </Text>
 
       <View style={styles.card}>
@@ -177,9 +169,7 @@ export function DispoSoirScreen() {
           <View style={{ flex: 1 }}>
             <Text style={styles.label}>Je suis dispo ce soir</Text>
             <Text style={styles.hint}>
-              {on
-                ? 'Visible dans Dispo ce soir · expire à minuit (Paris)'
-                : 'Masqué pour l’instant'}
+              {on ? 'Visible ce soir' : 'Invisible pour l’instant'}
             </Text>
           </View>
           <Switch
@@ -291,48 +281,8 @@ export function DispoSoirScreen() {
         </View>
       ) : null}
 
-      <Text style={styles.section}>Budget max *</Text>
-      <Text style={styles.sectionHint}>
-        Ce que tu es prêt à mettre pour une sortie ce soir.
-      </Text>
-      <View style={styles.chips}>
-        {BUDGET_PRESETS.map((b) => {
-          const selected = budgetMax === b;
-          return (
-            <Pressable
-              key={b}
-              onPress={() => setBudgetMax(b)}
-              style={[styles.chip, selected && styles.chipOn]}
-            >
-              <Text style={[styles.chipText, selected && styles.chipTextOn]}>
-                ≤ {b} €
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <Text style={styles.sectionHint}>Autre budget max</Text>
-      <TextInput
-        style={styles.input}
-        value={
-          (BUDGET_PRESETS as readonly number[]).includes(budgetMax)
-            ? ''
-            : String(budgetMax)
-        }
-        onChangeText={(t) => {
-          const digits = t.replace(/\D/g, '');
-          if (digits === '') return;
-          const n = parseInt(digits, 10);
-          if (!Number.isNaN(n)) setBudgetMax(n);
-        }}
-        placeholder="Ex. 30"
-        placeholderTextColor={colors.textMuted}
-        keyboardType="number-pad"
-        maxLength={4}
-        selectTextOnFocus
-      />
 
-      <Text style={styles.section}>Sujet (optionnel)</Text>
+      <Text style={styles.section}>Sujet</Text>
       <TextInput
         style={styles.input}
         value={topic}
@@ -341,7 +291,7 @@ export function DispoSoirScreen() {
         placeholderTextColor={colors.textMuted}
       />
 
-      <Text style={styles.section}>Exclusions (optionnel)</Text>
+      <Text style={styles.section}>Exclusions</Text>
       <Text style={styles.sectionHint}>Séparées par des virgules.</Text>
       <TextInput
         style={styles.input}

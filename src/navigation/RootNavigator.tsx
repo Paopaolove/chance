@@ -50,6 +50,7 @@ export function RootNavigator() {
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.primary,
           headerTitleStyle: { fontWeight: '600', color: colors.text },
+          headerBackTitle: 'Retour',
           contentStyle: { backgroundColor: colors.background },
         }}
       >
@@ -64,7 +65,7 @@ export function RootNavigator() {
             <Stack.Screen
               name="MainTabs"
               component={MainTabs}
-              options={{ headerShown: false }}
+              options={{ headerShown: false, headerBackTitle: 'Retour', title: 'Retour' }}
             />
             <Stack.Screen
               name="OutingDetail"
@@ -94,7 +95,11 @@ export function RootNavigator() {
             <Stack.Screen
               name="DispoSoir"
               component={DispoSoirScreen}
-              options={{ title: 'Dispo ce soir' }}
+              options={{
+                title: 'Dispo ce soir',
+                headerBackTitle: 'Retour',
+                headerTintColor: colors.primary,
+              }}
             />
             <Stack.Screen
               name="EditProfile"
