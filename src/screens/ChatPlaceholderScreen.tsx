@@ -1,6 +1,7 @@
 import { RouteProp, useRoute } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -36,6 +37,8 @@ export function ChatPlaceholderScreen() {
     ensureChatSeeded,
     sendChatMessage,
     reportLate,
+    getLateReportsForOthers,
+    simulateOtherLate,
     simulateOutingInMinutes,
   } = useChance();
 
@@ -65,6 +68,11 @@ export function ChatPlaceholderScreen() {
     if (!outing) return [];
     return getChatMessages(outing.id, request?.id);
   }, [outing, request?.id, getChatMessages]);
+
+  const lateFromOthers = useMemo(() => {
+    if (!outing) return [];
+    return getLateReportsForOthers(outing.id, request?.id);
+  }, [outing, request?.id, getLateReportsForOthers]);
 
   if (!outing) {
     return (
@@ -157,6 +165,10 @@ export function ChatPlaceholderScreen() {
   const onLate = (minutes: LatePresetMinutes) => {
     reportLate(outing.id, minutes, request?.id);
     setLateOpen(false);
+    Alert.alert(
+      'Retard signalé',
+      `L’autre personne verra un bandeau « ${lateLabel(minutes)} ».`,
+    );
   };
 
   return (
@@ -171,6 +183,16 @@ export function ChatPlaceholderScreen() {
           avec {otherName} · {outing.title}
         </Text>
         <Text style={styles.openBadge}>Ouvert · H−1</Text>
+
+        {lateFromOthers.length ? (
+          <View style={styles.lateBanner}>
+            {lateFromOthers.map((r) => (
+              <Text key={r.id} style={styles.lateBannerText}>
+                ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes)})
+              </Text>
+            ))}
+          </View>
+        ) : null}
 
         <ScrollView
           style={styles.thread}
@@ -238,6 +260,16 @@ export function ChatPlaceholderScreen() {
           />
         )}
 
+
+        <View style={styles.demoBox}>
+          <Text style={styles.demoLabel}>Démo QA</Text>
+          <Button
+            title="Simuler retard de l’autre (bandeau)"
+            variant="ghost"
+            onPress={() => simulateOtherLate(outing.id, 15, request?.id)}
+          />
+        </View>
+
         <View style={styles.composer}>
           <TextInput
             style={styles.input}
@@ -287,6 +319,21 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontFamily: fonts.semiBold,
     marginBottom: spacing.md,
+  },
+  lateBanner: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.md,
+    gap: 4,
+  },
+  lateBannerText: {
+    ...typography.bodyStrong,
+    color: colors.warning,
+    fontFamily: fonts.semiBold,
   },
   body: { ...typography.body, color: colors.textSecondary },
   lockCard: {

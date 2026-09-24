@@ -21,7 +21,7 @@ import {
 } from '../data/travelTime';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
-import { isChatUnlocked } from '../utils/chat';
+import { isChatUnlocked, lateLabel } from '../utils/chat';
 import { formatOutingWhen } from '../utils/format';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 
@@ -41,6 +41,8 @@ export function OutingDetailScreen() {
     outgoingRequests,
     incomingRequests,
     closeOuting,
+    getLateReportsForOthers,
+    simulateOtherLate,
     simulateOutingInMinutes,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
@@ -83,6 +85,7 @@ export function OutingDetailScreen() {
       (r) => r.outingId === outing.id && r.status === 'confirmed',
     );
   const photoSize = hostPhotoSize(state.currentUser);
+  const lateFromOthers = getLateReportsForOthers(outing.id);
   const travel =
     state.currentUser?.neighborhood && !isHost
       ? getTravelMinutes(
@@ -132,6 +135,16 @@ export function OutingDetailScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      {lateFromOthers.length ? (
+        <View style={styles.lateBanner}>
+          {lateFromOthers.map((r) => (
+            <Text key={r.id} style={styles.lateBannerText}>
+              ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes)})
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
       {/* Visible before accept: listing, 1 photo, place, budget */}
       <View style={styles.hostBlock}>
         <Avatar
@@ -287,6 +300,12 @@ export function OutingDetailScreen() {
                   );
                 }}
               />
+              <Button
+                title="Simuler retard de l’autre"
+                variant="ghost"
+                onPress={() => simulateOtherLate(outing.id, 10)}
+                style={{ marginTop: spacing.sm }}
+              />
             </View>
           )}
         </View>
@@ -340,6 +359,18 @@ export function OutingDetailScreen() {
                       'Sortie placée dans ~50 min — le chat est déverrouillé.',
                     );
                   }}
+                />
+                <Button
+                  title="Simuler retard de l’autre"
+                  variant="ghost"
+                  onPress={() =>
+                    simulateOtherLate(
+                      outing.id,
+                      10,
+                      'id' in myRequest ? myRequest.id : undefined,
+                    )
+                  }
+                  style={{ marginTop: spacing.sm }}
                 />
               </View>
             </>
@@ -453,6 +484,21 @@ const styles = StyleSheet.create({
     ...typography.bodyStrong,
     color: colors.success,
     textAlign: 'center',
+  },
+  lateBanner: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
+    gap: 4,
+  },
+  lateBannerText: {
+    ...typography.bodyStrong,
+    color: colors.warning,
+    fontFamily: fonts.semiBold,
   },
   demoBox: {
     marginTop: spacing.lg,

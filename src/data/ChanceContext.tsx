@@ -20,6 +20,7 @@ import {
   ChatMessage,
   DispoProfileUpdate,
   LatePresetMinutes,
+  LateReport,
   OnboardingInput,
   Outing,
   OutingCategory,
@@ -53,6 +54,7 @@ const initialState: AppState = {
   entryIntent: null,
   chatMessages: [],
   reviews: mockReviews,
+  lateReports: [],
   toast: null,
 };
 
@@ -344,6 +346,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         requests: [],
         chatMessages: [],
         reviews: mockReviews,
+        lateReports: [],
         toast: null,
       };
 
@@ -360,6 +363,23 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         chatMessages: [...state.chatMessages, ...action.payload],
+      };
+    }
+
+    case 'REPORT_LATE': {
+      const report = action.payload;
+      // Keep latest per reporter+outing (+optional request)
+      const filtered = state.lateReports.filter(
+        (r) =>
+          !(
+            r.outingId === report.outingId &&
+            r.reporterId === report.reporterId &&
+            (r.requestId ?? '') === (report.requestId ?? '')
+          ),
+      );
+      return {
+        ...state,
+        lateReports: [report, ...filtered],
       };
     }
 
@@ -573,6 +593,17 @@ interface ChanceContextValue {
   reportLate: (
     outingId: string,
     minutes: LatePresetMinutes,
+    requestId?: string,
+  ) => void;
+  /** Late reports from someone other than the current user (for bandeau). */
+  getLateReportsForOthers: (
+    outingId: string,
+    requestId?: string,
+  ) => LateReport[];
+  /** Demo QA: pretend the other party reported late so bandeau is visible. */
+  simulateOtherLate: (
+    outingId: string,
+    minutes?: LatePresetMinutes,
     requestId?: string,
   ) => void;
   clearToast: () => void;
@@ -1135,6 +1166,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const user = state.currentUser;
       if (!user) return;
       const who = user.firstName;
+      const now = new Date().toISOString();
+      const report: LateReport = {
+        id: uid('late'),
+        outingId,
+        requestId,
+        reporterId: user.id,
+        reporterName: who,
+        minutes,
+        createdAt: now,
+      };
+      dispatch({ type: 'REPORT_LATE', payload: report });
       const sys: ChatMessage = {
         id: uid('msg'),
         threadKey: chatThreadKey(outingId, requestId),
@@ -1142,18 +1184,79 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         requestId,
         kind: 'system',
         text: lateSystemText(who, minutes),
-        createdAt: new Date().toISOString(),
+        createdAt: now,
+      };
+      dispatch({ type: 'ADD_CHAT_MESSAGE', payload: sys });
+      // No toast for the reporter — bandeau is for the other party(ies).
+    },
+    [state.currentUser],
+  );
+
+  const getLateReportsForOthers = useCallback(
+    (outingId: string, requestId?: string) => {
+      const me = state.currentUser?.id;
+      return state.lateReports.filter((r) => {
+        if (r.outingId !== outingId) return false;
+        if (me && r.reporterId === me) return false;
+        if (requestId && r.requestId && r.requestId !== requestId) return false;
+        return true;
+      });
+    },
+    [state.lateReports, state.currentUser],
+  );
+
+  const simulateOtherLate = useCallback(
+    (
+      outingId: string,
+      minutes: LatePresetMinutes = 10,
+      requestId?: string,
+    ) => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return;
+      const me = state.currentUser;
+      // Pick a plausible "other" name
+      let otherId = outing.hostId;
+      let otherName = outing.hostName;
+      if (me && outing.hostId === me.id) {
+        const guest = state.requests.find(
+          (r) =>
+            r.outingId === outingId &&
+            r.status === 'confirmed' &&
+            (!requestId || r.id === requestId),
+        );
+        otherId = guest?.userId ?? 'demo-guest-1';
+        otherName = guest?.userName ?? 'Juliette';
+      }
+      const now = new Date().toISOString();
+      const report: LateReport = {
+        id: uid('late'),
+        outingId,
+        requestId,
+        reporterId: otherId,
+        reporterName: otherName,
+        minutes,
+        createdAt: now,
+      };
+      dispatch({ type: 'REPORT_LATE', payload: report });
+      const sys: ChatMessage = {
+        id: uid('msg'),
+        threadKey: chatThreadKey(outingId, requestId),
+        outingId,
+        requestId,
+        kind: 'system',
+        text: lateSystemText(otherName, minutes),
+        createdAt: now,
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: sys });
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Retard signalé',
-        body: `${who} a un retard (${lateLabel(minutes)}).`,
-        createdAt: new Date().toISOString(),
+        body: `${otherName} a un retard (${lateLabel(minutes)}).`,
+        createdAt: now,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
     },
-    [state.currentUser],
+    [state.outings, state.requests, state.currentUser],
   );
 
   const clearToast = useCallback(() => {
@@ -1426,6 +1529,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       ensureChatSeeded,
       sendChatMessage,
       reportLate,
+      getLateReportsForOthers,
+      simulateOtherLate,
       clearToast,
       simulateOutingInMinutes,
       completeOuting,
@@ -1473,6 +1578,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       ensureChatSeeded,
       sendChatMessage,
       reportLate,
+      getLateReportsForOthers,
+      simulateOtherLate,
       clearToast,
       simulateOutingInMinutes,
       completeOuting,

@@ -129,6 +129,17 @@ export interface ChatMessage {
   createdAt: string;
 }
 
+/** Late signal — bandeau shown to other party(ies), not the reporter. */
+export interface LateReport {
+  id: string;
+  outingId: string;
+  requestId?: string;
+  reporterId: string;
+  reporterName: string;
+  minutes: LatePresetMinutes;
+  createdAt: string;
+}
+
 export interface AppToast {
   id: string;
   title: string;
@@ -145,6 +156,8 @@ export interface AppState {
   entryIntent: EntryIntent | null;
   chatMessages: ChatMessage[];
   reviews: Review[];
+  /** Late signals — bandeau for other party(ies) in chat/outing UI. */
+  lateReports: LateReport[];
   /** In-app mock notification banner (e.g. late alert). */
   toast: AppToast | null;
 }
@@ -211,6 +224,7 @@ export type AppAction =
   | { type: 'SET_PERMISSIONS'; payload: { notificationsGranted?: boolean; locationGranted?: boolean } }
   | { type: 'ADD_CHAT_MESSAGE'; payload: ChatMessage }
   | { type: 'SEED_CHAT_MESSAGES'; payload: ChatMessage[] }
+  | { type: 'REPORT_LATE'; payload: LateReport }
   | { type: 'SET_TOAST'; payload: AppToast | null }
   | { type: 'SHIFT_OUTING_START'; payload: { outingId: string; startsAt: string } }
   | { type: 'COMPLETE_OUTING'; payload: { outingId: string } }
