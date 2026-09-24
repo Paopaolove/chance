@@ -37,7 +37,7 @@ const slides = [
     titlePrefix: 'Une place pour ',
     titleBold: 'toi',
     titleSuffix: '.',
-    body: 'Un repas, un verre, une expo. Partage le moment.',
+    body: 'Un repas, un verre, une expo.\nPartage le moment.',
   },
   {
     key: '2',
