@@ -127,185 +127,192 @@ export function LeaveReviewScreen() {
     >
       <Text style={styles.hero}>Comment c’était ?</Text>
       <Text style={styles.intro}>
-        {`Tu notes le respect et la rencontre, pas le feeling.\nPas d’étincelle, ce n’est pas une mauvaise note.`}
+        {`Deux avis séparés : la rencontre (profil), et le lieu (fiche du resto / bar).`}
       </Text>
 
-      <Text style={styles.blockTitle}>Personne / rencontre</Text>
-      <Text style={styles.personHint}>À propos de {toUserName}</Text>
+      <View style={styles.personBlock}>
+        <Text style={styles.blockTitle}>Rencontre</Text>
+        <Text style={styles.personHint}>
+          À propos de {toUserName} — respect et déroulé, pas le feeling.
+        </Text>
 
-      <Text style={styles.label}>
-        La sortie s’est-elle bien passée ? (ponctualité, respect)
-      </Text>
-      <View style={styles.starsRow}>
-        {([1, 2, 3, 4, 5] as const).map((n) => (
-          <Pressable
-            key={n}
-            onPress={() => {
-              setRating(n);
-              if (n >= 3) {
-                setLowStarKind(null);
-                setLowStarOther('');
-              }
-            }}
-            style={styles.starBtn}
-            accessibilityRole="button"
-            accessibilityLabel={`${n} étoile${n > 1 ? 's' : ''}`}
-          >
-            <Text
-              style={[
-                styles.star,
-                rating != null && n <= rating && styles.starOn,
-              ]}
-            >
-              ★
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {needsMotive ? (
-        <View style={styles.motiveBox}>
-          <Text style={styles.motiveHint}>
-            Si c’était juste un manque de feeling, mets plutôt 3 ou 4 et « envie
-            de revoir : non ».
-          </Text>
-          <Text style={styles.label}>Motif (obligatoire)</Text>
-          {LOW_STAR_MOTIVES.map((m) => (
+        <Text style={styles.label}>
+          La sortie s’est-elle bien passée ? (ponctualité, respect)
+        </Text>
+        <View style={styles.starsRow}>
+          {([1, 2, 3, 4, 5] as const).map((n) => (
             <Pressable
-              key={m.kind}
-              onPress={() => setLowStarKind(m.kind)}
-              style={[
-                styles.chip,
-                lowStarKind === m.kind && styles.chipOn,
-              ]}
+              key={n}
+              onPress={() => {
+                setRating(n);
+                if (n >= 3) {
+                  setLowStarKind(null);
+                  setLowStarOther('');
+                }
+              }}
+              style={styles.starBtn}
               accessibilityRole="button"
-              accessibilityState={{ selected: lowStarKind === m.kind }}
+              accessibilityLabel={`${n} étoile${n > 1 ? 's' : ''}`}
             >
               <Text
                 style={[
-                  styles.chipText,
-                  lowStarKind === m.kind && styles.chipTextOn,
+                  styles.star,
+                  rating != null && n <= rating && styles.starOn,
                 ]}
               >
-                {m.label}
+                ★
               </Text>
             </Pressable>
           ))}
-          {lowStarKind === 'autre' ? (
-            <TextInput
-              style={styles.inputOneLine}
-              placeholder="Précise en une ligne…"
-              placeholderTextColor={colors.textMuted}
-              value={lowStarOther}
-              onChangeText={setLowStarOther}
-              maxLength={120}
-            />
-          ) : null}
         </View>
-      ) : null}
 
-      <Text style={styles.label}>Envie de revoir cette personne ?</Text>
-      <Text style={styles.privateNote}>
-        Réponse privée — jamais affichée sur le profil.
-      </Text>
-      <View style={styles.yesNoRow}>
-        <Pressable
-          onPress={() => setWantToSeeAgain(true)}
-          style={[
-            styles.yesNoBtn,
-            wantToSeeAgain === true && styles.yesNoOn,
-          ]}
-          accessibilityRole="button"
-          accessibilityState={{ selected: wantToSeeAgain === true }}
-        >
-          <Text
-            style={[
-              styles.yesNoText,
-              wantToSeeAgain === true && styles.yesNoTextOn,
-            ]}
-          >
-            Oui
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setWantToSeeAgain(false)}
-          style={[
-            styles.yesNoBtn,
-            wantToSeeAgain === false && styles.yesNoOn,
-          ]}
-          accessibilityRole="button"
-          accessibilityState={{ selected: wantToSeeAgain === false }}
-        >
-          <Text
-            style={[
-              styles.yesNoText,
-              wantToSeeAgain === false && styles.yesNoTextOn,
-            ]}
-          >
-            Non
-          </Text>
-        </Pressable>
-      </View>
-
-      <Text style={styles.label}>
-        Commentaire sur la personne (optionnel)
-      </Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Respect, ponctualité, discussion… Pas le resto."
-        placeholderTextColor={colors.textMuted}
-        value={comment}
-        onChangeText={setComment}
-        multiline
-        maxLength={400}
-      />
-      <Text style={styles.immutableNote}>
-        Commentaire personne non modifiable après envoi. Une seule réponse
-        possible.
-      </Text>
-
-      <View style={styles.divider} />
-
-      <Text style={styles.blockTitle}>Lieu</Text>
-      <Text style={styles.sectionSub}>
-        Note et commentaire sur le lieu uniquement — jamais sur la personne.
-      </Text>
-
-      <Text style={styles.label}>Note du lieu (obligatoire)</Text>
-      <View style={styles.starsRow}>
-        {([1, 2, 3, 4, 5] as const).map((n) => (
-          <Pressable
-            key={n}
-            onPress={() => setVenueRating(n)}
-            style={styles.starBtn}
-            accessibilityRole="button"
-            accessibilityLabel={`Lieu · ${n} étoile${n > 1 ? 's' : ''}`}
-          >
-            <Text
-              style={[
-                styles.star,
-                venueRating != null && n <= venueRating && styles.starOn,
-              ]}
-            >
-              ★
+        {needsMotive ? (
+          <View style={styles.motiveBox}>
+            <Text style={styles.motiveHint}>
+              Si c’était juste un manque de feeling, mets plutôt 3 ou 4 et «
+              envie de revoir : non ».
             </Text>
-          </Pressable>
-        ))}
+            <Text style={styles.label}>Motif (obligatoire)</Text>
+            {LOW_STAR_MOTIVES.map((m) => (
+              <Pressable
+                key={m.kind}
+                onPress={() => setLowStarKind(m.kind)}
+                style={[
+                  styles.chip,
+                  lowStarKind === m.kind && styles.chipOn,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: lowStarKind === m.kind }}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    lowStarKind === m.kind && styles.chipTextOn,
+                  ]}
+                >
+                  {m.label}
+                </Text>
+              </Pressable>
+            ))}
+            {lowStarKind === 'autre' ? (
+              <TextInput
+                style={styles.inputOneLine}
+                placeholder="Précise en une ligne…"
+                placeholderTextColor={colors.textMuted}
+                value={lowStarOther}
+                onChangeText={setLowStarOther}
+                maxLength={120}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Envie de revoir : collectée ici, jamais affichée sur le profil */}
+        <View>
+          <Text style={styles.label}>Envie de revoir cette personne ?</Text>
+          <Text style={styles.privateNote}>
+            Réponse privée — jamais affichée sur le profil.
+          </Text>
+          <View style={styles.yesNoRow}>
+            <Pressable
+              onPress={() => setWantToSeeAgain(true)}
+              style={[
+                styles.yesNoBtn,
+                wantToSeeAgain === true && styles.yesNoOn,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: wantToSeeAgain === true }}
+            >
+              <Text
+                style={[
+                  styles.yesNoText,
+                  wantToSeeAgain === true && styles.yesNoTextOn,
+                ]}
+              >
+                Oui
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setWantToSeeAgain(false)}
+              style={[
+                styles.yesNoBtn,
+                wantToSeeAgain === false && styles.yesNoOn,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: wantToSeeAgain === false }}
+            >
+              <Text
+                style={[
+                  styles.yesNoText,
+                  wantToSeeAgain === false && styles.yesNoTextOn,
+                ]}
+              >
+                Non
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <Text style={styles.label}>
+          Commentaire sur la personne (optionnel)
+        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Respect, ponctualité, discussion… Pas le resto."
+          placeholderTextColor={colors.textMuted}
+          value={comment}
+          onChangeText={setComment}
+          multiline
+          maxLength={400}
+        />
+        <Text style={styles.immutableNote}>
+          Commentaire personne non modifiable après envoi. Une seule réponse
+          possible.
+        </Text>
       </View>
 
-      <Text style={styles.label}>Commentaire sur le lieu (optionnel)</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Cuisine, bruit, accueil… Pas la personne."
-        placeholderTextColor={colors.textMuted}
-        value={venueComment}
-        onChangeText={setVenueComment}
-        multiline
-        maxLength={400}
-      />
-      <Text style={styles.immutableNote}>
-        Commentaire lieu non modifiable après envoi.
-      </Text>
+      <View style={styles.venueBlock}>
+        <Text style={styles.blockTitle}>Lieu</Text>
+        <Text style={styles.sectionSub}>
+          Note et commentaire sur le lieu uniquement — jamais sur la personne.
+        </Text>
+
+        <Text style={styles.label}>Note du lieu (obligatoire)</Text>
+        <View style={styles.starsRow}>
+          {([1, 2, 3, 4, 5] as const).map((n) => (
+            <Pressable
+              key={n}
+              onPress={() => setVenueRating(n)}
+              style={styles.starBtn}
+              accessibilityRole="button"
+              accessibilityLabel={`Lieu · ${n} étoile${n > 1 ? 's' : ''}`}
+            >
+              <Text
+                style={[
+                  styles.star,
+                  venueRating != null && n <= venueRating && styles.starOn,
+                ]}
+              >
+                ★
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Commentaire sur le lieu (optionnel)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Cuisine, bruit, accueil… Pas la personne."
+          placeholderTextColor={colors.textMuted}
+          value={venueComment}
+          onChangeText={setVenueComment}
+          multiline
+          maxLength={400}
+        />
+        <Text style={[styles.immutableNote, styles.immutableNoteLast]}>
+          Commentaire lieu non modifiable après envoi.
+        </Text>
+      </View>
 
       <Button title="Publier l’avis" onPress={onSubmit} />
       <Button
@@ -328,6 +335,22 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     lineHeight: 24,
   },
+  personBlock: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  venueBlock: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
   blockTitle: {
     ...typography.subtitle,
     color: colors.text,
@@ -336,7 +359,7 @@ const styles = StyleSheet.create({
   },
   personHint: {
     ...typography.caption,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontFamily: fonts.semiBold,
     marginBottom: spacing.lg,
   },
@@ -428,11 +451,6 @@ const styles = StyleSheet.create({
   yesNoTextOn: {
     color: colors.white,
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xl,
-  },
   sectionSub: {
     ...typography.caption,
     color: colors.textMuted,
@@ -453,6 +471,10 @@ const styles = StyleSheet.create({
   immutableNote: {
     ...typography.caption,
     color: colors.textMuted,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  immutableNoteLast: {
+    marginBottom: 0,
   },
 });
+
