@@ -34,22 +34,25 @@ const { width } = Dimensions.get('window');
 const slides = [
   {
     key: '1',
-    title: 'Une place pour toi.',
+    titlePrefix: 'Une place pour ',
+    titleBold: 'toi',
+    titleSuffix: '.',
     body: 'Un repas, un verre, une expo. Partage le moment.',
-    chanceBold: false,
   },
   {
     key: '2',
-    title: 'Une vraie rencontre.',
-    body: 'Pas de fil sans fin. Pas de swipe. Autour d’une table, d’un bar ou d’une sortie.',
-    chanceBold: false,
+    titlePrefix: 'Une vraie ',
+    titleBold: 'rencontre',
+    titleSuffix: '.',
+    body:
+      'Pas de fil sans fin.\nPas de swipe.\nUne vraie rencontre autour d’une table, d’un bar ou d’une sortie.',
   },
   {
     key: '3',
     titlePrefix: 'Laisse une ',
     titleBold: 'Chance',
+    titleSuffix: '',
     body: 'Crée une sortie. Ou rejoins-en une. Le premier mois est ouvert.',
-    chanceBold: true,
   },
 ];
 
@@ -644,14 +647,13 @@ export function OnboardingScreen() {
         keyExtractor={(item) => item.key}
         renderItem={({ item }) => (
           <View style={[styles.slide, { width }]}>
-            {item.chanceBold ? (
-              <Text style={styles.slideTitle}>
-                <Text style={styles.slideTitlePlain}>{item.titlePrefix}</Text>
-                <Text style={styles.slideTitleBold}>{item.titleBold}</Text>
-              </Text>
-            ) : (
-              <Text style={styles.slideTitle}>{item.title}</Text>
-            )}
+            <Text style={styles.slideTitle}>
+              <Text style={styles.slideTitlePlain}>{item.titlePrefix}</Text>
+              <Text style={styles.slideTitleBold}>{item.titleBold}</Text>
+              {item.titleSuffix ? (
+                <Text style={styles.slideTitlePlain}>{item.titleSuffix}</Text>
+              ) : null}
+            </Text>
             <Text style={styles.slideBody}>{item.body}</Text>
           </View>
         )}
@@ -700,7 +702,11 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     color: colors.primary,
   },
-  slideBody: { ...typography.body, color: colors.textSecondary, maxWidth: 320 },
+  slideBody: {
+    ...typography.body,
+    color: colors.textSecondary,
+    maxWidth: 320,
+  },
   footer: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.xl,
