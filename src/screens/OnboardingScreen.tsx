@@ -193,7 +193,7 @@ export function OnboardingScreen() {
 
   const continueRules = () => {
     if (!acceptedRules) {
-      setError('Accepte les règles et l’essai pour continuer.');
+      setError('Coche la case pour confirmer que tu as compris.');
       return;
     }
     setError('');
@@ -517,25 +517,44 @@ export function OnboardingScreen() {
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.wrapScroll}>
           <Text style={styles.brand}>Chance</Text>
-          <Text style={styles.title}>Règles & essai</Text>
-          <Text style={styles.hint}>
-            Chance, c’est partager un repas, un verre ou une sortie culturelle
-            à Paris — pas une app de dating. Pas de swipe, pas de chat libre
-            dès l’acceptation. Le chat s’ouvre 1 h avant. Caution 20 € à la
-            confirmation (démo).
-          </Text>
+          <Text style={styles.title}>Comment ça marche</Text>
           <View style={styles.rulesBox}>
-            <Text style={styles.rulesLine}>• Paris intramuros uniquement</Text>
             <Text style={styles.rulesLine}>
-              • 1-to-1 ou 2–3 places (groupes secondaires)
+              1. Tu poses une sortie, ou tu en rejoins une.
             </Text>
             <Text style={styles.rulesLine}>
-              • Une annonce active à la fois · hôte ne paie pas pour publier
+              2. Si on t’accepte, tu as 10 minutes pour confirmer.
             </Text>
             <Text style={styles.rulesLine}>
-              • Essai 1 mois illimité, puis 6,90 €/sortie · Essentiel 12,90 €/mois (119 €/an) · Illimité 19,90 €/mois (189 €/an)
+              3. À la confirmation, 20 € sont bloqués. Rendus si tu viens.
+            </Text>
+            <Text style={styles.rulesLine}>
+              4. Le chat s’ouvre 1 heure avant. Pas avant.
             </Text>
           </View>
+          <Text style={styles.rulesSection}>Absences</Text>
+          <View style={styles.rulesBox}>
+            <Text style={styles.rulesLine}>
+              • Annulation au moins 12h avant → caution rendue.
+            </Text>
+            <Text style={styles.rulesLine}>
+              • Annulation trop tard ou absence → caution perdue.
+            </Text>
+            <Text style={styles.rulesLine}>
+              • Deux absences → perte de priorité, puis le compte peut être
+              fermé.
+            </Text>
+            <Text style={styles.rulesLine}>
+              • L’hôte ne vient pas → 1 avertissement, 2e fois compte fermé.
+              Les autres récupèrent la caution.
+            </Text>
+          </View>
+          <Text style={styles.hint}>
+            Paris intramuros. Pas une app de rencontre.
+          </Text>
+          <Text style={styles.hint}>
+            Si tu es une femme : option Femmes uniquement.
+          </Text>
           <Pressable
             style={styles.acceptRow}
             onPress={() => setAcceptedRules((v) => !v)}
@@ -548,7 +567,7 @@ export function OnboardingScreen() {
               ) : null}
             </View>
             <Text style={styles.acceptText}>
-              J’accepte les règles et l’essai 1 mois illimité.
+              J’ai compris les règles et l’essai d’1 mois.
             </Text>
           </Pressable>
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -658,7 +677,7 @@ export function OnboardingScreen() {
           ))}
         </View>
         <Button
-          title={index === slides.length - 1 ? 'Continuer' : 'Suivant'}
+          title={index === slides.length - 1 ? 'Commencer' : 'Suivant'}
           onPress={goNextSlide}
         />
       </View>
@@ -813,6 +832,12 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.sm,
     marginBottom: spacing.xl,
+  },
+  rulesSection: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    marginTop: spacing.md,
+    marginBottom: spacing.sm,
   },
   rulesLine: { ...typography.body, color: colors.textSecondary },
   acceptRow: {
