@@ -564,12 +564,6 @@ export function OnboardingScreen() {
               Les autres récupèrent la caution.
             </Text>
           </View>
-          <Text style={styles.hint}>
-            Pas une app de rencontre.
-          </Text>
-          <Text style={styles.hint}>
-            Si tu es une femme : option Femmes uniquement.
-          </Text>
           <Pressable
             style={styles.acceptRow}
             onPress={() => setAcceptedRules((v) => !v)}
