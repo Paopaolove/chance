@@ -608,15 +608,6 @@ export function OnboardingScreen() {
           <Text style={styles.hint}>
             Pas de GPS continu. Choisis un quartier ou écris le tien.
           </Text>
-          <Text style={styles.label}>Quartier *</Text>
-          <TextInput
-            style={styles.input}
-            value={neighborhood}
-            onChangeText={setNeighborhood}
-            placeholder="Ex. République, ton arrondissement…"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-          />
           <View style={styles.chips}>
             {PARIS_NEIGHBORHOODS.map((q) => {
               const selected = neighborhood === q;
@@ -638,6 +629,20 @@ export function OnboardingScreen() {
               );
             })}
           </View>
+          <Text style={styles.label}>Autre quartier</Text>
+          <TextInput
+            style={styles.input}
+            value={
+              PARIS_NEIGHBORHOODS.includes(neighborhood) ? '' : neighborhood
+            }
+            onChangeText={(t) => {
+              setNeighborhood(t);
+              setError('');
+            }}
+            placeholder="Écris ton quartier…"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+          />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             title="Continuer"
