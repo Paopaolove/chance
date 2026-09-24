@@ -27,7 +27,7 @@ import { dispoSlotLabel } from '../utils/dispo';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
 type FeedMode = 'sorties' | 'dispos';
-type BudgetFilter = 'all' | 15 | 25 | 40;
+type BudgetFilter = number | 'all';
 
 const FILTERS: { id: FilterId; label: string }[] = [
   { id: 'all', label: 'Toutes' },
@@ -48,6 +48,13 @@ const TRAVEL_SHORTCUTS = [15, 30, 45, 60] as const;
 const TRAVEL_MIN_MINUTES = 5;
 const TRAVEL_MAX_MINUTES = 90;
 const TRAVEL_DEFAULT_MINUTES = 30;
+
+const BUDGET_FREE_MIN = 5;
+const BUDGET_FREE_MAX = 200;
+
+function clampBudgetEuros(n: number): number {
+  return Math.min(BUDGET_FREE_MAX, Math.max(BUDGET_FREE_MIN, Math.round(n)));
+}
 
 type OutingWithTravel = Outing & { travelMinutes: number; matchScore: number };
 
@@ -267,13 +274,18 @@ export function FeedScreen() {
       person?.dispoCategories?.length
         ? person.dispoCategories
         : user?.dispoCategories ?? [];
-    const primary = (cats[0] ?? 'restaurant') as OutingCategory;
+    const primary = (
+      cats.includes('autre') ? 'autre' : (cats[0] ?? 'restaurant')
+    ) as OutingCategory;
     const slot = person?.dispoSlot ?? user?.dispoSlot ?? '19:30';
+    const detail =
+      person?.dispoCategoryDetail ?? user?.dispoCategoryDetail ?? undefined;
     navigation.navigate('MainTabs', {
       screen: 'Create',
       params: {
         fromDispo: true,
         category: primary,
+        categoryDetail: primary === 'autre' ? detail : undefined,
         neighborhood:
           person?.dispoNeighborhood ??
           person?.neighborhood ??
@@ -408,6 +420,32 @@ export function FeedScreen() {
           );
         })}
       </ScrollView>
+      <Text style={styles.quartierFreeLabel}>Budget max libre</Text>
+      <View style={styles.budgetFreeRow}>
+        <Text style={styles.travelInputPrefix}>max</Text>
+        <TextInput
+          style={styles.budgetFreeInput}
+          value={budgetFilter === 'all' ? '' : String(budgetFilter)}
+          onChangeText={(t) => {
+            const digits = t.replace(/\D/g, '');
+            if (digits === '') {
+              setBudgetFilter('all');
+              return;
+            }
+            const n = parseInt(digits, 10);
+            if (!Number.isNaN(n)) {
+              setBudgetFilter(clampBudgetEuros(n));
+            }
+          }}
+          placeholder="_"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="number-pad"
+          maxLength={3}
+          selectTextOnFocus
+          accessibilityLabel="Budget maximum en euros"
+        />
+        <Text style={styles.travelInputSuffix}>€</Text>
+      </View>
       {mode === 'dispos' ? (
         <>
           <ScrollView
@@ -807,5 +845,25 @@ const styles = StyleSheet.create({
   travelInputSuffix: {
     ...typography.caption,
     color: colors.textMuted,
+  },
+  budgetFreeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs,
+  },
+  budgetFreeInput: {
+    width: 56,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    textAlign: 'center',
   },
 });

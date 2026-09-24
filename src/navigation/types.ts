@@ -5,6 +5,7 @@ import { OutingCategory } from '../data/types';
 export type CreateOutingParams = {
   fromDispo?: boolean;
   category?: OutingCategory;
+  categoryDetail?: string;
   neighborhood?: string;
   budgetMaxEuros?: number;
   topic?: string;

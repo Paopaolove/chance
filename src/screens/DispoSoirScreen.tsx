@@ -42,6 +42,9 @@ export function DispoSoirScreen() {
       ? [...user.dispoCategories]
       : ['restaurant', 'bar'],
   );
+  const [categoryDetail, setCategoryDetail] = useState(
+    user?.dispoCategoryDetail ?? '',
+  );
   const [quartier, setQuartier] = useState(
     user?.dispoNeighborhood ?? user?.neighborhood ?? 'Le Marais',
   );
@@ -80,6 +83,10 @@ export function DispoSoirScreen() {
     return {
       dispoSoir: forceOn,
       dispoCategories: nextCats,
+      dispoCategoryDetail:
+        forceOn && nextCats.includes('autre')
+          ? categoryDetail.trim() || null
+          : null,
       dispoSlot: forceOn ? slot : null,
       dispoNeighborhood: forceOn ? quartier : null,
       dispoBudgetMax: forceOn ? budgetMax : null,
@@ -94,6 +101,13 @@ export function DispoSoirScreen() {
   const onSave = () => {
     if (on && !quartier.trim()) {
       Alert.alert('Quartier requis', 'Indique le quartier pour ce soir.');
+      return;
+    }
+    if (on && categories.includes('autre') && !categoryDetail.trim()) {
+      Alert.alert(
+        'Précise la catégorie',
+        'Quand tu coches Autre, indique ce que tu as en tête (ex. bowling…).',
+      );
       return;
     }
     setDispoProfile(buildPayload());
@@ -111,17 +125,29 @@ export function DispoSoirScreen() {
       Alert.alert('Quartier requis', 'Indique le quartier pour ce soir.');
       return;
     }
+    if (categories.includes('autre') && !categoryDetail.trim()) {
+      Alert.alert(
+        'Précise la catégorie',
+        'Quand tu coches Autre, indique ce que tu as en tête (ex. bowling…).',
+      );
+      return;
+    }
     // Tap 1: persist prefs + go Create prefilled (tap 2 = publier).
     setOn(true);
     const payload = buildPayload(true);
     setDispoProfile(payload);
-    const primaryCat = (payload.dispoCategories[0] ??
-      'restaurant') as OutingCategory;
+    const primaryCat = (
+      payload.dispoCategories.includes('autre')
+        ? 'autre'
+        : (payload.dispoCategories[0] ?? 'restaurant')
+    ) as OutingCategory;
     navigation.navigate('MainTabs', {
       screen: 'Create',
       params: {
         fromDispo: true,
         category: primaryCat,
+        categoryDetail:
+          primaryCat === 'autre' ? categoryDetail.trim() : undefined,
         neighborhood: quartier,
         budgetMaxEuros: budgetMax,
         topic: topic.trim() || undefined,
@@ -204,6 +230,20 @@ export function DispoSoirScreen() {
         })}
       </View>
       {hint ? <Text style={styles.error}>{hint}</Text> : null}
+      {categories.includes('autre') ? (
+        <>
+          <Text style={styles.sectionHint}>Précise *</Text>
+          <TextInput
+            style={styles.input}
+            value={categoryDetail}
+            onChangeText={setCategoryDetail}
+            placeholder="Ex. bowling, pique-nique…"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            accessibilityLabel="Précise la catégorie Autre"
+          />
+        </>
+      ) : null}
 
       <Text style={styles.section}>Quartier *</Text>
       <Text style={styles.sectionHint}>

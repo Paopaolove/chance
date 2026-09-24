@@ -34,6 +34,15 @@ const categories: { id: OutingCategory; label: string }[] = [
   { id: 'autre', label: 'Autre' },
 ];
 
+const BUDGET_PRESETS = [15, 25, 40] as const;
+
+function clampCreateBudget(n: number): number {
+  return Math.min(
+    BUDGET_MAX_EUROS,
+    Math.max(BUDGET_MIN_EUROS, Math.round(n)),
+  );
+}
+
 /** Core seats 1–3 (brief). */
 const capacities: Array<1 | 2 | 3> = [1, 2, 3];
 
@@ -134,6 +143,13 @@ export function CreateOutingScreen() {
   const [category, setCategory] = useState<OutingCategory>(
     prefill?.category ?? 'restaurant',
   );
+  const [categoryDetail, setCategoryDetail] = useState(() => {
+    if (prefill?.categoryDetail) return prefill.categoryDetail;
+    if (prefill?.category === 'autre') {
+      return state.currentUser?.dispoCategoryDetail ?? '';
+    }
+    return '';
+  });
   const [neighborhood, setNeighborhood] = useState(
     prefill?.neighborhood ??
       state.currentUser?.dispoNeighborhood ??
@@ -159,6 +175,7 @@ export function CreateOutingScreen() {
   useEffect(() => {
     if (!prefill?.fromDispo) return;
     if (prefill.category) setCategory(prefill.category);
+    if (prefill.categoryDetail != null) setCategoryDetail(prefill.categoryDetail);
     if (prefill.neighborhood) setNeighborhood(prefill.neighborhood);
     if (prefill.budgetMaxEuros != null) setBudgetMaxEuros(prefill.budgetMaxEuros);
     if (prefill.topic != null) setTopic(prefill.topic);
@@ -213,6 +230,14 @@ export function CreateOutingScreen() {
       return;
     }
 
+    if (category === 'autre' && !categoryDetail.trim()) {
+      Alert.alert(
+        'Précise la catégorie',
+        'Quand tu choisis Autre, indique ce que tu proposes (ex. bowling, pique-nique…).',
+      );
+      return;
+    }
+
     const when = buildStartsAt(dateStr, timeStr);
     if (!when) {
       Alert.alert(
@@ -232,6 +257,8 @@ export function CreateOutingScreen() {
       title,
       description: message.trim(),
       category,
+      categoryDetail:
+        category === 'autre' ? categoryDetail.trim() : undefined,
       neighborhood,
       venueName,
       approxArea: neighborhood,
@@ -273,6 +300,7 @@ export function CreateOutingScreen() {
     setFlexibleSlot(false);
     setCapacity(1);
     setBudgetMaxEuros(25);
+    setCategoryDetail('');
     const next = defaultDateTime(false);
     setDateStr(next.dateStr);
     setTimeStr(next.timeStr);
@@ -353,6 +381,20 @@ export function CreateOutingScreen() {
             />
           ))}
         </View>
+        {category === 'autre' ? (
+          <>
+            <Text style={styles.label}>Précise *</Text>
+            <TextInput
+              style={styles.input}
+              value={categoryDetail}
+              onChangeText={setCategoryDetail}
+              placeholder="Ex. bowling, pique-nique…"
+              placeholderTextColor={colors.textMuted}
+              autoCorrect={false}
+              accessibilityLabel="Précise la catégorie Autre"
+            />
+          </>
+        ) : null}
 
         <Text style={styles.label}>Lieu *</Text>
         <TextInput
@@ -493,15 +535,45 @@ export function CreateOutingScreen() {
         </View>
 
         <Text style={styles.label}>Budget approx. *</Text>
+        <View style={styles.row}>
+          {BUDGET_PRESETS.map((b) => (
+            <Button
+              key={b}
+              title={`${b} €`}
+              variant={Math.round(budgetMaxEuros) === b ? 'primary' : 'ghost'}
+              onPress={() => setBudgetMaxEuros(b)}
+              style={styles.chip}
+            />
+          ))}
+        </View>
         <View style={styles.budgetCard}>
-          <Text style={styles.budgetValue}>{Math.round(budgetMaxEuros)} €</Text>
+          <View style={styles.budgetMontantRow}>
+            <Text style={styles.budgetMontantLabel}>Montant</Text>
+            <TextInput
+              style={styles.budgetMontantInput}
+              value={String(Math.round(budgetMaxEuros))}
+              onChangeText={(t) => {
+                const digits = t.replace(/\D/g, '');
+                if (digits === '') return;
+                const n = parseInt(digits, 10);
+                if (!Number.isNaN(n)) {
+                  setBudgetMaxEuros(clampCreateBudget(n));
+                }
+              }}
+              keyboardType="number-pad"
+              maxLength={2}
+              selectTextOnFocus
+              accessibilityLabel="Montant budget en euros"
+            />
+            <Text style={styles.budgetMontantSuffix}>€</Text>
+          </View>
           <Slider
             style={styles.slider}
             minimumValue={BUDGET_MIN_EUROS}
             maximumValue={BUDGET_MAX_EUROS}
             step={1}
             value={budgetMaxEuros}
-            onValueChange={setBudgetMaxEuros}
+            onValueChange={(v) => setBudgetMaxEuros(clampCreateBudget(v))}
             minimumTrackTintColor={colors.primary}
             maximumTrackTintColor={colors.border}
             thumbTintColor={colors.primary}
@@ -638,6 +710,33 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
+  },
+  budgetMontantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  budgetMontantLabel: {
+    ...typography.bodyStrong,
+    color: colors.textSecondary,
+  },
+  budgetMontantInput: {
+    minWidth: 56,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.bodyStrong,
+    color: colors.text,
+    textAlign: 'center',
+  },
+  budgetMontantSuffix: {
+    ...typography.bodyStrong,
+    color: colors.text,
   },
   slider: { width: '100%', height: 40 },
   budgetEnds: {

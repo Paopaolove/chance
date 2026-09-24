@@ -308,6 +308,9 @@ export function OutingDetailScreen() {
           </View>
         ) : null}
       </View>
+      {outing.categoryDetail ? (
+        <Text style={styles.categoryDetail}>{outing.categoryDetail}</Text>
+      ) : null}
 
       <Text style={styles.title}>{outing.title}</Text>
       <Text style={styles.when}>{formatOutingWhen(outing.startsAt)}</Text>
@@ -554,6 +557,12 @@ const styles = StyleSheet.create({
   },
   chipWomen: { backgroundColor: colors.primarySoft },
   chipText: { ...typography.small, color: colors.textSecondary },
+  categoryDetail: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
+  },
   title: { ...typography.title, color: colors.text },
   when: {
     ...typography.bodyStrong,

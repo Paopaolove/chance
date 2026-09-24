@@ -43,6 +43,8 @@ export interface User {
   /** Local URI from image picker; undefined = initials fallback. */
   photoUri?: string;
   dispoCategories: OutingCategory[];
+  /** Free detail when Dispo includes Autre. */
+  dispoCategoryDetail?: string;
   /** Optional max budget when dispo ce soir (€). */
   dispoBudgetMax?: number;
   /** Créneau ce soir (ex. « 19:30 » ou « flexible »). */
@@ -112,6 +114,8 @@ export interface Outing {
   title: string;
   description: string;
   category: OutingCategory;
+  /** Free detail when category === 'autre' (ex. bowling). */
+  categoryDetail?: string;
   neighborhood: string;
   venueName: string;
   approxArea: string;
@@ -248,6 +252,7 @@ export interface AppState {
 export type DispoProfileUpdate = {
   dispoSoir?: boolean;
   dispoCategories?: OutingCategory[];
+  dispoCategoryDetail?: string | null;
   dispoBudgetMax?: number | null;
   dispoSlot?: string | null;
   dispoNeighborhood?: string | null;

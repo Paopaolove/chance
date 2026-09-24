@@ -321,6 +321,7 @@ function reducer(state: AppState, action: AppAction): AppState {
             }
           : {}),
         ...clearOrSet('dispoBudgetMax', p.dispoBudgetMax),
+        ...clearOrSet('dispoCategoryDetail', p.dispoCategoryDetail),
         ...clearOrSet('dispoSlot', p.dispoSlot),
         ...clearOrSet('dispoNeighborhood', p.dispoNeighborhood),
         ...clearOrSet('dispoTopic', p.dispoTopic),
@@ -905,6 +906,7 @@ interface ChanceContextValue {
     capacity: 1 | 2 | 3 | 4;
     womenOnly: boolean;
     budgetMaxEuros: number;
+    categoryDetail?: string;
     topic?: string;
     excludedTopics?: string[];
     flexibleSlot?: boolean;
@@ -1213,6 +1215,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       capacity: 1 | 2 | 3 | 4;
       womenOnly: boolean;
       budgetMaxEuros: number;
+      categoryDetail?: string;
       topic?: string;
       excludedTopics?: string[];
       flexibleSlot?: boolean;
@@ -1232,6 +1235,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         // Silently force off — UI should prevent this
       }
       const topic = input.topic?.trim();
+      const categoryDetail = input.categoryDetail?.trim();
       const excluded = (input.excludedTopics ?? [])
         .map((t) => t.trim())
         .filter(Boolean);
@@ -1255,6 +1259,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         budgetMaxEuros: input.budgetMaxEuros,
         status: 'open',
         createdAt: new Date().toISOString(),
+        ...(input.category === 'autre' && categoryDetail
+          ? { categoryDetail }
+          : {}),
         ...(topic ? { topic } : {}),
         ...(excluded.length ? { excludedTopics: excluded } : {}),
         ...(input.flexibleSlot ? { flexibleSlot: true } : {}),

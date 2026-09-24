@@ -289,11 +289,21 @@ export function ProfileScreen() {
               variant="secondary"
               onPress={() => {
                 const slot = user.dispoSlot ?? '19:30';
+                const cats = user.dispoCategories ?? [];
+                const primary = (
+                  cats.includes('autre')
+                    ? 'autre'
+                    : (cats[0] ?? 'restaurant')
+                );
                 navigation.navigate('MainTabs', {
                   screen: 'Create',
                   params: {
                     fromDispo: true,
-                    category: user.dispoCategories?.[0] ?? 'restaurant',
+                    category: primary,
+                    categoryDetail:
+                      primary === 'autre'
+                        ? user.dispoCategoryDetail
+                        : undefined,
                     neighborhood:
                       user.dispoNeighborhood ?? user.neighborhood,
                     budgetMaxEuros: user.dispoBudgetMax ?? 25,
