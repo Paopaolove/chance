@@ -518,6 +518,18 @@ export function OnboardingScreen() {
         <ScrollView contentContainerStyle={styles.wrapScroll}>
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Comment ça marche</Text>
+          <View style={styles.disclaimerBox}>
+            <Text style={styles.disclaimerTitle}>
+              Chance n’est pas un site de rencontre.
+            </Text>
+            <Text style={styles.disclaimerBody}>
+              On ne swipe pas, on ne cherche pas un match.
+            </Text>
+            <Text style={styles.disclaimerBody}>
+              On partage une table, un verre ou une sortie — pour se voir pour
+              de vrai.
+            </Text>
+          </View>
           <View style={styles.rulesBox}>
             <Text style={styles.rulesLine}>
               1. Tu poses une sortie, ou tu en rejoins une.
@@ -827,6 +839,23 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
+  },
+  disclaimerBox: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  disclaimerTitle: {
+    ...typography.bodyStrong,
+    color: colors.text,
+  },
+  disclaimerBody: {
+    ...typography.body,
+    color: colors.text,
   },
   rulesBox: {
     backgroundColor: colors.surface,
