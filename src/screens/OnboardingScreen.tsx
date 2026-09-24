@@ -535,10 +535,14 @@ export function OnboardingScreen() {
           <Text style={styles.rulesSection}>Absences</Text>
           <View style={styles.rulesBox}>
             <Text style={styles.rulesLine}>
-              • Annulation au moins 12h avant → caution rendue.
+              • Annulation au moins 3h avant → caution rendue.
             </Text>
             <Text style={styles.rulesLine}>
               • Annulation trop tard ou absence → caution perdue.
+            </Text>
+            <Text style={styles.rulesLine}>
+              • Un imprévu peut être signalé (avec une raison). Il ne lève la
+              caution que si l’hôte accepte.
             </Text>
             <Text style={styles.rulesLine}>
               • Deux absences → perte de priorité, puis le compte peut être

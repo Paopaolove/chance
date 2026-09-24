@@ -5,6 +5,19 @@ export type PlanInterval = 'month' | 'year';
 /** Authoritative Chance pricing (post J+30 trial). */
 export const DEPOSIT_EUROS = 20;
 
+/** Annulation ≥ N heures avant startsAt → caution rendue (heure serveur). */
+export const CANCEL_FREE_BEFORE_HOURS = 3;
+
+export function isCancelFreeWindow(
+  startsAtIso: string,
+  nowMs: number = Date.now(),
+): boolean {
+  const start = new Date(startsAtIso).getTime();
+  if (!Number.isFinite(start)) return false;
+  return start - nowMs >= CANCEL_FREE_BEFORE_HOURS * 60 * 60 * 1000;
+}
+
+
 export const ESSENTIEL_OUTINGS_PER_MONTH = 4;
 
 export const PRICING = {

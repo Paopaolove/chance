@@ -37,7 +37,9 @@ import {
   ConfirmGateResult,
   shouldConsumeCreditOnConfirm,
 } from '../utils/subscription';
-import { DEPOSIT_EUROS as DEPOSIT_FROM_PRICING } from './pricing';
+import { CANCEL_FREE_BEFORE_HOURS,
+  DEPOSIT_EUROS as DEPOSIT_FROM_PRICING,
+  isCancelFreeWindow } from './pricing';
 import {
   chatThreadKey,
   lateLabel,
@@ -62,6 +64,8 @@ const initialState: AppState = {
   reviews: mockReviews,
   lateReports: [],
   hostNoShowStrikes: {},
+  guestNoShowStrikes: {},
+  hostPublishStrikes: {},
   toast: null,
 };
 
@@ -200,6 +204,22 @@ function reducer(state: AppState, action: AppAction): AppState {
           type: 'EXPIRE_REQUEST',
           payload: { requestId: action.payload.requestId },
         });
+      }
+      const outingForRace = state.outings.find((o) => o.id === req.outingId);
+      if (outingForRace) {
+        const alreadyConfirmed = state.requests.filter(
+          (r) =>
+            r.outingId === req.outingId &&
+            r.status === 'confirmed' &&
+            r.id !== req.id,
+        );
+        // Capacity race: first confirmedAt wins; later confirms lose the seat.
+        if (alreadyConfirmed.length >= outingForRace.capacity) {
+          return reducer(state, {
+            type: 'EXPIRE_REQUEST',
+            payload: { requestId: action.payload.requestId },
+          });
+        }
       }
       const nextUser =
         state.currentUser &&
@@ -356,6 +376,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         reviews: mockReviews,
         lateReports: [],
         hostNoShowStrikes: {},
+        guestNoShowStrikes: {},
+        hostPublishStrikes: {},
         toast: null,
       };
 
@@ -646,6 +668,85 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'REPORT_GUEST_NO_SHOW': {
+      const { outingId, requestId, guestId, strike, lowerPriority } =
+        action.payload;
+      let currentUser = state.currentUser;
+      if (currentUser && currentUser.id === guestId) {
+        currentUser = {
+          ...currentUser,
+          guestNoShowCount: strike,
+          lowerPriority: lowerPriority || currentUser.lowerPriority,
+          profileMention: lowerPriority
+            ? 'Ghost après confirmation (démo)'
+            : currentUser.profileMention,
+        };
+      }
+      return {
+        ...state,
+        currentUser,
+        guestNoShowStrikes: {
+          ...state.guestNoShowStrikes,
+          [guestId]: strike,
+        },
+        requests: state.requests.map((r) =>
+          r.id === requestId
+            ? { ...r, depositStatus: 'forfeited' as const }
+            : r,
+        ),
+        outings: state.outings.map((o) =>
+          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+        ),
+      };
+    }
+
+    case 'REPORT_HOST_NEVER_HONOR': {
+      const { outingId, hostId, strike, banned } = action.payload;
+      let currentUser = state.currentUser;
+      if (currentUser && currentUser.id === hostId) {
+        currentUser = {
+          ...currentUser,
+          hostPublishStrikeCount: strike,
+          banned: banned || currentUser.banned,
+          bannedReason: banned
+            ? '2e publication jamais honorée — compte suspendu (démo)'
+            : currentUser.bannedReason,
+        };
+      }
+      return {
+        ...state,
+        currentUser,
+        hostPublishStrikes: {
+          ...state.hostPublishStrikes,
+          [hostId]: strike,
+        },
+        outings: state.outings.map((o) =>
+          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+        ),
+      };
+    }
+
+    case 'RUN_CONFIRM_RACE_DEMO': {
+      // Demo: inject two accepted seats, confirm first timestamp, expire the other.
+      const { winner, loser, winnerConfirmedAt } = action.payload;
+      const without = state.requests.filter(
+        (r) => r.id !== winner.id && r.id !== loser.id,
+      );
+      return {
+        ...state,
+        requests: [
+          {
+            ...winner,
+            status: 'confirmed' as const,
+            confirmedAt: winnerConfirmedAt,
+            depositStatus: 'held' as const,
+          },
+          { ...loser, status: 'expired' as const },
+          ...without,
+        ],
+      };
+    }
+
     default:
       return state;
   }
@@ -721,7 +822,7 @@ interface ChanceContextValue {
     requestId: string,
   ) =>
     | { ok: true }
-    | { ok: false; reason: 'expired' | 'invalid' | 'paywall' };
+    | { ok: false; reason: 'expired' | 'invalid' | 'paywall' | 'race_lost' };
   expireRequestIfNeeded: (requestId: string) => void;
   setDispoSoir: (value: boolean) => void;
   setDispoProfile: (update: DispoProfileUpdate) => void;
@@ -835,6 +936,31 @@ interface ChanceContextValue {
     outingId: string,
     decision: 'accepted' | 'refused',
   ) => { ok: true } | { ok: false; reason: string };
+  /** Confirmed guest ghosts: forfeit deposit; 2nd → lower priority + profile mention. */
+  reportGuestNoShow: (
+    requestId: string,
+  ) =>
+    | { ok: true; strike: number; lowerPriority: boolean }
+    | { ok: false; reason: string };
+  /** Host publishes often and never honors: 1 warning, 2nd ban. */
+  reportHostNeverHonor: (
+    outingId: string,
+  ) =>
+    | { ok: true; strike: number; banned: boolean }
+    | { ok: false; reason: string };
+  /**
+   * Demo QA: over-accept a 2nd seat on a capacity-1 outing then confirm both —
+   * first timestamp wins, second gets race_lost.
+   */
+  simulateConfirmRace: (
+    outingId: string,
+  ) =>
+    | {
+        ok: true;
+        winnerRequestId: string;
+        loserRequestId: string;
+      }
+    | { ok: false; reason: string };
   /** Demo: fire accepted / 3-min reminder / chat H−1 notifications quickly. */
   simulateLocalNotifications: (
     outingTitle?: string,
@@ -1096,7 +1222,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       requestId: string,
     ):
       | { ok: true }
-      | { ok: false; reason: 'expired' | 'invalid' | 'paywall' } => {
+      | {
+          ok: false;
+          reason: 'expired' | 'invalid' | 'paywall' | 'race_lost';
+        } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'invalid' };
       const gate = gateCanConfirmOuting(user);
@@ -1113,6 +1242,16 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       ) {
         dispatch({ type: 'EXPIRE_REQUEST', payload: { requestId } });
         return { ok: false, reason: 'expired' };
+      }
+      const outingRace = state.outings.find((o) => o.id === req.outingId);
+      if (outingRace) {
+        const confirmedCount = state.requests.filter(
+          (r) => r.outingId === req.outingId && r.status === 'confirmed',
+        ).length;
+        if (confirmedCount >= outingRace.capacity) {
+          dispatch({ type: 'EXPIRE_REQUEST', payload: { requestId } });
+          return { ok: false, reason: 'race_lost' };
+        }
       }
       if (shouldConsumeCreditOnConfirm(user)) {
         dispatch({ type: 'CONSUME_OUTING_CREDIT' });
@@ -1828,6 +1967,29 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         type: 'RETURN_DEPOSITS_FOR_OUTING',
         payload: { outingId, reason: 'host_no_show' },
       });
+      // Auto note in chat threads for confirmed guests.
+      const confirmedReqs = state.requests.filter(
+        (r) => r.outingId === outingId && r.status === 'confirmed',
+      );
+      const noteBody = banned
+        ? 'Note auto · 2e no-show hôte — compte suspendu. Cautions remboursées.'
+        : 'Note auto · no-show hôte — avertissement. Cautions des invités remboursées.';
+      const targets =
+        confirmedReqs.length > 0
+          ? confirmedReqs
+          : [{ id: undefined as string | undefined }];
+      for (const r of targets) {
+        const note: ChatMessage = {
+          id: uid('msg'),
+          threadKey: chatThreadKey(outingId, r.id),
+          outingId,
+          requestId: r.id,
+          kind: 'system',
+          text: noteBody,
+          createdAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
+      }
       const toast: AppToast = {
         id: uid('toast'),
         title: banned ? 'Hôte banni (démo)' : 'Avertissement hôte',
@@ -1839,7 +2001,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_TOAST', payload: toast });
       return { ok: true, strike, banned };
     },
-    [state.outings, state.hostNoShowStrikes],
+    [state.outings, state.hostNoShowStrikes, state.requests],
   );
 
   const reportVenueClosed = useCallback(
@@ -1906,6 +2068,167 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
 
+  const reportGuestNoShow = useCallback(
+    (
+      requestId: string,
+    ):
+      | { ok: true; strike: number; lowerPriority: boolean }
+      | { ok: false; reason: string } => {
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req || req.status !== 'confirmed') {
+        return { ok: false, reason: 'not_confirmed' };
+      }
+      const outingId = req.outingId;
+      const guestId = req.userId;
+      const prev = state.guestNoShowStrikes[guestId] ?? 0;
+      const strike = prev + 1;
+      const lowerPriority = strike >= 2;
+      dispatch({
+        type: 'REPORT_GUEST_NO_SHOW',
+        payload: {
+          outingId,
+          requestId,
+          guestId,
+          strike,
+          lowerPriority,
+        },
+      });
+      const note: ChatMessage = {
+        id: uid('msg'),
+        threadKey: chatThreadKey(outingId, requestId),
+        outingId,
+        requestId,
+        kind: 'system',
+        text: lowerPriority
+          ? 'Note auto · 2e ghost invité — priorité baissée + mention profil. Caution perdue.'
+          : 'Note auto · ghost après confirmation — caution perdue (mock).',
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: lowerPriority ? 'Priorité baissée' : 'Caution perdue',
+        body: lowerPriority
+          ? '2e no-show invité — priorité baissée + mention sur le profil.'
+          : 'Ghost après confirmation — caution non remboursée (mock).',
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true, strike, lowerPriority };
+    },
+    [state.requests, state.guestNoShowStrikes],
+  );
+
+  const reportHostNeverHonor = useCallback(
+    (
+      outingId: string,
+    ):
+      | { ok: true; strike: number; banned: boolean }
+      | { ok: false; reason: string } => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      const hostId = outing.hostId;
+      const prev = state.hostPublishStrikes[hostId] ?? 0;
+      const strike = prev + 1;
+      const banned = strike >= 2;
+      dispatch({
+        type: 'REPORT_HOST_NEVER_HONOR',
+        payload: { outingId, hostId, strike, banned },
+      });
+      dispatch({
+        type: 'RETURN_DEPOSITS_FOR_OUTING',
+        payload: { outingId, reason: 'host_never_honor' },
+      });
+      const note: ChatMessage = {
+        id: uid('msg'),
+        threadKey: chatThreadKey(outingId),
+        outingId,
+        kind: 'system',
+        text: banned
+          ? 'Note auto · 2e publication jamais honorée — compte suspendu. Cautions remboursées.'
+          : 'Note auto · publication jamais honorée — avertissement. Cautions remboursées.',
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: banned ? 'Compte suspendu' : 'Avertissement publication',
+        body: banned
+          ? '2e fois — ban. Cautions des invités remboursées.'
+          : '1er avertissement (publie sans honorer). Cautions remboursées.',
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true, strike, banned };
+    },
+    [state.outings, state.hostPublishStrikes],
+  );
+
+  const simulateConfirmRace = useCallback(
+    (
+      outingId: string,
+    ):
+      | {
+          ok: true;
+          winnerRequestId: string;
+          loserRequestId: string;
+        }
+      | { ok: false; reason: string } => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      const now = Date.now();
+      const deadline = new Date(now + CONFIRM_WINDOW_MS).toISOString();
+      const winner: Request = {
+        id: uid('req'),
+        outingId,
+        userId: 'demo-race-a',
+        userName: 'Alice (démo)',
+        userAge: 28,
+        userGender: 'femme',
+        message: 'Course A',
+        status: 'accepted',
+        createdAt: new Date(now - 90_000).toISOString(),
+        acceptedAt: new Date(now - 60_000).toISOString(),
+        confirmDeadlineAt: deadline,
+      };
+      const loser: Request = {
+        id: uid('req'),
+        outingId,
+        userId: 'demo-race-b',
+        userName: 'Bruno (démo)',
+        userAge: 31,
+        userGender: 'homme',
+        message: 'Course B',
+        status: 'accepted',
+        createdAt: new Date(now - 80_000).toISOString(),
+        acceptedAt: new Date(now - 50_000).toISOString(),
+        confirmDeadlineAt: deadline,
+      };
+      dispatch({
+        type: 'RUN_CONFIRM_RACE_DEMO',
+        payload: {
+          outingId,
+          winner,
+          loser,
+          winnerConfirmedAt: new Date(now - 2000).toISOString(),
+        },
+      });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: 'Course confirmation',
+        body: `1er timestamp gagne (${winner.userName}) — ${loser.userName} perd la place.`,
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return {
+        ok: true,
+        winnerRequestId: winner.id,
+        loserRequestId: loser.id,
+      };
+    },
+    [state.outings],
+  );
+
   const simulateLocalNotifications = useCallback(
     async (outingTitle?: string) => {
       void ensureAndroidChannel();
@@ -1969,6 +2292,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,
+      reportGuestNoShow,
+      reportHostNeverHonor,
+      simulateConfirmRace,
       simulateLocalNotifications,
     }),
     [
@@ -2023,6 +2349,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNoShow,
       reportVenueClosed,
       respondVenueAlternate,
+      reportGuestNoShow,
+      reportHostNeverHonor,
+      simulateConfirmRace,
       simulateLocalNotifications,
     ],
   );
@@ -2043,3 +2372,4 @@ export function useChance(): ChanceContextValue {
 export { CONFIRM_WINDOW_MS };
 
 export const DEPOSIT_EUROS = DEPOSIT_FROM_PRICING;
+export { CANCEL_FREE_BEFORE_HOURS, isCancelFreeWindow };

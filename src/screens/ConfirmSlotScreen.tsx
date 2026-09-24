@@ -147,6 +147,14 @@ export function ConfirmSlotScreen() {
         });
         return;
       }
+      if (result.reason === 'race_lost') {
+        showToast(
+          'Place prise',
+          'Une autre confirmation est arrivée avant (1er timestamp gagne).',
+        );
+        setExpired(true);
+        return;
+      }
       setExpired(true);
       return;
     }
@@ -204,8 +212,8 @@ export function ConfirmSlotScreen() {
             <Text style={styles.depositTitle}>Caution bloquée</Text>
             <Text style={styles.depositBody}>
               {DEPOSIT_EUROS} € seront pré-autorisés sur ta carte (Stripe mock —
-              aucun débit réel). Libérée après la sortie si tout s’est bien
-              passé.
+              aucun débit réel). Rendue si tu viens, ou si tu annules au moins
+              3 h avant. Perdue si annulation trop tard ou absence.
             </Text>
             <Button title="Confirmer ma place" onPress={onConfirm} />
           </View>

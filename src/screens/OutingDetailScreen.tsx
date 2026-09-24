@@ -422,7 +422,10 @@ export function OutingDetailScreen() {
                 </Text>
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'held' ? (
-                <Text style={styles.hint}>Caution 20 € bloquée (mock).</Text>
+                <Text style={styles.hint}>
+                  Caution 20 € bloquée (mock). Rendue si tu annules ≥ 3 h
+                  avant, sinon perdue.
+                </Text>
               ) : null}
               <Text style={styles.hint}>
                 {isChatUnlocked(outing.startsAt)

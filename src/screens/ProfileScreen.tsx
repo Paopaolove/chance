@@ -42,6 +42,10 @@ export function ProfileScreen() {
     getOutingsToRate,
     completeOuting,
     simulateLocalNotifications,
+    reportGuestNoShow,
+    reportHostNeverHonor,
+    reportHostNoShow,
+    simulateConfirmRace,
   } = useChance();
   const user = state.currentUser;
   const active = getActiveOutingForUser();
@@ -129,11 +133,31 @@ export function ProfileScreen() {
                 '2e no-show en tant qu’hôte — tu ne peux plus publier.'}
             </Text>
           </View>
-        ) : (user.hostNoShowCount ?? 0) === 1 ? (
+        ) : (user.hostNoShowCount ?? 0) === 1 ||
+          (user.hostPublishStrikeCount ?? 0) === 1 ? (
           <View style={styles.warnBanner}>
-            <Text style={styles.warnTitle}>Avertissement no-show</Text>
+            <Text style={styles.warnTitle}>Avertissement</Text>
             <Text style={styles.warnBody}>
-              1er no-show hôte enregistré. Un 2e entraînera un ban (démo).
+              {(user.hostNoShowCount ?? 0) === 1
+                ? '1er no-show hôte. Un 2e entraînera un ban (démo).'
+                : '1er avertissement publication jamais honorée. Un 2e = ban (démo).'}
+            </Text>
+          </View>
+        ) : null}
+        {user.lowerPriority || user.profileMention ? (
+          <View style={styles.warnBanner}>
+            <Text style={styles.warnTitle}>Priorité baissée</Text>
+            <Text style={styles.warnBody}>
+              {user.profileMention ??
+                'Ghost après confirmation — priorité réduite dans les files hôte.'}
+            </Text>
+          </View>
+        ) : (user.guestNoShowCount ?? 0) === 1 ? (
+          <View style={styles.warnBanner}>
+            <Text style={styles.warnTitle}>Caution perdue (ghost)</Text>
+            <Text style={styles.warnBody}>
+              1er ghost après confirmation. Un 2e baisse ta priorité + mention
+              profil.
             </Text>
           </View>
         ) : null}
@@ -600,6 +624,135 @@ export function ProfileScreen() {
               );
             });
           })()}
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Démo QA · cas limites</Text>
+          <Text style={styles.cardHint}>
+            Ghost invité, publication jamais honorée, course 2 confirmations,
+            no-show hôte (1er/2e).
+          </Text>
+          <Button
+            title="Simuler mon ghost (caution perdue)"
+            variant="ghost"
+            onPress={() => {
+              const req = outgoingRequests.find((r) => r.status === 'confirmed');
+              if (!req) {
+                Alert.alert(
+                  'Démo',
+                  'Il faut une place confirmée (outgoing) pour simuler un ghost.',
+                );
+                return;
+              }
+              const r = reportGuestNoShow(req.id);
+              if (!r.ok) Alert.alert('Impossible', r.reason);
+              else
+                Alert.alert(
+                  r.lowerPriority ? 'Priorité baissée' : 'Caution perdue',
+                  r.lowerPriority
+                    ? '2e ghost — priorité baissée + mention profil.'
+                    : '1er ghost — caution non remboursée.',
+                );
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
+          <Button
+            title="Signaler ghost d’un invité"
+            variant="ghost"
+            onPress={() => {
+              const req = incomingRequests.find((r) => r.status === 'confirmed');
+              if (!req) {
+                Alert.alert('Démo', 'Aucun invité confirmé sur tes sorties.');
+                return;
+              }
+              const r = reportGuestNoShow(req.id);
+              if (!r.ok) Alert.alert('Impossible', r.reason);
+              else
+                Alert.alert(
+                  'Ghost invité',
+                  r.lowerPriority
+                    ? '2e — priorité baissée pour cet invité.'
+                    : 'Caution de l’invité perdue (mock).',
+                );
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
+          <Button
+            title="Publication jamais honorée (1er/2e)"
+            variant="ghost"
+            onPress={() => {
+              const o =
+                getActiveOutingForUser() ??
+                (() => {
+                  const r = [
+                    ...outgoingRequests,
+                    ...incomingRequests,
+                  ].find((x) => x.status === 'confirmed');
+                  return r ? getOutingById(r.outingId) : undefined;
+                })();
+              if (!o) {
+                Alert.alert('Démo', 'Aucune sortie active / confirmée.');
+                return;
+              }
+              const r = reportHostNeverHonor(o.id);
+              if (!r.ok) Alert.alert('Impossible', r.reason);
+              else
+                Alert.alert(
+                  r.banned ? 'Compte suspendu' : 'Avertissement',
+                  r.banned
+                    ? '2e publication jamais honorée — ban.'
+                    : '1er avertissement — cautions remboursées.',
+                );
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
+          <Button
+            title="Course 2 confirmations (1er timestamp)"
+            variant="ghost"
+            onPress={() => {
+              const o =
+                getActiveOutingForUser() ??
+                state.outings.find(
+                  (x) => x.status === 'open' || x.status === 'full',
+                );
+              if (!o) {
+                Alert.alert('Démo', 'Aucune sortie ouverte.');
+                return;
+              }
+              const r = simulateConfirmRace(o.id);
+              if (!r.ok) Alert.alert('Impossible', r.reason);
+              else
+                Alert.alert(
+                  'Course',
+                  `Gagnant ${r.winnerRequestId.slice(0, 12)}… — perdant expiré.`,
+                );
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
+          <Button
+            title="No-show hôte sur moi (1er/2e)"
+            variant="ghost"
+            onPress={() => {
+              const o = getActiveOutingForUser();
+              if (!o) {
+                Alert.alert(
+                  'Démo',
+                  'Publie / ouvre une sortie (hôte) pour enchaîner les strikes.',
+                );
+                return;
+              }
+              const r = reportHostNoShow(o.id);
+              if (!r.ok) Alert.alert('Impossible', r.reason);
+              else
+                Alert.alert(
+                  r.banned ? 'Compte suspendu' : 'Avertissement',
+                  r.banned
+                    ? '2e no-show hôte — ban + cautions remboursées.'
+                    : '1er no-show — warning + note auto + cautions remboursées.',
+                );
+            }}
+            style={{ marginTop: spacing.sm }}
+          />
         </View>
 
         <Button

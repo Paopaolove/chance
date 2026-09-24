@@ -66,7 +66,15 @@ export interface User {
   createdAt: string;
   /** Host no-shows: 1 = warning, 2+ = ban (mock). */
   hostNoShowCount?: number;
-  /** Banned after 2nd host no-show (mock). */
+  /** Guest ghost after confirm: 1 = forfeit deposit, 2+ = lower priority + profile mention. */
+  guestNoShowCount?: number;
+  /** After 2nd guest no-show — deprioritized in host queues (mock). */
+  lowerPriority?: boolean;
+  /** Visible profile mention after repeated guest ghost (mock). */
+  profileMention?: string;
+  /** Publishes often / never honors: 1 = warning, 2+ = ban (mock). */
+  hostPublishStrikeCount?: number;
+  /** Banned after 2nd host no-show or never-honor (mock). */
   banned?: boolean;
   bannedReason?: string;
 }
@@ -196,6 +204,10 @@ export interface AppState {
   lateReports: LateReport[];
   /** Host id → no-show count (1=warning, 2+=ban). */
   hostNoShowStrikes: Record<string, number>;
+  /** Guest id → ghost-after-confirm count (1=forfeit, 2+=lower priority). */
+  guestNoShowStrikes: Record<string, number>;
+  /** Host id → publish-never-honor count (1=warning, 2+=ban). */
+  hostPublishStrikes: Record<string, number>;
   /** In-app mock notification banner (e.g. late alert). */
   toast: AppToast | null;
 }
@@ -306,6 +318,34 @@ export type AppAction =
         outingId: string;
         userId: string;
         decision: 'accepted' | 'refused';
+      };
+    }
+  | {
+      type: 'REPORT_GUEST_NO_SHOW';
+      payload: {
+        outingId: string;
+        requestId: string;
+        guestId: string;
+        strike: number;
+        lowerPriority: boolean;
+      };
+    }
+  | {
+      type: 'REPORT_HOST_NEVER_HONOR';
+      payload: {
+        outingId: string;
+        hostId: string;
+        strike: number;
+        banned: boolean;
+      };
+    }
+  | {
+      type: 'RUN_CONFIRM_RACE_DEMO';
+      payload: {
+        outingId: string;
+        winner: Request;
+        loser: Request;
+        winnerConfirmedAt: string;
       };
     };
 
