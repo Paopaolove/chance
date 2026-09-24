@@ -633,7 +633,9 @@ export function OnboardingScreen() {
           <TextInput
             style={styles.input}
             value={
-              PARIS_NEIGHBORHOODS.includes(neighborhood) ? '' : neighborhood
+              (PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
+                ? ''
+                : neighborhood
             }
             onChangeText={(t) => {
               setNeighborhood(t);
