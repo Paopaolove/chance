@@ -1,0 +1,443 @@
+import { RouteProp, useRoute } from '@react-navigation/native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Button } from '../components/Button';
+import { useChance } from '../data/ChanceContext';
+import { RootStackParamList } from '../navigation/types';
+import { colors, fonts, radius, spacing, typography } from '../theme';
+import {
+  formatUntilChatOpens,
+  getChatOpensAt,
+  isChatUnlocked,
+  LATE_PRESETS,
+  lateLabel,
+  type LatePresetMinutes,
+} from '../utils/chat';
+import { formatOutingWhen } from '../utils/format';
+
+type R = RouteProp<RootStackParamList, 'ChatPlaceholder'>;
+
+export function ChatPlaceholderScreen() {
+  const route = useRoute<R>();
+  const {
+    getOutingById,
+    getRequestById,
+    state,
+    getChatMessages,
+    ensureChatSeeded,
+    sendChatMessage,
+    reportLate,
+    simulateOutingInMinutes,
+  } = useChance();
+
+  const outing = getOutingById(route.params.outingId);
+  const request = route.params.requestId
+    ? getRequestById(route.params.requestId)
+    : undefined;
+
+  const [now, setNow] = useState(Date.now());
+  const [draft, setDraft] = useState('');
+  const [lateOpen, setLateOpen] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const unlocked = outing ? isChatUnlocked(outing.startsAt, now) : false;
+
+  useEffect(() => {
+    if (unlocked && outing) {
+      ensureChatSeeded(outing.id, request?.id);
+    }
+  }, [unlocked, outing, request?.id, ensureChatSeeded]);
+
+  const messages = useMemo(() => {
+    if (!outing) return [];
+    return getChatMessages(outing.id, request?.id);
+  }, [outing, request?.id, getChatMessages]);
+
+  if (!outing) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.body}>Sortie introuvable.</Text>
+      </View>
+    );
+  }
+
+  const otherName =
+    outing.hostId === state.currentUser?.id
+      ? request?.userName ?? 'l’autre personne'
+      : outing.hostName;
+
+  const confirmed =
+    request?.status === 'confirmed' ||
+    (outing.hostId === state.currentUser?.id &&
+      state.requests.some(
+        (r) =>
+          r.outingId === outing.id &&
+          r.status === 'confirmed' &&
+          (!request || r.id === request.id),
+      ));
+
+  const opensAt = getChatOpensAt(outing.startsAt);
+
+  if (!unlocked) {
+    return (
+      <View style={styles.wrap}>
+        <Text style={styles.title}>Chat verrouillé</Text>
+        <Text style={styles.sub}>
+          avec {otherName} · {outing.title}
+        </Text>
+
+        <View style={styles.lockCard}>
+          <Text style={styles.lockEmoji}>🔒</Text>
+          <Text style={styles.lockTitle}>
+            Le chat s’ouvre 1 h avant la sortie.
+          </Text>
+          <Text style={styles.lockBody}>
+            Ouverture dans {formatUntilChatOpens(outing.startsAt, now)} (
+            {opensAt.toLocaleString('fr-FR', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+            ).
+          </Text>
+          <Text style={styles.lockHint}>
+            Sortie : {formatOutingWhen(outing.startsAt)}
+          </Text>
+        </View>
+
+        <View style={styles.info}>
+          <Text style={styles.infoLabel}>Lieu</Text>
+          <Text style={styles.infoValue}>
+            {confirmed
+              ? outing.exactAddress
+              : `${outing.venueName} · ${outing.approxArea}`}
+          </Text>
+          {!confirmed ? (
+            <Text style={styles.lockHint}>
+              L’adresse exacte reste masquée jusqu’à confirmation.
+            </Text>
+          ) : null}
+        </View>
+
+        <View style={styles.demoBox}>
+          <Text style={styles.demoLabel}>Démo QA</Text>
+          <Text style={styles.demoHint}>
+            Simule « dans moins d’1 h » sans attendre le vrai créneau.
+          </Text>
+          <Button
+            title="Simuler J−50 min"
+            variant="secondary"
+            onPress={() => simulateOutingInMinutes(outing.id, 50)}
+          />
+        </View>
+      </View>
+    );
+  }
+
+  const onSend = () => {
+    sendChatMessage(outing.id, draft, request?.id);
+    setDraft('');
+  };
+
+  const onLate = (minutes: LatePresetMinutes) => {
+    reportLate(outing.id, minutes, request?.id);
+    setLateOpen(false);
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.flex}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={88}
+    >
+      <View style={styles.wrapTight}>
+        <Text style={styles.title}>Chat</Text>
+        <Text style={styles.sub}>
+          avec {otherName} · {outing.title}
+        </Text>
+        <Text style={styles.openBadge}>Ouvert · H−1</Text>
+
+        <ScrollView
+          style={styles.thread}
+          contentContainerStyle={styles.threadContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {messages.map((m) => {
+            if (m.kind === 'system') {
+              return (
+                <View key={m.id} style={styles.bubbleSystem}>
+                  <Text style={styles.systemText}>{m.text}</Text>
+                </View>
+              );
+            }
+            const mine = m.senderId === state.currentUser?.id;
+            return (
+              <View
+                key={m.id}
+                style={[
+                  styles.bubble,
+                  mine ? styles.bubbleMe : styles.bubbleThem,
+                ]}
+              >
+                {!mine && m.senderName ? (
+                  <Text style={styles.senderName}>{m.senderName}</Text>
+                ) : null}
+                <Text
+                  style={[styles.bubbleText, mine && styles.bubbleTextMe]}
+                >
+                  {m.text}
+                </Text>
+              </View>
+            );
+          })}
+        </ScrollView>
+
+        {lateOpen ? (
+          <View style={styles.latePanel}>
+            <Text style={styles.lateTitle}>J’ai un retard</Text>
+            <Text style={styles.lateHint}>
+              Choisis une durée — un message système est envoyé à l’autre
+              personne.
+            </Text>
+            <View style={styles.lateRow}>
+              {LATE_PRESETS.map((m) => (
+                <Pressable
+                  key={m}
+                  style={styles.lateChip}
+                  onPress={() => onLate(m)}
+                >
+                  <Text style={styles.lateChipText}>{lateLabel(m)}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable onPress={() => setLateOpen(false)}>
+              <Text style={styles.lateCancel}>Annuler</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Button
+            title="J’ai un retard"
+            variant="secondary"
+            onPress={() => setLateOpen(true)}
+            style={{ marginBottom: spacing.sm }}
+          />
+        )}
+
+        <View style={styles.composer}>
+          <TextInput
+            style={styles.input}
+            placeholder="Écrire un message…"
+            placeholderTextColor={colors.textMuted}
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={onSend}
+            returnKeyType="send"
+          />
+          <Pressable
+            style={[styles.sendBtn, !draft.trim() && styles.sendDisabled]}
+            onPress={onSend}
+            disabled={!draft.trim()}
+          >
+            <Text style={styles.sendLabel}>Envoyer</Text>
+          </Pressable>
+        </View>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  wrap: {
+    flex: 1,
+    backgroundColor: colors.background,
+    padding: spacing.xl,
+  },
+  wrapTight: {
+    flex: 1,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  title: { ...typography.title, color: colors.text },
+  sub: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  openBadge: {
+    ...typography.small,
+    color: colors.success,
+    fontFamily: fonts.semiBold,
+    marginBottom: spacing.md,
+  },
+  body: { ...typography.body, color: colors.textSecondary },
+  lockCard: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  lockEmoji: { fontSize: 32, marginBottom: spacing.sm },
+  lockTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  lockBody: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  lockHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.md,
+  },
+  info: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  infoLabel: { ...typography.caption, color: colors.textMuted },
+  infoValue: { ...typography.bodyStrong, color: colors.text, marginTop: 2 },
+  demoBox: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  demoLabel: {
+    ...typography.caption,
+    color: colors.warning,
+    fontFamily: fonts.semiBold,
+  },
+  demoHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  thread: { flex: 1 },
+  threadContent: { paddingBottom: spacing.md, gap: spacing.sm },
+  bubbleSystem: {
+    alignSelf: 'center',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    maxWidth: '92%',
+  },
+  systemText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  bubble: {
+    maxWidth: '85%',
+    padding: spacing.md,
+    borderRadius: radius.lg,
+  },
+  bubbleThem: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignSelf: 'flex-start',
+  },
+  bubbleMe: {
+    backgroundColor: colors.primary,
+    alignSelf: 'flex-end',
+  },
+  senderName: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginBottom: 2,
+  },
+  bubbleText: { ...typography.body, color: colors.text },
+  bubbleTextMe: { color: colors.white },
+  latePanel: {
+    backgroundColor: colors.warningSoft,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  lateTitle: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  lateHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  lateRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  lateChip: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  lateChipText: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
+  },
+  lateCancel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: Platform.OS === 'ios' ? spacing.md : spacing.sm,
+    ...typography.body,
+    color: colors.text,
+  },
+  sendBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  sendDisabled: { opacity: 0.45 },
+  sendLabel: {
+    ...typography.bodyStrong,
+    color: colors.white,
+    fontFamily: fonts.semiBold,
+  },
+});

@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Chance",
+    "slug": "chance",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Chance utilise ta position pour te montrer des sorties près de toi à Paris.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Chance utilise ta position pour te montrer des sorties près de toi à Paris.",
+        "NSPhotoLibraryUsageDescription": "Chance utilise ta photothèque pour ta photo de profil.",
+        "NSCameraUsageDescription": "Chance utilise l’appareil photo pour ta photo de profil.",
+        "NSPhotoLibraryAddUsageDescription": "Chance peut enregistrer une photo de profil."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF7F2",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "READ_MEDIA_IMAGES",
+        "CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Chance utilise ta position pour te montrer des sorties près de toi à Paris."
+        }
+      ],
+      "expo-notifications",
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Chance utilise ta photothèque pour ta photo de profil.",
+          "cameraPermission": "Chance utilise l’appareil photo pour ta photo de profil."
+        }
+      ]
+    ]
+  }
+}
