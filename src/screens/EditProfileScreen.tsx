@@ -146,7 +146,8 @@ export function EditProfileScreen() {
         style={[styles.input, styles.multiline]}
         value={bio}
         onChangeText={setBio}
-        multiline        placeholder="Parle un peu de toi…"
+        multiline
+        placeholder="Parle un peu de toi…"
         placeholderTextColor={colors.textMuted}
       />
 
