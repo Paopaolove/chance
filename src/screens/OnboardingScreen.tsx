@@ -19,7 +19,6 @@ import { CustomFiltersEditor } from '../components/CustomFiltersEditor';
 import { useChance } from '../data/ChanceContext';
 import {
   INTEREST_SUGGESTIONS,
-  MAX_BIO_LENGTH,
   SUGGESTED_INTERESTS_MAX,
   SUGGESTED_INTERESTS_MIN,
   isValidFrPhone,
@@ -171,10 +170,6 @@ export function OnboardingScreen() {
       setError('Écris une courte bio.');
       return;
     }
-    if (bio.trim().length > MAX_BIO_LENGTH) {
-      setError(`Bio : max ${MAX_BIO_LENGTH} caractères.`);
-      return;
-    }
     setError('');
     setStep('interests');
   };
@@ -220,7 +215,7 @@ export function OnboardingScreen() {
       firstName: firstName.trim(),
       gender,
       neighborhood,
-      bio: bio.trim().slice(0, MAX_BIO_LENGTH),
+      bio: bio.trim(),
       interests,
       customFilters,
       photoUri,
@@ -424,7 +419,7 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Prénom & bio</Text>
           <Text style={styles.hint}>
-            Une courte présentation (~{MAX_BIO_LENGTH} caractères max).
+            Une courte présentation.
           </Text>
           <Text style={styles.label}>Prénom *</Text>
           <TextInput
@@ -438,15 +433,10 @@ export function OnboardingScreen() {
           <TextInput
             style={[styles.input, styles.multiline]}
             value={bio}
-            onChangeText={(t) => setBio(t.slice(0, MAX_BIO_LENGTH))}
+            onChangeText={setBio}
             placeholder="Qui es-tu, qu’est-ce que tu aimes faire à Paris…"
             placeholderTextColor={colors.textMuted}
-            multiline
-            maxLength={MAX_BIO_LENGTH}
-          />
-          <Text style={styles.counter}>
-            {bio.trim().length}/{MAX_BIO_LENGTH}
-          </Text>
+            multiline          />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             title="Continuer"

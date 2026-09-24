@@ -24,10 +24,7 @@ export type InterestSuggestion = (typeof INTEREST_SUGGESTIONS)[number];
 export const SUGGESTED_INTERESTS_MIN = 3;
 export const SUGGESTED_INTERESTS_MAX = 5;
 
-/** Bio hard cap (~120 chars per product brief). */
-export const MAX_BIO_LENGTH = 120;
-
-/** Soft hint only — bio is required but short; no long min. */
+/** Bio is required and short; no fixed character quota. */
 export const MIN_BIO_LENGTH = 1;
 
 export const MAX_CUSTOM_FILTERS = 8;

@@ -15,7 +15,6 @@ import { CustomFiltersEditor } from '../components/CustomFiltersEditor';
 import { useChance } from '../data/ChanceContext';
 import {
   INTEREST_SUGGESTIONS,
-  MAX_BIO_LENGTH,
   SUGGESTED_INTERESTS_MAX,
 } from '../data/interests';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
@@ -82,10 +81,6 @@ export function EditProfileScreen() {
       setError('Écris une courte bio.');
       return;
     }
-    if (bio.trim().length > MAX_BIO_LENGTH) {
-      setError(`Bio : max ${MAX_BIO_LENGTH} caractères.`);
-      return;
-    }
     updateProfile({
       firstName: firstName.trim(),
       neighborhood: neighborhood.trim(),
@@ -146,19 +141,14 @@ export function EditProfileScreen() {
         })}
       </View>
 
-      <Text style={styles.label}>Bio (max {MAX_BIO_LENGTH})</Text>
+      <Text style={styles.label}>Bio</Text>
       <TextInput
         style={[styles.input, styles.multiline]}
         value={bio}
-        onChangeText={(v) => setBio(v.slice(0, MAX_BIO_LENGTH))}
-        multiline
-        maxLength={MAX_BIO_LENGTH}
-        placeholder="Parle un peu de toi…"
+        onChangeText={setBio}
+        multiline        placeholder="Parle un peu de toi…"
         placeholderTextColor={colors.textMuted}
       />
-      <Text style={styles.counter}>
-        {bio.trim().length}/{MAX_BIO_LENGTH}
-      </Text>
 
       <Text style={styles.label}>
         Centres d’intérêt (optionnel, max {SUGGESTED_INTERESTS_MAX})
