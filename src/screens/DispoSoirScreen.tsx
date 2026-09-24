@@ -108,10 +108,10 @@ export function DispoSoirScreen() {
     }
     setDispoProfile(buildPayload());
     Alert.alert(
-      on ? 'Tu es dispo ce soir' : 'Dispo désactivée',
+      on ? 'Visible ce soir' : 'Invisible pour l’instant',
       on
-        ? 'Tu es visible ce soir. Ça s’arrête à minuit, ou dès que tu confirmes une table.'
-        : 'Invisible pour l’instant.',
+        ? 'Ça s’arrête à minuit, ou dès que tu confirmes une table.'
+        : 'Les autres ne peuvent plus te proposer de sortie.',
     );
     navigation.goBack();
   };
