@@ -207,8 +207,8 @@ export function OnboardingScreen() {
   };
 
   const continueNeighborhood = () => {
-    if (!neighborhood) {
-      setError('Choisis ton quartier à Paris.');
+    if (!neighborhood.trim()) {
+      setError('Indique ton quartier.');
       return;
     }
     setError('');
@@ -220,7 +220,7 @@ export function OnboardingScreen() {
     completeOnboarding({
       firstName: firstName.trim(),
       gender,
-      neighborhood,
+      neighborhood: neighborhood.trim(),
       bio: bio.trim(),
       interests,
       customFilters,
@@ -606,15 +606,27 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Ton quartier</Text>
           <Text style={styles.hint}>
-            Paris intramuros — pas de GPS continu. Choisis ton quartier.
+            Pas de GPS continu. Choisis un quartier ou écris le tien.
           </Text>
+          <Text style={styles.label}>Quartier *</Text>
+          <TextInput
+            style={styles.input}
+            value={neighborhood}
+            onChangeText={setNeighborhood}
+            placeholder="Ex. République, ton arrondissement…"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+          />
           <View style={styles.chips}>
             {PARIS_NEIGHBORHOODS.map((q) => {
               const selected = neighborhood === q;
               return (
                 <Pressable
                   key={q}
-                  onPress={() => setNeighborhood(q)}
+                  onPress={() => {
+                    setNeighborhood(q);
+                    setError('');
+                  }}
                   style={[styles.chip, selected && styles.chipOn]}
                 >
                   <Text
