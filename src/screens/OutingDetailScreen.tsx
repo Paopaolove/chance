@@ -30,7 +30,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'OutingDetail'>;
 
 const RECOMMENDED_INTRO =
-  'Salut ! Ta sortie m’intéresse — je suis motivé·e et dispo. À bientôt ?';
+  'Salut ! Ta sortie m’intéresse — je suis motivé et dispo. À bientôt ?';
 
 export function OutingDetailScreen() {
   const navigation = useNavigation<Nav>();
@@ -115,7 +115,7 @@ export function OutingDetailScreen() {
     if (isGuest) {
       Alert.alert(
         'Demande envoyée',
-        'Si tu es accepté·e, tu auras 10 minutes pour confirmer. Crée ton compte pour qu’on puisse te prévenir.',
+        'Si tu es accepté, tu auras 10 minutes pour confirmer. Crée ton compte pour qu’on puisse te prévenir.',
         [
           { text: 'Plus tard', style: 'cancel' },
           {
@@ -128,7 +128,7 @@ export function OutingDetailScreen() {
     } else {
       Alert.alert(
         'Demande envoyée',
-        'Si tu es accepté·e, tu auras 10 minutes pour confirmer. Une caution de 20 € sera bloquée à la confirmation.',
+        'Si tu es accepté, tu auras 10 minutes pour confirmer. Une caution de 20 € sera bloquée à la confirmation.',
       );
     }
   };

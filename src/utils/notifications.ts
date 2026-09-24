@@ -161,8 +161,8 @@ export async function scheduleAcceptedConfirmNotifications(input: {
 
   const accepted = await sendPriorityPush({
     type: 'accepted',
-    title: 'Tu es accepté·e !',
-    body: `${input.hostName} t’a accepté·e pour « ${input.outingTitle} ». Confirme ta place dans 10 min.`,
+    title: 'Tu es accepté !',
+    body: `${input.hostName} t’a accepté pour « ${input.outingTitle} ». Confirme ta place dans 10 min.`,
     delaySeconds: 1,
     data: { requestId: input.requestId },
   });
@@ -234,7 +234,7 @@ export async function simulateDemoNotifications(input?: {
     },
     {
       type: 'accepted',
-      title: 'Tu es accepté·e !',
+      title: 'Tu es accepté !',
       body: `Démo · confirme ta place dans 10 min pour « ${title} ».`,
       delay: 3,
     },

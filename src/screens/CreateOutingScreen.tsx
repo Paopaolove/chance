@@ -141,6 +141,7 @@ export function CreateOutingScreen() {
       'Le Marais',
   );
   const [venueName, setVenueName] = useState('');
+  const [exactAddress, setExactAddress] = useState('');
   const [dateStr, setDateStr] = useState(initial.dateStr);
   const [timeStr, setTimeStr] = useState(initial.timeStr);
   const [capacity, setCapacity] = useState<1 | 2 | 3>(1);
@@ -199,10 +200,15 @@ export function CreateOutingScreen() {
   };
 
   const onPublish = () => {
-    if (!venueName.trim() || !neighborhood.trim() || !message.trim()) {
+    if (
+      !venueName.trim() ||
+      !exactAddress.trim() ||
+      !neighborhood.trim() ||
+      !message.trim()
+    ) {
       Alert.alert(
         'Manque un peu',
-        'Catégorie, lieu + quartier, date/heure, places, budget et message sont requis.',
+        'Catégorie, lieu, adresse exacte, quartier, date/heure, places, budget et message sont requis.',
       );
       return;
     }
@@ -229,8 +235,10 @@ export function CreateOutingScreen() {
       neighborhood,
       venueName,
       approxArea: neighborhood,
-      // Exact address never shown before confirmation — host can refine later.
-      exactAddress: `${venueName.trim()}, ${neighborhood.trim()}, Paris`,
+      // Exact address never shown before confirmation — host types it freely.
+      exactAddress:
+        exactAddress.trim() ||
+        `${venueName.trim()}, ${neighborhood.trim()}, Paris`,
       startsAt: when.toISOString(),
       capacity,
       womenOnly: womenOnly && canWomenOnly,
@@ -346,7 +354,7 @@ export function CreateOutingScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>Lieu (nom) *</Text>
+        <Text style={styles.label}>Lieu *</Text>
         <TextInput
           style={styles.input}
           value={venueName}
@@ -355,18 +363,37 @@ export function CreateOutingScreen() {
           placeholderTextColor={colors.textMuted}
         />
 
-        <Text style={styles.label}>Quartier *</Text>
-        <Pressable
-          onPress={() => setShowQuartiers((v) => !v)}
+        <Text style={styles.label}>Adresse exacte *</Text>
+        <TextInput
           style={styles.input}
-        >
-          <Text style={{ ...typography.body, color: colors.text }}>
-            {neighborhood}
-          </Text>
-        </Pressable>
+          value={exactAddress}
+          onChangeText={setExactAddress}
+          placeholder="Ex. 12 rue de Rivoli, 75004 Paris"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="words"
+        />
+        <Text style={styles.privacyHint}>
+          Adresse visible seulement après confirmation — avant, seul le
+          quartier / nom du lieu est affiché.
+        </Text>
+
+        <Text style={styles.label}>Quartier *</Text>
+        <TextInput
+          style={styles.input}
+          value={neighborhood}
+          onChangeText={(t) => {
+            setNeighborhood(t);
+            setShowQuartiers(true);
+          }}
+          onFocus={() => setShowQuartiers(true)}
+          placeholder="Quartier (ex. Le Marais)"
+          placeholderTextColor={colors.textMuted}
+        />
         {showQuartiers ? (
           <View style={styles.quartierList}>
-            {PARIS_NEIGHBORHOODS.map((q) => (
+            {PARIS_NEIGHBORHOODS.filter((q) =>
+              q.toLowerCase().includes(neighborhood.trim().toLowerCase()),
+            ).map((q) => (
               <Pressable
                 key={q}
                 onPress={() => {
@@ -390,10 +417,6 @@ export function CreateOutingScreen() {
             ))}
           </View>
         ) : null}
-        <Text style={styles.privacyHint}>
-          Avant confirmation, seul le quartier / nom du lieu est visible — pas
-          l’adresse exacte.
-        </Text>
 
         <Text style={styles.label}>Date *</Text>
         <TextInput

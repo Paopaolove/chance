@@ -629,7 +629,7 @@ export function OnboardingScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
           <Text style={styles.brand}>Chance</Text>
-          <Text style={styles.title}>Prêt·e ?</Text>
+          <Text style={styles.title}>Prêt ?</Text>
           <Text style={styles.hint}>
             Dispo ce soir pour une sortie improvisée, ou parcours les
             annonces autour de toi.

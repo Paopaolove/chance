@@ -1342,8 +1342,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           // In-app toast for « accepté + fenêtre 10 min »
           const toast: AppToast = {
             id: uid('toast'),
-            title: 'Tu es accepté·e !',
-            body: `${outing.hostName} t’a accepté·e pour « ${outing.title} ». Confirme ta place dans 10 min.`,
+            title: 'Tu es accepté !',
+            body: `${outing.hostName} t’a accepté pour « ${outing.title} ». Confirme ta place dans 10 min.`,
             createdAt: new Date().toISOString(),
           };
           dispatch({ type: 'SET_TOAST', payload: toast });

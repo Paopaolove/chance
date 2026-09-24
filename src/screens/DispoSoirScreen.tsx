@@ -99,7 +99,7 @@ export function DispoSoirScreen() {
       on ? 'Tu es dispo ce soir' : 'Dispo désactivée',
       on
         ? `Visible jusqu’à minuit · ${dispoSlotLabel(slot)} · ${quartier}. Expire aussi à la confirmation d’une sortie.`
-        : 'Tu n’es plus signalé·e comme dispo.',
+        : 'Tu n’es plus signalé comme dispo.',
     );
     navigation.goBack();
   };
@@ -241,7 +241,7 @@ export function DispoSoirScreen() {
 
       <Text style={styles.section}>Budget max *</Text>
       <Text style={styles.sectionHint}>
-        Ce que tu es prêt·e à mettre pour une sortie ce soir.
+        Ce que tu es prêt à mettre pour une sortie ce soir.
       </Text>
       <View style={styles.chips}>
         {[15, 25, 40].map((b) => {

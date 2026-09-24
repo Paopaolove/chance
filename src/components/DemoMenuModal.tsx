@@ -127,7 +127,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 }
                 simulateHostAccept(pendingOutgoing.id);
                 Alert.alert(
-                  'Tu es accepté·e !',
+                  'Tu es accepté !',
                   'Confirme ta place dans 10 min (voir Demandes).',
                 );
               })
@@ -245,7 +245,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   const seq: [string, string, number][] = [
                     ['Nouvelle demande', 'Juliette veut rejoindre ta sortie.', 800],
                     [
-                      'Tu es accepté·e !',
+                      'Tu es accepté !',
                       'Confirme ta place dans 10 min.',
                       2800,
                     ],
