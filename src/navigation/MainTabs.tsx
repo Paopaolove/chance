@@ -63,7 +63,7 @@ export function MainTabs() {
       <Tab.Screen
         name="Create"
         component={CreateOutingScreen}
-        options={{ title: 'Créer' }}
+        options={{ title: 'Publier' }}
       />
       <Tab.Screen
         name="Requests"

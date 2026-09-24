@@ -1,8 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useChance } from '../data/ChanceContext';
-import { colors, fonts, spacing, typography } from '../theme';
-import { formatRatingLine } from '../utils/format';
+import { colors, fonts, typography } from '../theme';
+import { formatRatingAverage, formatRatingLine } from '../utils/format';
 
 interface Props {
   userId: string;
@@ -12,19 +12,24 @@ interface Props {
   style?: object;
 }
 
-/** « 4,6 · 12 sorties » or new-user empty-state copy. */
+/** « 4,6 · 12 sorties » or new-user empty-state copy with branded « Chance ». */
 export function RatingLine({ userId, firstName, onPress, style }: Props) {
   const { getRatingStats } = useChance();
   const stats = getRatingStats(userId);
+  const isNew = stats.outingCount <= 0 || stats.average == null;
   const label = formatRatingLine(firstName, stats.average, stats.outingCount);
-  const isNew = stats.outingCount <= 0;
 
-  const content = (
-    <Text
-      style={[styles.text, isNew && styles.newText, style]}
-      numberOfLines={2}
-    >
-      {label}
+  const content = isNew ? (
+    <Text style={[styles.text, styles.newText, style]} numberOfLines={2}>
+      {`${firstName} vient d’arriver. Donne-lui sa `}
+      <Text style={styles.chanceBrand}>Chance</Text>
+      {'.'}
+    </Text>
+  ) : (
+    <Text style={[styles.text, style]} numberOfLines={2}>
+      {`${formatRatingAverage(stats.average!)} · ${
+        stats.outingCount === 1 ? '1 sortie' : `${stats.outingCount} sorties`
+      }`}
     </Text>
   );
 
@@ -34,9 +39,7 @@ export function RatingLine({ userId, firstName, onPress, style }: Props) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={
-        isNew ? label : `Avis · ${label}`
-      }
+      accessibilityLabel={isNew ? label : `Avis · ${label}`}
       hitSlop={8}
     >
       {content}
@@ -54,5 +57,9 @@ const styles = StyleSheet.create({
   newText: {
     color: colors.textSecondary,
     fontFamily: fonts.medium,
+  },
+  chanceBrand: {
+    color: colors.primary,
+    fontFamily: fonts.bold,
   },
 });

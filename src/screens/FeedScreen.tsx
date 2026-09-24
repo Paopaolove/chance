@@ -94,6 +94,7 @@ export function FeedScreen() {
   const [quartierFilter, setQuartierFilter] = useState<string>('all');
   /** Annonces: prefer alignment with my Dispo prefs when toggled. */
   const [alignDispo, setAlignDispo] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   const user = state.currentUser;
   const isDispo = !!user?.dispoSoir;
@@ -285,102 +286,125 @@ export function FeedScreen() {
     </Pressable>
   );
 
-  const categoryChips = (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filters}
-      style={styles.filtersScroll}
-    >
-      {FILTERS.map((f) => {
-        const selected = categoryFilter === f.id;
-        return (
-          <Pressable
-            key={f.id}
-            onPress={() => setCategoryFilter(f.id)}
-            style={[styles.chip, selected && styles.chipSelected]}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-          >
-            <Text
-              style={[styles.chipText, selected && styles.chipTextSelected]}
-            >
-              {f.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
+  const filtersActive =
+    budgetFilter !== 'all' ||
+    alignDispo ||
+    (mode === 'dispos' && quartierFilter !== 'all');
 
-  const alignChip =
-    mode === 'sorties' && isDispo ? (
+  const categoryChips = (
+    <View style={styles.categoryRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filters}
+        style={styles.filtersScrollFlex}
+      >
+        {FILTERS.map((f) => {
+          const selected = categoryFilter === f.id;
+          return (
+            <Pressable
+              key={f.id}
+              onPress={() => setCategoryFilter(f.id)}
+              style={[styles.chip, selected && styles.chipSelected]}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text
+                style={[styles.chipText, selected && styles.chipTextSelected]}
+              >
+                {f.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       <Pressable
-        onPress={() => setAlignDispo((v) => !v)}
-        style={[styles.chip, alignDispo && styles.chipSelected, styles.alignChip]}
+        onPress={() => setShowFilters((v) => !v)}
+        style={[
+          styles.chip,
+          styles.filtresChip,
+          (showFilters || filtersActive) && styles.chipSelected,
+        ]}
+        accessibilityRole="button"
+        accessibilityState={{ selected: showFilters }}
       >
         <Text
-          style={[styles.chipText, alignDispo && styles.chipTextSelected]}
+          style={[
+            styles.chipText,
+            (showFilters || filtersActive) && styles.chipTextSelected,
+          ]}
         >
-          Aligné à ma dispo
+          Filtres
         </Text>
       </Pressable>
-    ) : null;
-
-  const budgetChips = (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filters}
-      style={styles.filtersScroll}
-    >
-      {alignChip}
-      {BUDGET_FILTERS.map((f) => {
-        const selected = budgetFilter === f.id;
-        return (
-          <Pressable
-            key={String(f.id)}
-            onPress={() => setBudgetFilter(f.id)}
-            style={[styles.chip, selected && styles.chipSelected]}
-          >
-            <Text
-              style={[styles.chipText, selected && styles.chipTextSelected]}
-            >
-              {f.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
+    </View>
   );
 
-  const quartierChips =
-    mode === 'dispos' ? (
+  const extraFiltersPanel = showFilters ? (
+    <View style={styles.filtersPanel}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filters}
         style={styles.filtersScroll}
       >
-        {quartierOptions.map((q) => {
-          const selected = quartierFilter === q;
-          const label = q === 'all' ? 'Quartier' : q;
+        {mode === 'sorties' && isDispo ? (
+          <Pressable
+            onPress={() => setAlignDispo((v) => !v)}
+            style={[styles.chip, alignDispo && styles.chipSelected]}
+          >
+            <Text
+              style={[styles.chipText, alignDispo && styles.chipTextSelected]}
+            >
+              Aligné à ma dispo
+            </Text>
+          </Pressable>
+        ) : null}
+        {BUDGET_FILTERS.map((f) => {
+          const selected = budgetFilter === f.id;
           return (
             <Pressable
-              key={q}
-              onPress={() => setQuartierFilter(q)}
+              key={String(f.id)}
+              onPress={() => setBudgetFilter(f.id)}
               style={[styles.chip, selected && styles.chipSelected]}
             >
               <Text
                 style={[styles.chipText, selected && styles.chipTextSelected]}
               >
-                {label}
+                {f.label}
               </Text>
             </Pressable>
           );
         })}
       </ScrollView>
-    ) : null;
+      {mode === 'dispos' ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+          style={styles.filtersScroll}
+        >
+          {quartierOptions.map((q) => {
+            const selected = quartierFilter === q;
+            const label = q === 'all' ? 'Quartier' : q;
+            return (
+              <Pressable
+                key={q}
+                onPress={() => setQuartierFilter(q)}
+                style={[styles.chip, selected && styles.chipSelected]}
+              >
+                <Text
+                  style={[styles.chipText, selected && styles.chipTextSelected]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+    </View>
+  ) : null;
 
   const listHeader = (
     <View>
@@ -404,8 +428,7 @@ export function FeedScreen() {
       </View>
       {dispoBanner}
       {categoryChips}
-      {budgetChips}
-      {quartierChips}
+      {extraFiltersPanel}
     </View>
   );
 
@@ -429,8 +452,8 @@ export function FeedScreen() {
           ListHeaderComponent={listHeader}
           ListEmptyComponent={
             <EmptyState
-              title="Encore peu d’annonces ici."
-              subtitle="Crée la première, ou passe en Dispo ce soir pour une sortie improvisée."
+              title="Encore peu de sorties ici."
+              subtitle="Crée la première, ou passe en Dispo ce soir."
               actionLabel="Créer la première"
               onAction={() =>
                 navigation.navigate('MainTabs', { screen: 'Create' })
@@ -550,11 +573,21 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   bannerCtaOn: { color: colors.success },
+  categoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  filtersScrollFlex: { flexGrow: 1, flexShrink: 1 },
   filtersScroll: { flexGrow: 0, marginBottom: spacing.sm },
   filters: {
     gap: spacing.sm,
     alignItems: 'center',
     paddingBottom: 4,
+  },
+  filtersPanel: {
+    marginBottom: spacing.sm,
   },
   chip: {
     backgroundColor: colors.chip,
@@ -564,7 +597,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  alignChip: { marginRight: 0 },
+  filtresChip: {
+    flexShrink: 0,
+  },
   chipSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
