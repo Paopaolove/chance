@@ -565,7 +565,7 @@ export function OnboardingScreen() {
             </Text>
           </View>
           <Text style={styles.hint}>
-            Paris intramuros. Pas une app de rencontre.
+            Pas une app de rencontre.
           </Text>
           <Text style={styles.hint}>
             Si tu es une femme : option Femmes uniquement.
