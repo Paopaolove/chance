@@ -236,6 +236,16 @@ export function CreateOutingScreen() {
       return;
     }
 
+    if (
+      (category === 'restaurant' || category === 'bar') &&
+      budgetMaxEuros === 0
+    ) {
+      Alert.alert(
+        'Budget',
+        'Pour un bar ou un restaurant, indique un montant (pas Gratuit).',
+      );
+      return;
+    }
     if (category === 'autre' && !categoryDetail.trim()) {
       Alert.alert(
         'Précise la sortie',
@@ -386,6 +396,11 @@ export function CreateOutingScreen() {
                 setCategory(c.id);
                 if (c.id === 'autre' && isPresetDefaultBudget(budgetMaxEuros)) {
                   setBudgetMaxEuros(0);
+                } else if (
+                  (c.id === 'restaurant' || c.id === 'bar') &&
+                  budgetMaxEuros === 0
+                ) {
+                  setBudgetMaxEuros(BUDGET_PRESETS[1]);
                 }
               }}
               style={styles.chip}
@@ -547,7 +562,7 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Budget approx. *</Text>
         <View style={styles.row}>
-          {category === 'autre' ? (
+          {category === 'autre' || category === 'culture' ? (
             <Button
               title="Gratuit"
               variant={budgetMaxEuros === 0 ? 'primary' : 'ghost'}
@@ -564,14 +579,6 @@ export function CreateOutingScreen() {
               style={styles.chip}
             />
           ))}
-          {category !== 'autre' ? (
-            <Button
-              title="Gratuit"
-              variant={budgetMaxEuros === 0 ? 'primary' : 'ghost'}
-              onPress={() => setBudgetMaxEuros(0)}
-              style={styles.chip}
-            />
-          ) : null}
         </View>
         <View
           style={[
