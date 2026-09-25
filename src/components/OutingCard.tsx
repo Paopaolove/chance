@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useChance } from '../data/ChanceContext';
-import { inviteOfferLine, mockHosts } from '../data/mockOutings';
+import { mockHosts } from '../data/mockOutings';
 import {
   formatTravelMinutes,
   getTravelMinutes,
@@ -42,12 +42,6 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
     return mockHosts.find((h) => h.id === outing.hostId)?.photoUri;
   }, [state.currentUser, outing.hostId]);
 
-  const title = inviteOfferLine(
-    outing.hostName,
-    outing.venueName,
-    outing.budgetMaxEuros,
-  );
-
   const openHostProfile = () => {
     navigation.navigate('HostProfile', { userId: outing.hostId });
   };
@@ -76,8 +70,11 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
             accessibilityLabel={`Sortie ${outing.venueName}`}
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Text style={styles.title} numberOfLines={2}>
-              {title}
+            <Text style={styles.title} numberOfLines={1}>
+              {outing.hostName} t'invite
+            </Text>
+            <Text style={styles.venue} numberOfLines={1}>
+              {outing.venueName}
             </Text>
             <Text style={styles.meta}>
               {formatOutingWhen(outing.startsAt)} · {outing.neighborhood}
@@ -85,6 +82,11 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
                 ? ` · ${formatTravelMinutes(minutes)}`
                 : ''}
             </Text>
+            {outing.description.trim() ? (
+              <Text style={styles.message} numberOfLines={2}>
+                {outing.description.trim()}
+              </Text>
+            ) : null}
             <View style={styles.chipsRow}>
               <View
                 style={[
@@ -139,11 +141,22 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     color: colors.text,
+    marginBottom: 2,
+  },
+  venue: {
+    ...typography.body,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
     marginBottom: 4,
   },
   meta: {
     ...typography.caption,
     color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  message: {
+    ...typography.body,
+    color: colors.text,
     marginBottom: spacing.sm,
   },
   chipsRow: {
