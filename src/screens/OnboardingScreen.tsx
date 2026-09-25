@@ -578,11 +578,24 @@ export function OnboardingScreen() {
   }
 
   if (step === 'rules') {
-    const steps = [
-      'Tu poses une sortie, ou tu en rejoins une.',
-      'Si on t’accepte, tu as 10 minutes pour confirmer.',
-      'À la confirmation, 20 € sont bloqués. Rendus si tu viens.',
-      'Le chat s’ouvre 1 heure avant. Pas avant.',
+    const steps: { text: string; caption?: string }[] = [
+      {
+        text:
+          'Tu invites à ta table jusqu’à un montant que tu choisis — ou tu rejoins une invitation.',
+        caption:
+          'Exemple : dîner au Frank, tu invites pour 20 €. Tu règles ça au restaurant.',
+      },
+      {
+        text: 'Si on t’accepte, tu as 10 minutes pour dire oui.',
+      },
+      {
+        text:
+          'Tu laisses 20 € de caution : c’est ton engagement à venir, pas le repas.',
+        caption: 'On te les rend si tu es là.',
+      },
+      {
+        text: 'Vous vous écrivez seulement 1 heure avant.',
+      },
     ];
     return (
       <SafeAreaView style={styles.safe}>
@@ -601,10 +614,15 @@ export function OnboardingScreen() {
             </Text>
           </View>
           <View style={styles.stepsBox}>
-            {steps.map((line, i) => (
+            {steps.map((item, i) => (
               <View key={i} style={styles.stepRow}>
                 <Text style={styles.stepNum}>{i + 1}.</Text>
-                <Text style={styles.stepText}>{line}</Text>
+                <View style={styles.stepBody}>
+                  <Text style={styles.stepText}>{item.text}</Text>
+                  {item.caption ? (
+                    <Text style={styles.stepCaption}>{item.caption}</Text>
+                  ) : null}
+                </View>
               </View>
             ))}
           </View>
@@ -648,16 +666,18 @@ export function OnboardingScreen() {
                 Tu as un joker par mois.
               </Text>
               <Text style={styles.rulesLine}>
-                Même si l’hôte refuse, le joker rend la caution et ça ne compte
-                pas comme une absence. L’hôte ne touche rien.
+                Même si l’hôte refuse, le joker rend la caution et ce n’est pas
+                une absence. L’hôte ne touche rien.
               </Text>
               <Text style={[styles.rulesLine, styles.rulesGap]}>
-                Deux absences : tu passes après les autres. Encore une fois, le
-                compte peut être fermé.
+                Deux absences : tu passes après les autres.
               </Text>
               <Text style={styles.rulesLine}>
-                Si c’est l’hôte qui ne vient pas : un avertissement, puis compte
-                fermé. Les invités récupèrent leur caution.
+                Au bout de trois, le compte est fermé.
+              </Text>
+              <Text style={[styles.rulesLine, styles.rulesGap]}>
+                Si c’est l’hôte qui ne vient pas : un avertissement. La seconde
+                fois, le compte est fermé. Les invités récupèrent leur caution.
               </Text>
             </View>
           ) : null}
@@ -673,7 +693,7 @@ export function OnboardingScreen() {
               ) : null}
             </View>
             <Text style={styles.acceptText}>
-              J’ai compris les règles et l’essai d’1 mois.
+              J’ai compris les règles et l’essai d’un mois.
             </Text>
           </Pressable>
           {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -991,12 +1011,19 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     minWidth: 28,
   },
+  stepBody: {
+    flex: 1,
+    gap: spacing.xs,
+  },
   stepText: {
     ...typography.subtitle,
     fontSize: 20,
     lineHeight: 28,
     color: colors.text,
-    flex: 1,
+  },
+  stepCaption: {
+    ...typography.caption,
+    color: colors.textSecondary,
   },
   accordionHeader: {
     flexDirection: 'row',
