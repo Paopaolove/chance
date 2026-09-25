@@ -7,7 +7,6 @@ import { useChance } from '../data/ChanceContext';
 import {
   PLAN_OFFERS,
   PRICING,
-  pricing,
   SubscribeablePlanId,
 } from '../data/pricing';
 import { PlanInterval } from '../data/types';
@@ -186,6 +185,11 @@ export function PaywallScreen() {
               ) : null}
             </View>
             <Text style={styles.price}>{priceLine}</Text>
+            {p.kind === 'subscription' &&
+            interval === 'month' &&
+            p.yearLabel ? (
+              <Text style={styles.yearHint}>{p.yearLabel}</Text>
+            ) : null}
             <Text style={styles.detail}>{p.detail}</Text>
             {p.id === 'essentiel' && interval === 'month' ? (
               <Text style={styles.detail}>
@@ -195,10 +199,10 @@ export function PaywallScreen() {
             <Button
               title={
                 p.kind === 'payg'
-                  ? 'Acheter 1 sortie (démo)'
+                  ? 'Acheter 1 sortie'
                   : active
                     ? 'Sélectionnée'
-                    : 'S’abonner (démo)'
+                    : 'S’abonner'
               }
               variant={active && p.kind !== 'payg' ? 'secondary' : 'primary'}
               onPress={() => onSelect(p.id)}
@@ -210,13 +214,8 @@ export function PaywallScreen() {
       })}
 
       <Text style={styles.fine}>
-        {pricing.trial} · puis {pricing.payg} · {pricing.essentielMonth} /{' '}
-        {pricing.essentielYear} · {pricing.illimiteMonth} /{' '}
-        {pricing.illimiteYear}
-      </Text>
-      <Text style={styles.fine}>
-        Paris intramuros · 1-to-1 ou petit groupe · une annonce active à la
-        fois · hôte ne paie pas pour publier
+        Le premier mois est offert, sans limite. Publier une invitation est
+        gratuit.
       </Text>
     </ScrollView>
   );
@@ -322,10 +321,15 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 4,
   },
+  yearHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   fine: {
     ...typography.caption,
     color: colors.textMuted,
     textAlign: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
   },
 });
