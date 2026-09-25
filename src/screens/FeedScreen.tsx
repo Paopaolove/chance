@@ -20,10 +20,12 @@ import { OutingCard } from '../components/OutingCard';
 import { PersonCard } from '../components/PersonCard';
 import { useChance } from '../data/ChanceContext';
 import { categoryLabels } from '../data/mockOutings';
+import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { getTravelMinutes } from '../data/travelTime';
 import { Outing, OutingCategory, User } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
+import { formatParisTime, parisYmd } from '../utils/parisTime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
@@ -53,8 +55,65 @@ const TRAVEL_DEFAULT_MINUTES = 30;
 const BUDGET_FREE_MIN = 5;
 const BUDGET_FREE_MAX = 200;
 
+type WhenDay = 'today' | 'tomorrow' | 'dayAfter';
+
+const WHEN_DAY_OPTIONS: { id: WhenDay; label: string }[] = [
+  { id: 'today', label: 'Aujourd’hui' },
+  { id: 'tomorrow', label: 'Demain' },
+  { id: 'dayAfter', label: 'Après-demain' },
+];
+
 function clampBudgetEuros(n: number): number {
   return Math.min(BUDGET_FREE_MAX, Math.max(BUDGET_FREE_MIN, Math.round(n)));
+}
+
+/** Paris calendar Y-M-D for today / tomorrow / day-after (noon UTC anchors). */
+function targetParisYmd(whenDay: WhenDay, nowMs = Date.now()): string {
+  const today = parisYmd(nowMs);
+  if (!today) return '';
+  if (whenDay === 'today') return today;
+  const [y, m, day] = today.split('-').map(Number);
+  const offset = whenDay === 'tomorrow' ? 1 : 2;
+  const noonMs = Date.UTC(y, m - 1, day, 12, 0, 0) + offset * 24 * 60 * 60 * 1000;
+  return parisYmd(noonMs);
+}
+
+/** Normalize « HH:MM » / « H:MM » for lexicographic compare. */
+function normalizeHhMm(raw: string): string | null {
+  const m = raw.trim().match(/^(\d{1,2})[:hH.](\d{2})$/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+}
+
+/**
+ * Outing matches Quand: same Paris calendar day as selected shortcut,
+ * and startsAt time ≥ threshold (chosen time, or now if today+empty, or 00:00).
+ */
+function outingMatchesWhen(
+  startsAt: string,
+  whenDay: WhenDay,
+  whenFromTime: string,
+  nowMs = Date.now(),
+): boolean {
+  const target = targetParisYmd(whenDay, nowMs);
+  if (!target || parisYmd(startsAt) !== target) return false;
+
+  const outingHhMm = normalizeHhMm(formatParisTime(startsAt));
+  if (!outingHhMm) return false;
+
+  const free = normalizeHhMm(whenFromTime);
+  let threshold: string;
+  if (free) {
+    threshold = free;
+  } else if (whenDay === 'today') {
+    threshold = normalizeHhMm(formatParisTime(new Date(nowMs).toISOString())) ?? '00:00';
+  } else {
+    threshold = '00:00';
+  }
+  return outingHhMm >= threshold;
 }
 
 type OutingWithTravel = Outing & { travelMinutes: number; matchScore: number };
@@ -126,6 +185,11 @@ export function FeedScreen() {
   const [travelMaxMinutes, setTravelMaxMinutes] = useState(
     TRAVEL_DEFAULT_MINUTES,
   );
+  /** Annonces: optional quartier origin (chip or free text). Empty = profile. */
+  const [annoncesQuartier, setAnnoncesQuartier] = useState('');
+  const [whenDay, setWhenDay] = useState<WhenDay>('today');
+  /** « HH:MM » or empty (= now if today, start of day otherwise). */
+  const [whenFromTime, setWhenFromTime] = useState('');
 
   const clampTravelMinutes = (n: number) =>
     Math.min(TRAVEL_MAX_MINUTES, Math.max(TRAVEL_MIN_MINUTES, Math.round(n)));
@@ -134,6 +198,8 @@ export function FeedScreen() {
   const isDispo = !!user?.dispoSoir;
   const userNeighborhood =
     user?.dispoNeighborhood ?? user?.neighborhood ?? '';
+  const filterOriginNeighborhood =
+    annoncesQuartier.trim() || userNeighborhood;
   const myDispoPrefs = {
     categories: user?.dispoCategories,
     neighborhood: userNeighborhood || undefined,
@@ -150,9 +216,10 @@ export function FeedScreen() {
   }, [peopleDispo]);
 
   const filteredOutings = useMemo(() => {
+    const origin = filterOriginNeighborhood;
     let list: OutingWithTravel[] = visibleOutings.map((o) => {
-      const travelMinutes = userNeighborhood
-        ? getTravelMinutes(userNeighborhood, o.neighborhood)
+      const travelMinutes = origin
+        ? getTravelMinutes(origin, o.neighborhood)
         : 25;
       return {
         ...o,
@@ -170,6 +237,9 @@ export function FeedScreen() {
     });
 
     list = list.filter((o) => o.travelMinutes <= travelMaxMinutes);
+    list = list.filter((o) =>
+      outingMatchesWhen(o.startsAt, whenDay, whenFromTime),
+    );
 
     if (categoryFilter !== 'all') {
       list = list.filter((o) => o.category === categoryFilter);
@@ -201,7 +271,9 @@ export function FeedScreen() {
     categoryFilter,
     budgetFilter,
     travelMaxMinutes,
-    userNeighborhood,
+    filterOriginNeighborhood,
+    whenDay,
+    whenFromTime,
     alignDispo,
     isDispo,
     myDispoPrefs.categories,
@@ -378,6 +450,10 @@ export function FeedScreen() {
     budgetFilter !== 'all' ||
     alignDispo ||
     (mode === 'dispos' && quartierFilter !== 'all') ||
+    (mode === 'sorties' &&
+      (annoncesQuartier.trim() !== '' ||
+        whenDay !== 'today' ||
+        whenFromTime.trim() !== '')) ||
     travelMaxMinutes !== TRAVEL_DEFAULT_MINUTES;
 
   const categoryChips = (
@@ -492,6 +568,120 @@ export function FeedScreen() {
         />
         <Text style={styles.travelInputSuffix}>€</Text>
       </View>
+      {mode === 'sorties' ? (
+        <>
+          <Text style={styles.quartierFreeLabel}>Quartier</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+            style={styles.filtersScroll}
+          >
+            <Pressable
+              onPress={() => setAnnoncesQuartier('')}
+              style={[
+                styles.chip,
+                annoncesQuartier.trim() === '' && styles.chipSelected,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: annoncesQuartier.trim() === '' }}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  annoncesQuartier.trim() === '' && styles.chipTextSelected,
+                ]}
+              >
+                Chez moi
+              </Text>
+            </Pressable>
+            {PARIS_NEIGHBORHOODS.map((q) => {
+              const selected = annoncesQuartier === q;
+              return (
+                <Pressable
+                  key={q}
+                  onPress={() =>
+                    setAnnoncesQuartier((prev) => (prev === q ? '' : q))
+                  }
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selected && styles.chipTextSelected,
+                    ]}
+                  >
+                    {q}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Text style={styles.quartierFreeLabel}>Autre quartier</Text>
+          <TextInput
+            style={styles.quartierFreeInput}
+            value={
+              (PARIS_NEIGHBORHOODS as readonly string[]).includes(
+                annoncesQuartier,
+              )
+                ? ''
+                : annoncesQuartier
+            }
+            onChangeText={(t) => setAnnoncesQuartier(t.trimStart())}
+            placeholder="Écris un quartier…"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            accessibilityLabel="Quartier d’origine saisi"
+          />
+          <Text style={styles.quartierFreeLabel}>Quand</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+            style={styles.filtersScroll}
+          >
+            {WHEN_DAY_OPTIONS.map((opt) => {
+              const selected = whenDay === opt.id;
+              return (
+                <Pressable
+                  key={opt.id}
+                  onPress={() => setWhenDay(opt.id)}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selected && styles.chipTextSelected,
+                    ]}
+                  >
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          <Text style={styles.quartierFreeLabel}>à partir de …</Text>
+          <TextInput
+            style={styles.quartierFreeInput}
+            value={whenFromTime}
+            onChangeText={(t) => {
+              // Allow typing HH:MM; soft-normalize digits and separators
+              const cleaned = t.replace(/[^0-9:hH.]/g, '').slice(0, 5);
+              setWhenFromTime(cleaned);
+            }}
+            placeholder="15:30"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="numbers-and-punctuation"
+            maxLength={5}
+            autoCorrect={false}
+            accessibilityLabel="Heure minimum à partir de"
+          />
+        </>
+      ) : null}
       {mode === 'dispos' ? (
         <>
           <ScrollView
@@ -542,7 +732,9 @@ export function FeedScreen() {
       ) : null}
       <View style={styles.travelBlock}>
         <Text style={styles.travelLabel}>
-          Moins de {travelMaxMinutes} min
+          {mode === 'sorties' && annoncesQuartier.trim()
+            ? `Moins de ${travelMaxMinutes} min depuis ${annoncesQuartier.trim()}`
+            : `Moins de ${travelMaxMinutes} min`}
         </Text>
         <ScrollView
           horizontal
@@ -643,8 +835,8 @@ export function FeedScreen() {
         </Pressable>
         <Text style={styles.title}>Autour de toi</Text>
         <Text style={styles.sub}>
-          {userNeighborhood
-            ? `Depuis ${userNeighborhood} · Moins de ${travelMaxMinutes} min`
+          {filterOriginNeighborhood
+            ? `Depuis ${filterOriginNeighborhood} · Moins de ${travelMaxMinutes} min`
             : `Paris intramuros · Moins de ${travelMaxMinutes} min`}
         </Text>
       </View>
