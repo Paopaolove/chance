@@ -36,13 +36,13 @@ export function PersonCard({ person, onPropose }: Props) {
 
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
+      <View style={styles.mainRow}>
         <Pressable
           onPress={openHostProfile}
           accessibilityRole="button"
           accessibilityLabel={`Profil de ${person.firstName}`}
           hitSlop={6}
-          style={({ pressed }) => pressed && styles.pressed}
+          style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
           <Avatar
             name={person.firstName}
@@ -50,73 +50,64 @@ export function PersonCard({ person, onPropose }: Props) {
             seed={person.id}
             size={photoSize}
           />
+          <RatingLine
+            userId={person.id}
+            firstName={person.firstName}
+            onPress={openHostProfile}
+            variant="underPhoto"
+          />
         </Pressable>
-        <View style={styles.headerText}>
+
+        <View style={styles.mainText}>
           <Pressable
             onPress={openHostProfile}
             accessibilityRole="button"
             accessibilityLabel={`Profil de ${person.firstName}`}
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Text style={styles.name}>
-              {person.firstName} · {person.age}
+            <Text style={styles.name} numberOfLines={1}>
+              {person.firstName}
             </Text>
+            <Text style={styles.meta}>
+              {slot ? `${slot} · ` : ''}
+              {quartier}
+            </Text>
+            {person.dispoTopic ? (
+              <Text style={styles.topic} numberOfLines={2}>
+                {person.dispoTopic}
+              </Text>
+            ) : null}
+            {person.dispoCategories?.length ? (
+              <View style={styles.chips}>
+                {person.dispoCategories.map((cat) => (
+                  <View key={cat} style={[styles.chip, styles.envieChip]}>
+                    <Text style={[styles.chipText, styles.envieText]}>
+                      {categoryLabels[cat]}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <View style={styles.chips}>
+              <View style={[styles.chip, styles.dispoPill]}>
+                <Text style={[styles.chipText, styles.dispoPillText]}>
+                  Dispo
+                </Text>
+              </View>
+            </View>
           </Pressable>
-          <RatingLine
-            userId={person.id}
-            firstName={person.firstName}
-            onPress={openHostProfile}
-          />
-          <Text style={styles.neighborhood}>
-            {quartier}
-            {slot ? ` · ${slot}` : ''}
-            {person.dispoBudgetMax
-              ? ` · ≤ ${person.dispoBudgetMax} €`
-              : ''}
-          </Text>
-        </View>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>Dispo</Text>
+
+          {onPropose ? (
+            <Pressable
+              onPress={onPropose}
+              style={styles.cta}
+              accessibilityRole="button"
+            >
+              <Text style={styles.ctaText}>Proposer une sortie</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
-
-      {person.dispoTopic ? (
-        <Text style={styles.topic} numberOfLines={2}>
-          Sujet · {person.dispoTopic}
-        </Text>
-      ) : person.bio ? (
-        <Text style={styles.bio} numberOfLines={2}>
-          {person.bio}
-        </Text>
-      ) : null}
-
-      {person.dispoExclusions?.length ? (
-        <Text style={styles.excl} numberOfLines={1}>
-          Pas de · {person.dispoExclusions.join(', ')}
-        </Text>
-      ) : null}
-
-      {person.dispoCategories?.length ? (
-        <View style={styles.chips}>
-          {person.dispoCategories.map((cat) => (
-            <View key={cat} style={[styles.chip, styles.envieChip]}>
-              <Text style={[styles.chipText, styles.envieText]}>
-                {categoryLabels[cat]}
-              </Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-
-      {onPropose ? (
-        <Pressable
-          onPress={onPropose}
-          style={styles.cta}
-          accessibilityRole="button"
-        >
-          <Text style={styles.ctaText}>Proposer une sortie</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -132,49 +123,34 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   pressed: { opacity: 0.94 },
-  header: {
+  mainRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
-    marginBottom: spacing.md,
   },
-  headerText: { flex: 1 },
+  photoCol: {
+    alignItems: 'center',
+    width: 72,
+  },
+  mainText: { flex: 1 },
   name: {
     ...typography.subtitle,
     fontFamily: fonts.semiBold,
+    fontSize: 18,
+    lineHeight: 24,
     color: colors.text,
+    marginBottom: 2,
   },
-  neighborhood: {
+  meta: {
     ...typography.caption,
     color: colors.textSecondary,
-    marginTop: 2,
-  },
-  badge: {
-    backgroundColor: colors.successSoft,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.full,
-  },
-  badgeText: {
-    ...typography.small,
-    color: colors.success,
-    fontFamily: fonts.semiBold,
-  },
-  bio: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   topic: {
     ...typography.body,
     color: colors.text,
     marginBottom: spacing.sm,
     fontFamily: fonts.medium,
-  },
-  excl: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginBottom: spacing.sm,
   },
   chips: {
     flexDirection: 'row',
@@ -183,7 +159,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   chip: {
-    backgroundColor: colors.chip,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radius.full,
@@ -199,8 +174,15 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontFamily: fonts.medium,
   },
+  dispoPill: {
+    backgroundColor: colors.successSoft,
+  },
+  dispoPillText: {
+    color: colors.success,
+    fontFamily: fonts.semiBold,
+  },
   cta: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
     alignSelf: 'flex-start',
     backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.lg,

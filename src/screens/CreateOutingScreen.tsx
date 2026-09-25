@@ -199,7 +199,8 @@ export function CreateOutingScreen() {
   const [timeStr, setTimeStr] = useState(initial.timeStr);
   const [capacity, setCapacity] = useState<1 | 2 | 3>(1);
   const [budgetMaxEuros, setBudgetMaxEuros] = useState(
-    prefill?.budgetMaxEuros ?? state.currentUser?.dispoBudgetMax ?? 25,
+    // Host invitation ceiling — never from guest Dispo budget.
+    prefill?.budgetMaxEuros ?? 25,
   );
   const [message, setMessage] = useState('');
   const [topic, setTopic] = useState(prefill?.topic ?? '');
@@ -231,7 +232,7 @@ export function CreateOutingScreen() {
     if (prefill.category) setCategory(prefill.category);
     if (prefill.categoryDetail != null) setCategoryDetail(prefill.categoryDetail);
     if (prefill.neighborhood) setNeighborhood(prefill.neighborhood);
-    if (prefill.budgetMaxEuros != null) setBudgetMaxEuros(prefill.budgetMaxEuros);
+    // Do not prefill J'invite jusqu'à from Dispo guest budget.
     if (prefill.topic != null) setTopic(prefill.topic);
     if (prefill.excludedTopics != null) setExcludedTopics(prefill.excludedTopics);
     if (prefill.flexibleSlot != null) setFlexibleSlot(!!prefill.flexibleSlot);
@@ -704,7 +705,7 @@ export function CreateOutingScreen() {
             <Text style={styles.dispoBannerBody}>
               {inviteeName
                 ? `Destinataire conservé : ${inviteeName}. Prérempli depuis sa dispo — tu lui proposes cette sortie.`
-                : 'Catégorie, créneau, quartier et budget sont préremplis. Ajoute le lieu + un message, puis publie (2e tap).'}
+                : 'Catégorie, créneau et quartier sont préremplis. Ajoute le lieu, ton plafond d’invitation et un message, puis publie.'}
             </Text>
           </View>
         ) : null}

@@ -148,7 +148,6 @@ export function HostProfileScreen() {
                   neighborhood:
                     dispoPerson.dispoNeighborhood ??
                     dispoPerson.neighborhood,
-                  budgetMaxEuros: dispoPerson.dispoBudgetMax ?? 25,
                   topic: dispoPerson.dispoTopic,
                   excludedTopics: dispoPerson.dispoExclusions?.join(', '),
                   timeLabel: slotPrefill.timeLabel,

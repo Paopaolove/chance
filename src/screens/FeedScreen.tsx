@@ -388,8 +388,6 @@ export function FeedScreen() {
           target?.neighborhood ??
           me?.dispoNeighborhood ??
           me?.neighborhood,
-        budgetMaxEuros:
-          target?.dispoBudgetMax ?? me?.dispoBudgetMax ?? 25,
         topic: target?.dispoTopic ?? me?.dispoTopic,
         excludedTopics: (target?.dispoExclusions ?? me?.dispoExclusions)?.join(
           ', ',

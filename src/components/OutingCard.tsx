@@ -54,13 +54,19 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
           accessibilityRole="button"
           accessibilityLabel={`Profil de ${outing.hostName}`}
           hitSlop={6}
-          style={({ pressed }) => pressed && styles.pressed}
+          style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
           <Avatar
             name={outing.hostName}
             photoUri={photoUri}
             seed={outing.hostId}
             size={photoSize}
+          />
+          <RatingLine
+            userId={outing.hostId}
+            firstName={outing.hostName}
+            onPress={openHostProfile}
+            variant="underPhoto"
           />
         </Pressable>
         <View style={styles.mainText}>
@@ -98,18 +104,8 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
                   </Text>
                 </View>
               ) : null}
-              <View
-                style={[
-                  styles.chip,
-                  isFree ? styles.chipFree : styles.chipBudget,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    isFree ? styles.chipFreeText : styles.chipBudgetText,
-                  ]}
-                >
+              <View style={[styles.chip, styles.chipOrange]}>
+                <Text style={[styles.chipText, styles.chipOrangeText]}>
                   {isFree
                     ? 'Gratuit'
                     : `J'invite jusqu'à ${outing.budgetMaxEuros} €`}
@@ -117,11 +113,6 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               </View>
             </View>
           </Pressable>
-          <RatingLine
-            userId={outing.hostId}
-            firstName={outing.hostName}
-            onPress={openHostProfile}
-          />
         </View>
       </View>
     </View>
@@ -143,6 +134,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
+  },
+  photoCol: {
+    alignItems: 'center',
+    width: 72,
   },
   mainText: { flex: 1 },
   title: {
@@ -173,18 +168,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.sm,
   },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radius.full,
   },
-  chipBudget: { backgroundColor: colors.surfaceMuted },
-  chipFree: { backgroundColor: colors.successSoft },
+  chipOrange: { backgroundColor: colors.primarySoft },
   chipUrgent: { backgroundColor: colors.primarySoft },
   chipText: { ...typography.small, color: colors.textSecondary },
-  chipBudgetText: { color: colors.text },
-  chipFreeText: { color: colors.success, fontFamily: fonts.semiBold },
+  chipOrangeText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
   chipUrgentText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
 });

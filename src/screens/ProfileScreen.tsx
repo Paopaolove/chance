@@ -293,7 +293,6 @@ export function ProfileScreen() {
                         : undefined,
                     neighborhood:
                       user.dispoNeighborhood ?? user.neighborhood,
-                    budgetMaxEuros: user.dispoBudgetMax ?? 25,
                     topic: user.dispoTopic,
                     excludedTopics: user.dispoExclusions?.join(', '),
                     timeLabel: slotPrefill.timeLabel,
