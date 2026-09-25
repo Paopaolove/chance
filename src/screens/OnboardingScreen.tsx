@@ -632,7 +632,7 @@ export function OnboardingScreen() {
             accessibilityRole="button"
             accessibilityState={{ expanded: absencesExpanded }}
           >
-            <Text style={styles.accordionTitle}>Conditions d’absence</Text>
+            <Text style={styles.accordionTitle}>Annulation et imprévu</Text>
             <Text style={styles.accordionChevron}>
               {absencesExpanded ? '▴' : '▾'}
             </Text>
