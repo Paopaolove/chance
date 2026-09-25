@@ -95,15 +95,19 @@ function normalizeHhMm(raw: string): string | null {
 /**
  * Outing matches Quand: same Paris calendar day as selected shortcut,
  * and startsAt time ≥ threshold (chosen time, or now if today+empty, or 00:00).
+ * Urgent « Maintenant »: always match on « today » (startsAt ≈ now, time filter would hide it).
  */
 function outingMatchesWhen(
   startsAt: string,
   whenDay: WhenDay,
   whenFromTime: string,
   nowMs = Date.now(),
+  opts?: { urgentOnSite?: boolean },
 ): boolean {
   const target = targetParisYmd(whenDay, nowMs);
   if (!target || parisYmd(startsAt) !== target) return false;
+
+  if (opts?.urgentOnSite && whenDay === 'today') return true;
 
   const outingHhMm = normalizeHhMm(formatParisTime(startsAt));
   if (!outingHhMm) return false;
@@ -242,7 +246,9 @@ export function FeedScreen() {
 
     list = list.filter((o) => o.travelMinutes <= travelMaxMinutes);
     list = list.filter((o) =>
-      outingMatchesWhen(o.startsAt, whenDay, whenFromTime),
+      outingMatchesWhen(o.startsAt, whenDay, whenFromTime, Date.now(), {
+        urgentOnSite: o.urgentOnSite,
+      }),
     );
 
     if (categoryFilter !== 'all') {
@@ -261,6 +267,10 @@ export function FeedScreen() {
     }
 
     list.sort((a, b) => {
+      // Urgent « Maintenant » first on Annonces / autour de toi.
+      const au = a.urgentOnSite ? 1 : 0;
+      const bu = b.urgentOnSite ? 1 : 0;
+      if (bu !== au) return bu - au;
       if (alignDispo || isDispo) {
         if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
       }
@@ -396,16 +406,31 @@ export function FeedScreen() {
       <Text style={styles.bannerBody}>
         Propose une table, un verre ou une sortie.
       </Text>
-      <Pressable
-        onPress={() =>
-          navigation.navigate('MainTabs', { screen: 'Create' })
-        }
-        style={styles.inviteCta}
-        accessibilityRole="button"
-        accessibilityLabel="Inviter"
-      >
-        <Text style={styles.inviteCtaText}>Inviter</Text>
-      </Pressable>
+      <View style={styles.inviteCtaRow}>
+        <Pressable
+          onPress={() =>
+            navigation.navigate('MainTabs', { screen: 'Create' })
+          }
+          style={styles.inviteCta}
+          accessibilityRole="button"
+          accessibilityLabel="Inviter"
+        >
+          <Text style={styles.inviteCtaText}>Inviter</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            navigation.navigate('MainTabs', {
+              screen: 'Create',
+              params: { urgentOnSite: true },
+            })
+          }
+          style={styles.urgentCta}
+          accessibilityRole="button"
+          accessibilityLabel="Je suis déjà sur place"
+        >
+          <Text style={styles.urgentCtaText}>Je suis déjà sur place</Text>
+        </Pressable>
+      </View>
     </View>
   );
 
@@ -988,6 +1013,12 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   bannerCtaOn: { color: colors.success },
+  inviteCtaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
   inviteCta: {
     alignSelf: 'flex-start',
     backgroundColor: colors.primary,
@@ -999,6 +1030,20 @@ const styles = StyleSheet.create({
     ...typography.bodyStrong,
     fontFamily: fonts.semiBold,
     color: colors.white,
+  },
+  urgentCta: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  urgentCtaText: {
+    ...typography.bodyStrong,
+    fontFamily: fonts.semiBold,
+    color: colors.primaryDark,
   },
   dispoToggleRow: {
     flexDirection: 'row',

@@ -41,6 +41,10 @@ const categories: { id: OutingCategory; label: string }[] = [
 ];
 
 const BUDGET_PRESETS = [15, 25, 40] as const;
+
+/** Prefill exact — urgent « déjà sur place » (≠ no-show / lapin Chance). */
+const URGENT_ON_SITE_MESSAGE =
+  'Une place est libre, mon ami ne vient plus.';
 function clampCreateBudget(n: number): number {
   return Math.min(
     BUDGET_MAX_EUROS,
@@ -209,6 +213,18 @@ export function CreateOutingScreen() {
   const [fromDispoBanner, setFromDispoBanner] = useState(!!prefill?.fromDispo);
   const [inviteeUserId, setInviteeUserId] = useState(prefill?.inviteeUserId);
   const [inviteeName, setInviteeName] = useState(prefill?.inviteeName);
+  const [urgentMode, setUrgentMode] = useState(!!prefill?.urgentOnSite);
+
+  useEffect(() => {
+    if (prefill?.urgentOnSite) {
+      setUrgentMode(true);
+      setMessage((prev) => (prev.trim() ? prev : URGENT_ON_SITE_MESSAGE));
+      setCapacity(1);
+      // Autre allows Gratuit chip — venue-agnostic short form.
+      setCategory((c) => (c === 'restaurant' || c === 'bar' || c === 'culture' || c === 'autre' ? 'autre' : c));
+      setCategoryDetail((d) => d.trim() || 'Sur place');
+    }
+  }, [prefill?.urgentOnSite]);
 
   useEffect(() => {
     if (!prefill?.fromDispo) return;
@@ -255,6 +271,67 @@ export function CreateOutingScreen() {
     d.setHours(20, 0, 0, 0);
     setDateStr(formatDateInput(d));
     setTimeStr('20:00');
+  };
+
+  const enterUrgentMode = () => {
+    setUrgentMode(true);
+    setMessage(URGENT_ON_SITE_MESSAGE);
+    setCapacity(1);
+    setCategory('autre');
+    setCategoryDetail('Sur place');
+  };
+
+  const exitUrgentMode = () => {
+    setUrgentMode(false);
+  };
+
+  const onPublishUrgent = () => {
+    if (!venueName.trim() || !neighborhood.trim()) {
+      Alert.alert('Champs requis', 'Indique le lieu et le quartier.');
+      return;
+    }
+    if (!message.trim()) {
+      Alert.alert('Message', 'Ajoute un court message pour les invités.');
+      return;
+    }
+    const result = createOuting({
+      title: `${venueName.trim()} · Maintenant`,
+      description: message.trim(),
+      category: 'autre',
+      categoryDetail: categoryDetail.trim() || 'Sur place',
+      neighborhood,
+      venueName,
+      approxArea: neighborhood,
+      exactAddress:
+        exactAddress.trim() ||
+        `${venueName.trim()}, ${neighborhood.trim()}, Paris`,
+      startsAt: new Date().toISOString(),
+      capacity: 1,
+      womenOnly: womenOnly && canWomenOnly,
+      budgetMaxEuros: Math.round(budgetMaxEuros),
+      urgentOnSite: true,
+    });
+    if (!result.ok) {
+      const messages: Record<string, string> = {
+        already_active:
+          'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
+        banned: 'Compte suspendu après 2 no-shows hôte (démo).',
+        no_user: 'Profil manquant.',
+        starts_in_past: 'Impossible de publier (créneau).',
+      };
+      Alert.alert('Impossible', messages[result.reason] ?? result.reason);
+      return;
+    }
+    Alert.alert(
+      'Annonce urgente publiée',
+      'Visible ~30 min sur Annonces avec le badge « Maintenant ». Même demandes / caution / confirm 10 min. Le chat s’ouvre dès confirmation.',
+    );
+    setVenueName('');
+    setExactAddress('');
+    setMessage(URGENT_ON_SITE_MESSAGE);
+    setBudgetMaxEuros(25);
+    setUrgentMode(false);
+    navigation.navigate('OutingDetail', { outingId: result.outingId });
   };
 
   const onPublish = () => {
@@ -440,6 +517,172 @@ export function CreateOutingScreen() {
     );
   }
 
+  if (urgentMode) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.title}>Je suis déjà sur place</Text>
+          <Text style={styles.sub}>
+            Une place libre maintenant · visible ~30 min · 1 place · chat dès
+            confirmation
+          </Text>
+          <View style={styles.urgentBanner}>
+            <Text style={styles.urgentBannerTitle}>Invitation urgente</Text>
+            <Text style={styles.urgentBannerBody}>
+              Tu es déjà au lieu et une place s’est libérée. Ce n’est pas un
+              signal d’absence d’un invité Chance.
+            </Text>
+            <Pressable onPress={exitUrgentMode} hitSlop={8}>
+              <Text style={styles.urgentBannerLink}>
+                Publier une sortie classique →
+              </Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.label}>Lieu *</Text>
+          <TextInput
+            style={styles.input}
+            value={venueName}
+            onChangeText={setVenueName}
+            placeholder="Nom du bar / resto / lieu"
+            placeholderTextColor={colors.textMuted}
+          />
+
+          <Text style={styles.label}>Quartier *</Text>
+          <Pressable
+            style={styles.input}
+            onPress={() => setShowQuartiers((v) => !v)}
+          >
+            <Text style={{ color: colors.text }}>{neighborhood}</Text>
+          </Pressable>
+          {showQuartiers ? (
+            <View style={styles.quartierList}>
+              {PARIS_NEIGHBORHOODS.map((q) => (
+                <Pressable
+                  key={q}
+                  onPress={() => {
+                    setNeighborhood(q);
+                    setShowQuartiers(false);
+                  }}
+                  style={styles.quartierItem}
+                >
+                  <Text
+                    style={{
+                      color:
+                        q === neighborhood ? colors.primary : colors.text,
+                      fontFamily:
+                        q === neighborhood ? fonts.semiBold : fonts.regular,
+                    }}
+                  >
+                    {q}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+
+          <Text style={styles.label}>Heure</Text>
+          <View style={styles.nowPill}>
+            <Text style={styles.nowPillText}>Maintenant</Text>
+          </View>
+          <Text style={styles.privacyHint}>
+            Pas de choix d’horaire — l’annonce reste joinable environ 30 min.
+          </Text>
+
+          <Text style={styles.label}>Places</Text>
+          <Text style={styles.privacyHint}>1 place (fixe)</Text>
+
+          <Text style={styles.label}>J'invite jusqu'à *</Text>
+          <Text style={styles.inviteHint}>
+            Plafond par invité, réglé sur place au lieu (pas via l'app).
+          </Text>
+          <View style={styles.row}>
+            <Button
+              title="Gratuit"
+              variant={budgetMaxEuros === 0 ? 'primary' : 'ghost'}
+              onPress={() => setBudgetMaxEuros(0)}
+              style={styles.chip}
+            />
+            {BUDGET_PRESETS.map((b) => (
+              <Button
+                key={b}
+                title={`${b} €`}
+                variant={Math.round(budgetMaxEuros) === b ? 'primary' : 'ghost'}
+                onPress={() => setBudgetMaxEuros(b)}
+                style={styles.chip}
+              />
+            ))}
+          </View>
+          <View
+            style={[
+              styles.budgetCard,
+              budgetMaxEuros === 0 && styles.budgetCardDisabled,
+            ]}
+            pointerEvents={budgetMaxEuros === 0 ? 'none' : 'auto'}
+          >
+            {budgetMaxEuros === 0 ? (
+              <Text style={styles.budgetFreeHint}>
+                Sortie gratuite — invitation sans plafond €
+              </Text>
+            ) : (
+              <>
+                <View style={styles.budgetMontantRow}>
+                  <Text style={styles.budgetMontantLabel}>Montant libre</Text>
+                  <TextInput
+                    style={styles.budgetMontantInput}
+                    value={String(Math.round(budgetMaxEuros))}
+                    onChangeText={(t) => {
+                      const digits = t.replace(/\D/g, '');
+                      if (digits === '') return;
+                      const n = parseInt(digits, 10);
+                      if (!Number.isNaN(n)) {
+                        setBudgetMaxEuros(clampCreateBudget(n));
+                      }
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={2}
+                    selectTextOnFocus
+                  />
+                  <Text style={styles.budgetMontantSuffix}>€</Text>
+                </View>
+                <Slider
+                  style={styles.slider}
+                  minimumValue={BUDGET_MIN_EUROS}
+                  maximumValue={BUDGET_MAX_EUROS}
+                  step={1}
+                  value={Math.max(BUDGET_MIN_EUROS, budgetMaxEuros)}
+                  onValueChange={(v) => setBudgetMaxEuros(clampCreateBudget(v))}
+                  minimumTrackTintColor={colors.primary}
+                  maximumTrackTintColor={colors.border}
+                  thumbTintColor={colors.primary}
+                />
+              </>
+            )}
+          </View>
+
+          <Text style={styles.label}>Message *</Text>
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            value={message}
+            onChangeText={setMessage}
+            placeholder={URGENT_ON_SITE_MESSAGE}
+            placeholderTextColor={colors.textMuted}
+            multiline
+          />
+
+          <Button
+            title="Publier maintenant"
+            onPress={onPublishUrgent}
+            style={styles.cta}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
@@ -465,6 +708,18 @@ export function CreateOutingScreen() {
             </Text>
           </View>
         ) : null}
+
+        <Pressable
+          onPress={enterUrgentMode}
+          style={styles.urgentEntry}
+          accessibilityRole="button"
+          accessibilityLabel="Je suis déjà sur place"
+        >
+          <Text style={styles.urgentEntryTitle}>Je suis déjà sur place</Text>
+          <Text style={styles.urgentEntryBody}>
+            Place libre tout de suite — annonce urgente ~30 min
+          </Text>
+        </Pressable>
 
         <Text style={styles.label}>Catégorie *</Text>
         <View style={styles.row}>
@@ -811,6 +1066,58 @@ export function CreateOutingScreen() {
 }
 
 const styles = StyleSheet.create({
+  urgentBanner: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  urgentBannerTitle: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
+    marginBottom: 4,
+  },
+  urgentBannerBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  urgentBannerLink: {
+    ...typography.bodyStrong,
+    color: colors.primary,
+  },
+  urgentEntry: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  urgentEntryTitle: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
+  },
+  urgentEntryBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  nowPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.full,
+    marginBottom: spacing.sm,
+  },
+  nowPillText: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
+    fontFamily: fonts.semiBold,
+  },
   dispoBanner: {
     backgroundColor: colors.successSoft,
     borderRadius: radius.md,

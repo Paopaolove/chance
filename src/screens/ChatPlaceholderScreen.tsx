@@ -63,7 +63,11 @@ export function ChatPlaceholderScreen() {
     return () => clearInterval(t);
   }, []);
 
-  const unlocked = outing ? isChatUnlocked(outing.startsAt, now) : false;
+  const unlocked = outing
+    ? isChatUnlocked(outing.startsAt, now, {
+        urgentOnSite: outing.urgentOnSite,
+      })
+    : false;
 
   useEffect(() => {
     if (unlocked && outing) {
@@ -117,7 +121,9 @@ export function ChatPlaceholderScreen() {
         <View style={styles.lockCard}>
           <Text style={styles.lockEmoji}>🔒</Text>
           <Text style={styles.lockTitle}>
-            {formatUntilChatOpens(outing.startsAt, now)}
+            {formatUntilChatOpens(outing.startsAt, now, {
+              urgentOnSite: outing.urgentOnSite,
+            })}
           </Text>
           <Text style={styles.lockBody}>
             Le chat s’ouvre 1 h avant la sortie (

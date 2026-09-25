@@ -174,6 +174,12 @@ export interface Outing {
   flexibleSlot?: boolean;
   /** Restaurant closed edge-case (mock). */
   venueIssue?: VenueIssue;
+  /**
+   * Invitation urgente « Je suis déjà sur place » — host already at venue,
+   * 1 free seat (friend cancelled). startsAt = now; joinable until startsAt+30 min,
+   * then auto-clôturée. NOT the guest no-show / lapin / imprévu flow.
+   */
+  urgentOnSite?: boolean;
 }
 
 export interface Request {

@@ -48,9 +48,12 @@ import {
 } from './pricing';
 import { isStartsAtPast, parisMonthKey } from '../utils/parisTime';
 import {
+  isOutingAcceptingRequests,
+  isUrgentOnSite,
   isVisibleOnAnnoncesFeed,
   outingOccupiesActiveSlot,
   OUTING_AUTO_COMPLETE_AFTER_MS,
+  URGENT_ON_SITE_ACCEPT_MS,
   wasPresent,
 } from '../utils/outingActive';
 import {
@@ -153,6 +156,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Host closes listing only: confirmed guests keep their seats.
       // Pending/accepted cancelled; accepted seats restored (spotsLeft).
       const outingId = action.payload.outingId;
+      const target = state.outings.find((o) => o.id === outingId);
+      if (!target || target.status === 'completed' || target.status === 'closed') {
+        return state;
+      }
       const acceptedCount = state.requests.filter(
         (r) => r.outingId === outingId && r.status === 'accepted',
       ).length;
@@ -287,9 +294,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!req || req.status !== 'pending') return state;
       const outing = state.outings.find((o) => o.id === req.outingId);
       if (!outing || outing.spotsLeft < 1) return state;
-      if (outing.status === 'completed' || isStartsAtPast(outing.startsAt)) {
-        return state;
-      }
+      if (outing.status === 'completed') return state;
+      if (!isOutingAcceptingRequests(outing)) return state;
 
       const newSpots = outing.spotsLeft - 1;
       return {
@@ -343,15 +349,26 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!req || req.status !== 'accepted') return state;
       {
         const outingGate = state.outings.find((o) => o.id === req.outingId);
-        if (
-          outingGate &&
-          (outingGate.status === 'completed' ||
+        if (outingGate) {
+          if (outingGate.status === 'completed') return state;
+          // Urgent: startsAt is « now » — allow confirm while listing still open/full
+          // (accepted seats are cancelled on closeOuting). Normal: block once started.
+          if (
+            !isUrgentOnSite(outingGate) &&
             isStartsAtPast(
               outingGate.startsAt,
               new Date(action.payload.confirmedAt).getTime(),
-            ))
-        ) {
-          return state;
+            )
+          ) {
+            return state;
+          }
+          if (
+            isUrgentOnSite(outingGate) &&
+            outingGate.status !== 'open' &&
+            outingGate.status !== 'full'
+          ) {
+            return state;
+          }
         }
       }
       if (
@@ -1156,6 +1173,8 @@ interface ChanceContextValue {
     inviteIncludes?: string;
     inviteExtras?: string;
     ticketsAlreadyBought?: boolean;
+    /** Urgent « déjà sur place » — startsAt = now, capacity forced to 1. */
+    urgentOnSite?: boolean;
   }) =>
     | { ok: true; outingId: string }
     | {
@@ -1566,6 +1585,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       inviteIncludes?: string;
       inviteExtras?: string;
       ticketsAlreadyBought?: boolean;
+      urgentOnSite?: boolean;
     }):
       | { ok: true; outingId: string }
       | {
@@ -1575,7 +1595,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       if (user.banned) return { ok: false, reason: 'banned' };
-      if (isStartsAtPast(input.startsAt)) {
+      const urgent = input.urgentOnSite === true;
+      // Urgent is by definition now — skip past-date block. Normal creates still blocked.
+      if (!urgent && isStartsAtPast(input.startsAt)) {
         return { ok: false, reason: 'starts_in_past' };
       }
       const now = Date.now();
@@ -1595,6 +1617,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const excluded = (input.excludedTopics ?? [])
         .map((t) => t.trim())
         .filter(Boolean);
+      const capacity: 1 | 2 | 3 | 4 = urgent ? 1 : input.capacity;
+      const startsAt = urgent ? new Date().toISOString() : input.startsAt;
       const outing: Outing = {
         id: uid('outing'),
         hostId: user.id,
@@ -1608,19 +1632,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         venueName: input.venueName.trim(),
         approxArea: input.approxArea.trim(),
         exactAddress: input.exactAddress.trim(),
-        startsAt: input.startsAt,
-        capacity: input.capacity,
-        spotsLeft: input.capacity,
+        startsAt,
+        capacity,
+        spotsLeft: capacity,
         womenOnly: input.womenOnly && user.gender === 'femme',
         budgetMaxEuros: input.budgetMaxEuros,
         status: 'open',
         createdAt: new Date().toISOString(),
+        ...(urgent ? { urgentOnSite: true } : {}),
         ...(input.category === 'autre' && categoryDetail
           ? { categoryDetail }
           : {}),
         ...(topic ? { topic } : {}),
         ...(excluded.length ? { excludedTopics: excluded } : {}),
-        ...(input.flexibleSlot ? { flexibleSlot: true } : {}),
+        ...(!urgent && input.flexibleSlot ? { flexibleSlot: true } : {}),
         ...(inviteIncludes ? { inviteIncludes } : {}),
         ...(inviteExtras ? { inviteExtras } : {}),
         ...(input.ticketsAlreadyBought ? { ticketsAlreadyBought: true } : {}),
@@ -1701,10 +1726,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       if (outing.hostId === user.id) return { ok: false, reason: 'own_outing' };
-      if (outing.status === 'completed' || isStartsAtPast(outing.startsAt)) {
+      if (outing.status === 'completed') {
+        return { ok: false, reason: 'outing_finished' };
+      }
+      if (!isOutingAcceptingRequests(outing) || outing.status !== 'open') {
         return { ok: false, reason: 'outing_started' };
       }
-      if (outing.status !== 'open' || outing.spotsLeft < 1) {
+      if (outing.spotsLeft < 1) {
         return { ok: false, reason: 'full' };
       }
       if (outing.womenOnly && user.gender !== 'femme') {
@@ -1761,7 +1789,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outing.status === 'completed') {
         return { ok: false, reason: 'outing_finished' };
       }
-      if (isStartsAtPast(outing.startsAt, now.getTime())) {
+      if (!isOutingAcceptingRequests(outing, now.getTime())) {
         return { ok: false, reason: 'outing_started' };
       }
       dispatch({
@@ -1862,8 +1890,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outingGate?.status === 'completed') {
         return { ok: false, reason: 'outing_finished' };
       }
-      if (outingGate && isStartsAtPast(outingGate.startsAt)) {
-        return { ok: false, reason: 'outing_started' };
+      if (outingGate) {
+        if (isUrgentOnSite(outingGate)) {
+          // Urgent: allow confirm while open/full (accepted cancelled on close).
+          if (outingGate.status !== 'open' && outingGate.status !== 'full') {
+            return { ok: false, reason: 'outing_started' };
+          }
+        } else if (isStartsAtPast(outingGate.startsAt)) {
+          return { ok: false, reason: 'outing_started' };
+        }
       }
       if (
         req.confirmDeadlineAt &&
@@ -1895,10 +1930,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outingForChat = state.outings.find((o) => o.id === req.outingId);
       if (outingForChat) {
         void ensureAndroidChannel();
+        const urgentChat = isUrgentOnSite(outingForChat);
         const toast: AppToast = {
           id: uid('toast'),
           title: 'Place confirmée',
-          body: `« ${outingForChat.title} » est confirmée. Chat à H−1.`,
+          body: urgentChat
+            ? `« ${outingForChat.title} » est confirmée. Le chat est ouvert.`
+            : `« ${outingForChat.title} » est confirmée. Chat à H−1.`,
           createdAt: new Date().toISOString(),
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
@@ -1911,6 +1949,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           });
           if (!push.pushOk) {
             Alert.alert(toast.title, toast.body);
+          }
+          if (urgentChat) {
+            // Urgent: chat already unlocked — no H−1 schedule.
+            return;
           }
           const chatId = await scheduleChatUnlockNotification({
             outingTitle: outingForChat.title,
@@ -2632,7 +2674,36 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   }, [state.imprevuReports, state.outings]);
 
   /**
+   * Urgent: auto-close listing at startsAt + 30 min (stop accepting).
+   * Confirmed guests keep seats via CLOSE_OUTING; 1-active slot rules unchanged.
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const outing of state.outings) {
+        if (!isUrgentOnSite(outing)) continue;
+        if (outing.status !== 'open' && outing.status !== 'full') continue;
+        const startMs = new Date(outing.startsAt).getTime();
+        if (!Number.isFinite(startMs)) continue;
+        if (now <= startMs + URGENT_ON_SITE_ACCEPT_MS) continue;
+        dispatch({ type: 'CLOSE_OUTING', payload: { outingId: outing.id } });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.outings]);
+
+  /**
    * Auto plan « terminée » : H + OUTING_AUTO_COMPLETE_AFTER_MS (30 min démo).
+   * Urgent accept window also ends at H+30 (auto-close above); terminée uses
+   * the same H+30 anchor so we don't leave open/full after the grace.
    * Host may also completeOuting once startsAt is past.
    */
   useEffect(() => {
@@ -2642,7 +2713,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         if (outing.status === 'completed') continue;
         const startMs = new Date(outing.startsAt).getTime();
         if (!Number.isFinite(startMs)) continue;
-        if (now < startMs + OUTING_AUTO_COMPLETE_AFTER_MS) continue;
+        // After H+30 inclusive (same boundary as urgent accept window).
+        if (now <= startMs + OUTING_AUTO_COMPLETE_AFTER_MS) continue;
         // Only auto-complete outings that had a real plan (open/full/closed).
         if (
           outing.status !== 'open' &&

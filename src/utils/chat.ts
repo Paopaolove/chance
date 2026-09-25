@@ -24,18 +24,34 @@ export function getChatOpensAt(startsAt: string): Date {
   return new Date(new Date(startsAt).getTime() - CHAT_UNLOCK_BEFORE_MS);
 }
 
-export function isChatUnlocked(startsAt: string, nowMs = Date.now()): boolean {
+export type ChatUnlockOpts = {
+  /**
+   * Urgent « déjà sur place »: chat opens as soon as the seat is confirmed
+   * (bypass H−1). Normal outings keep the H−1 gate.
+   */
+  urgentOnSite?: boolean;
+};
+
+export function isChatUnlocked(
+  startsAt: string,
+  nowMs = Date.now(),
+  opts?: ChatUnlockOpts,
+): boolean {
+  if (opts?.urgentOnSite) return true;
   return nowMs >= getChatOpensAt(startsAt).getTime();
 }
 
 /**
  * French countdown until chat opens.
  * Under 1 h → « Chat dans {mm} min »; otherwise hours (+ minutes).
+ * Urgent on-site → already open.
  */
 export function formatUntilChatOpens(
   startsAt: string,
   nowMs = Date.now(),
+  opts?: ChatUnlockOpts,
 ): string {
+  if (opts?.urgentOnSite) return 'Chat ouvert';
   const left = Math.max(0, getChatOpensAt(startsAt).getTime() - nowMs);
   if (left <= 0) return 'Chat ouvert';
   const totalMin = Math.ceil(left / 60_000);

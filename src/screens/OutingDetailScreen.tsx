@@ -682,13 +682,15 @@ export function OutingDetailScreen() {
               })()}
 
               <Text style={styles.hint}>
-                {isChatUnlocked(outing.startsAt)
-                  ? 'Le chat est ouvert (H−1).'
+                {isChatUnlocked(outing.startsAt, Date.now(), { urgentOnSite: outing.urgentOnSite })
+                  ? outing.urgentOnSite
+                    ? 'Le chat est ouvert (invitation urgente).'
+                    : 'Le chat est ouvert (H−1).'
                   : 'Le chat s’ouvre 1 h avant la sortie.'}
               </Text>
               <Button
                 title={
-                  isChatUnlocked(outing.startsAt)
+                  isChatUnlocked(outing.startsAt, Date.now(), { urgentOnSite: outing.urgentOnSite })
                     ? 'Ouvrir le chat'
                     : 'Voir le chat (verrouillé)'
                 }

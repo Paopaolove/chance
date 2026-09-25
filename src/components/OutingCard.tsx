@@ -77,7 +77,10 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               {outing.venueName}
             </Text>
             <Text style={styles.meta}>
-              {formatOutingWhen(outing.startsAt)} · {outing.neighborhood}
+              {outing.urgentOnSite
+                ? 'Maintenant'
+                : formatOutingWhen(outing.startsAt)}{' '}
+              · {outing.neighborhood}
               {minutes !== undefined
                 ? ` · ${formatTravelMinutes(minutes)}`
                 : ''}
@@ -88,6 +91,13 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               </Text>
             ) : null}
             <View style={styles.chipsRow}>
+              {outing.urgentOnSite ? (
+                <View style={[styles.chip, styles.chipUrgent]}>
+                  <Text style={[styles.chipText, styles.chipUrgentText]}>
+                    Maintenant
+                  </Text>
+                </View>
+              ) : null}
               <View
                 style={[
                   styles.chip,
@@ -172,7 +182,9 @@ const styles = StyleSheet.create({
   },
   chipBudget: { backgroundColor: colors.surfaceMuted },
   chipFree: { backgroundColor: colors.successSoft },
+  chipUrgent: { backgroundColor: colors.primarySoft },
   chipText: { ...typography.small, color: colors.textSecondary },
   chipBudgetText: { color: colors.text },
   chipFreeText: { color: colors.success, fontFamily: fonts.semiBold },
+  chipUrgentText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
 });

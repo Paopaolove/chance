@@ -18,6 +18,11 @@ export type CreateOutingParams = {
   /** When proposing from a profile / Dispo card — keep THAT recipient. */
   inviteeUserId?: string;
   inviteeName?: string;
+  /**
+   * Invitation urgente « Je suis déjà sur place » — short create mode
+   * (lieu, quartier, budget, 1 place, message). ≠ Dispo.
+   */
+  urgentOnSite?: boolean;
 };
 
 export type MainTabParamList = {
