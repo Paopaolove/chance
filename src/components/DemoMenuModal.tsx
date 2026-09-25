@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChance } from '../data/ChanceContext';
+import { describeDepositForfeitMoment } from '../data/pricing';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { Button } from './Button';
 
@@ -20,7 +21,7 @@ type Props = {
 
 /**
  * Hidden QA menu (cahier I) — opened by 5 taps on the Chance logo.
- * Mid-flow « Simuler … » buttons live here, not in the user journey.
+ * Mid-flow « Simuler … » buttons live here ONLY — not on Profile.
  */
 export function DemoMenuModal({ visible, onClose }: Props) {
   const insets = useSafeAreaInsets();
@@ -41,6 +42,12 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     setDispoProfile,
     simulateLocalNotifications,
     showToast,
+    simulateTrialEnd,
+    reportGuestNoShow,
+    reportHostNeverHonor,
+    reportHostNoShow,
+    simulateConfirmRace,
+    resetDemo,
   } = useChance();
 
   const active = getActiveOutingForUser();
@@ -82,8 +89,8 @@ export function DemoMenuModal({ visible, onClose }: Props) {
           </Pressable>
         </View>
         <Text style={styles.hint}>
-          Outil QA caché (5 taps sur Chance). Les cas limites restent aussi dans
-          Profil → Démo QA.
+          Outil QA caché (5 taps sur Chance). Tous les « Simuler … » sont ici —
+          pas sur l’écran Profil.
         </Text>
         <ScrollView
           contentContainerStyle={styles.content}
@@ -148,6 +155,21 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 Alert.alert(
                   'Noter la sortie',
                   'Tu peux noter ton binôme depuis Profil.',
+                );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Simuler fin d’essai (J+30)"
+            variant="ghost"
+            disabled={busy}
+            onPress={() =>
+              run('Essai terminé', () => {
+                simulateTrialEnd();
+                Alert.alert(
+                  'Essai terminé (démo)',
+                  'Choisis une formule pour confirmer une place.',
                 );
               })
             }
@@ -221,6 +243,148 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             style={styles.btn}
           />
 
+          <Text style={styles.section}>Cas limites</Text>
+          <Button
+            title="Simuler mon absence (caution perdue)"
+            variant="ghost"
+            disabled={busy}
+            onPress={() =>
+              run('Absence', () => {
+                const req = outgoingRequests.find(
+                  (r) => r.status === 'confirmed',
+                );
+                if (!req) {
+                  Alert.alert(
+                    'Démo',
+                    'Il faut une place confirmée (outgoing) pour simuler une absence.',
+                  );
+                  return;
+                }
+                const r = reportGuestNoShow(req.id);
+                if (!r.ok) Alert.alert('Impossible', r.reason);
+                else
+                  Alert.alert(
+                    r.lowerPriority ? 'Priorité baissée' : 'Caution perdue',
+                    r.lowerPriority
+                      ? '2e absence — priorité baissée + mention profil.'
+                      : `1re absence — ${describeDepositForfeitMoment()}`,
+                  );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Signaler l’absence d’un invité"
+            variant="ghost"
+            disabled={busy}
+            onPress={() =>
+              run('Absence invité', () => {
+                const req = incomingRequests.find(
+                  (r) => r.status === 'confirmed',
+                );
+                if (!req) {
+                  Alert.alert('Démo', 'Aucun invité confirmé sur tes sorties.');
+                  return;
+                }
+                const r = reportGuestNoShow(req.id);
+                if (!r.ok) Alert.alert('Impossible', r.reason);
+                else
+                  Alert.alert(
+                    'Absence invité',
+                    r.lowerPriority
+                      ? '2e — priorité baissée pour cet invité.'
+                      : describeDepositForfeitMoment(),
+                  );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Publication jamais honorée (1er/2e)"
+            variant="ghost"
+            disabled={busy}
+            onPress={() =>
+              run('Publish strike', () => {
+                const o =
+                  getActiveOutingForUser() ??
+                  (() => {
+                    const r = [
+                      ...outgoingRequests,
+                      ...incomingRequests,
+                    ].find((x) => x.status === 'confirmed');
+                    return r ? getOutingById(r.outingId) : undefined;
+                  })();
+                if (!o) {
+                  Alert.alert('Démo', 'Aucune sortie active / confirmée.');
+                  return;
+                }
+                const r = reportHostNeverHonor(o.id);
+                if (!r.ok) Alert.alert('Impossible', r.reason);
+                else
+                  Alert.alert(
+                    r.banned ? 'Compte suspendu' : 'Avertissement',
+                    r.banned
+                      ? '2e publication jamais honorée — ban.'
+                      : '1er avertissement — cautions remboursées.',
+                  );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Course 2 confirmations (1er timestamp)"
+            variant="ghost"
+            disabled={busy}
+            onPress={() =>
+              run('Race', () => {
+                const o =
+                  getActiveOutingForUser() ??
+                  state.outings.find(
+                    (x) => x.status === 'open' || x.status === 'full',
+                  );
+                if (!o) {
+                  Alert.alert('Démo', 'Aucune sortie ouverte.');
+                  return;
+                }
+                const r = simulateConfirmRace(o.id);
+                if (!r.ok) Alert.alert('Impossible', r.reason);
+                else
+                  Alert.alert(
+                    'Course',
+                    `Gagnant ${r.winnerRequestId.slice(0, 12)}… — perdant expiré.`,
+                  );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="No-show hôte sur moi (1er/2e)"
+            variant="ghost"
+            disabled={busy}
+            onPress={() =>
+              run('Host no-show', () => {
+                const o = getActiveOutingForUser();
+                if (!o) {
+                  Alert.alert(
+                    'Démo',
+                    'Publie / ouvre une sortie (hôte) pour enchaîner les strikes.',
+                  );
+                  return;
+                }
+                const r = reportHostNoShow(o.id);
+                if (!r.ok) Alert.alert('Impossible', r.reason);
+                else
+                  Alert.alert(
+                    r.banned ? 'Compte suspendu' : 'Avertissement',
+                    r.banned
+                      ? '2e no-show hôte — ban + cautions remboursées.'
+                      : '1er no-show — warning + note auto + cautions remboursées.',
+                  );
+              })
+            }
+            style={styles.btn}
+          />
+
           <Text style={styles.section}>Notifs prioritaires</Text>
           <Button
             title="Simuler toutes les notifs"
@@ -241,7 +405,6 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                       ? 'Push impossible. Les bandeaux in-app restent actifs.'
                       : result.reason,
                   );
-                  // In-app sequence when push denied
                   const seq: [string, string, number][] = [
                     ['Nouvelle demande', 'Juliette veut rejoindre ta sortie.', 800],
                     [
@@ -292,9 +455,34 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             style={styles.btn}
           />
 
+          <Text style={styles.section}>Reset</Text>
+          <Button
+            title="Réinitialiser la démo"
+            variant="ghost"
+            disabled={busy}
+            onPress={() => {
+              Alert.alert(
+                'Réinitialiser la démo ?',
+                'Tu reviendras au début de l’onboarding (slides → compte → téléphone → …).',
+                [
+                  { text: 'Annuler', style: 'cancel' },
+                  {
+                    text: 'Réinitialiser',
+                    style: 'destructive',
+                    onPress: () => {
+                      resetDemo();
+                      onClose();
+                    },
+                  },
+                ],
+              );
+            }}
+            style={styles.btn}
+          />
+
           <Text style={styles.footer}>
-            Pas de notif pour chaque nouvelle annonce du fil. Cas limites
-            (absence, course, no-show…) : Profil → Démo QA.
+            Pas de notif pour chaque nouvelle annonce du fil. Pas de Stripe /
+            Supabase dans la démo.
           </Text>
         </ScrollView>
       </View>

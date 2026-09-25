@@ -36,21 +36,9 @@ export function ProfileScreen() {
     state,
     getActiveOutingForUser,
     setPermissions,
-    resetDemo,
     updateProfile,
-    simulateOutingInMinutes,
-    simulateTrialEnd,
-    outgoingRequests,
-    incomingRequests,
-    getOutingById,
     getOutingsToRate,
-    completeOuting,
-    simulateLocalNotifications,
-    reportGuestNoShow,
     hasJokerAvailable,
-    reportHostNeverHonor,
-    reportHostNoShow,
-    simulateConfirmRace,
   } = useChance();
   const user = state.currentUser;
   const active = getActiveOutingForUser();
@@ -109,21 +97,6 @@ export function ProfileScreen() {
     } finally {
       setBusy(false);
     }
-  };
-
-  const onReset = () => {
-    Alert.alert(
-      'Réinitialiser la démo ?',
-      'Tu reviendras au début de l’onboarding (slides → compte → téléphone → …).',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        {
-          text: 'Réinitialiser',
-          style: 'destructive',
-          onPress: () => resetDemo(),
-        },
-      ],
-    );
   };
 
   return (
@@ -374,35 +347,6 @@ export function ProfileScreen() {
             Pas de notif pour chaque annonce du fil. Fallback : bandeau + Alert
             si push indisponible.
           </Text>
-          <Button
-            title="Démo · simuler les notifs prioritaires"
-            variant="ghost"
-            loading={busy}
-            onPress={async () => {
-              setBusy(true);
-              try {
-                const result = await simulateLocalNotifications('sortie démo');
-                if (!result.ok) {
-                  Alert.alert(
-                    'Notifications',
-                    result.reason === 'permission_denied'
-                      ? 'Autorise d’abord les notifications.'
-                      : result.reason,
-                  );
-                  return;
-                }
-                Alert.alert(
-                  'Démo',
-                  result.pushOk
-                    ? 'Notifs prioritaires programmées (~1–17 s).'
-                    : 'Push partiel — bandeaux in-app si besoin.',
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
         </View>
 
         <View style={styles.card}>
@@ -472,31 +416,6 @@ export function ProfileScreen() {
             onPress={() => navigation.navigate('Paywall')}
             style={{ marginTop: spacing.md }}
           />
-          <Button
-            title="Simuler fin d’essai (J+30)"
-            variant="ghost"
-            onPress={() => {
-              Alert.alert(
-                'Simuler fin d’essai ?',
-                'Ton essai passera à expiré. Confirmer une place ouvrira le paywall.',
-                [
-                  { text: 'Annuler', style: 'cancel' },
-                  {
-                    text: 'Simuler',
-                    style: 'destructive',
-                    onPress: () => {
-                      simulateTrialEnd();
-                      Alert.alert(
-                        'Essai terminé (démo)',
-                        'Choisis une formule pour confirmer une place.',
-                      );
-                    },
-                  },
-                ],
-              );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
         </View>
 
         <View style={styles.card}>
@@ -541,11 +460,7 @@ export function ProfileScreen() {
           </Text>
           {(() => {
             const toRate = getOutingsToRate();
-            const confirmed = [
-              ...outgoingRequests.filter((r) => r.status === 'confirmed'),
-              ...incomingRequests.filter((r) => r.status === 'confirmed'),
-            ];
-            if (!toRate.length && !confirmed.length) {
+            if (!toRate.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
                   Aucune sortie à noter pour l’instant.
@@ -572,234 +487,14 @@ export function ProfileScreen() {
                     />
                   </View>
                 ))}
-                {confirmed
-                  .filter((r) => {
-                    const o = getOutingById(r.outingId);
-                    return o && o.status !== 'completed';
-                  })
-                  .map((r) => {
-                    const o = getOutingById(r.outingId)!;
-                    return (
-                      <View key={`sim-${r.id}`} style={{ marginTop: spacing.md }}>
-                        <Text style={styles.cardValue}>{o.title}</Text>
-                        <Button
-                          title="Simuler sortie terminée"
-                          variant="ghost"
-                          onPress={() => {
-                            completeOuting(o.id);
-                            Alert.alert(
-                              'Sortie terminée',
-                              'Tu peux maintenant noter ton binôme ci-dessus.',
-                            );
-                          }}
-                          style={{ marginTop: spacing.sm }}
-                        />
-                      </View>
-                    );
-                  })}
               </>
             );
           })()}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Démo QA · chat</Text>
-          <Text style={styles.cardHint}>
-            Aussi via 5 taps sur le logo Chance (menu Démo caché). « Simuler
-            J−50 min » place une sortie confirmée dans ~50 min pour déverrouiller
-            le chat sans attendre.
-          </Text>
-          {(() => {
-            const confirmed = [
-              ...outgoingRequests.filter((r) => r.status === 'confirmed'),
-              ...incomingRequests.filter((r) => r.status === 'confirmed'),
-            ];
-            const seen = new Set<string>();
-            const items = confirmed.filter((r) => {
-              if (seen.has(r.outingId)) return false;
-              seen.add(r.outingId);
-              return true;
-            });
-            if (!items.length) {
-              return (
-                <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
-                  Aucune sortie confirmée pour l’instant.
-                </Text>
-              );
-            }
-            return items.map((r) => {
-              const o = getOutingById(r.outingId);
-              if (!o) return null;
-              return (
-                <View key={r.outingId} style={{ marginTop: spacing.md }}>
-                  <Text style={styles.cardValue}>{o.title}</Text>
-                  <Button
-                    title="Simuler J−50 min"
-                    variant="secondary"
-                    onPress={() => {
-                      simulateOutingInMinutes(o.id, 50);
-                      Alert.alert(
-                        'Démo',
-                        `« ${o.title} » est maintenant dans ~50 min. Ouvre le chat depuis Demandes.`,
-                      );
-                    }}
-                    style={{ marginTop: spacing.sm }}
-                  />
-                  <Button
-                    title="Ouvrir le chat"
-                    variant="ghost"
-                    onPress={() =>
-                      navigation.navigate('ChatPlaceholder', {
-                        outingId: o.id,
-                        requestId: r.id,
-                      })
-                    }
-                    style={{ marginTop: spacing.sm }}
-                  />
-                </View>
-              );
-            });
-          })()}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Démo QA · cas limites</Text>
-          <Text style={styles.cardHint}>
-            Absence invité, publication jamais honorée, course 2 confirmations,
-            no-show hôte (1er/2e).
-          </Text>
-          <Button
-            title="Simuler mon absence (caution perdue)"
-            variant="ghost"
-            onPress={() => {
-              const req = outgoingRequests.find((r) => r.status === 'confirmed');
-              if (!req) {
-                Alert.alert(
-                  'Démo',
-                  'Il faut une place confirmée (outgoing) pour simuler une absence.',
-                );
-                return;
-              }
-              const r = reportGuestNoShow(req.id);
-              if (!r.ok) Alert.alert('Impossible', r.reason);
-              else
-                Alert.alert(
-                  r.lowerPriority ? 'Priorité baissée' : 'Caution perdue',
-                  r.lowerPriority
-                    ? '2e absence — priorité baissée + mention profil.'
-                    : `1re absence — ${describeDepositForfeitMoment()}`,
-                );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
-          <Button
-            title="Signaler l’absence d’un invité"
-            variant="ghost"
-            onPress={() => {
-              const req = incomingRequests.find((r) => r.status === 'confirmed');
-              if (!req) {
-                Alert.alert('Démo', 'Aucun invité confirmé sur tes sorties.');
-                return;
-              }
-              const r = reportGuestNoShow(req.id);
-              if (!r.ok) Alert.alert('Impossible', r.reason);
-              else
-                Alert.alert(
-                  'Absence invité',
-                  r.lowerPriority
-                    ? '2e — priorité baissée pour cet invité.'
-                    : describeDepositForfeitMoment(),
-                );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
-          <Button
-            title="Publication jamais honorée (1er/2e)"
-            variant="ghost"
-            onPress={() => {
-              const o =
-                getActiveOutingForUser() ??
-                (() => {
-                  const r = [
-                    ...outgoingRequests,
-                    ...incomingRequests,
-                  ].find((x) => x.status === 'confirmed');
-                  return r ? getOutingById(r.outingId) : undefined;
-                })();
-              if (!o) {
-                Alert.alert('Démo', 'Aucune sortie active / confirmée.');
-                return;
-              }
-              const r = reportHostNeverHonor(o.id);
-              if (!r.ok) Alert.alert('Impossible', r.reason);
-              else
-                Alert.alert(
-                  r.banned ? 'Compte suspendu' : 'Avertissement',
-                  r.banned
-                    ? '2e publication jamais honorée — ban.'
-                    : '1er avertissement — cautions remboursées.',
-                );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
-          <Button
-            title="Course 2 confirmations (1er timestamp)"
-            variant="ghost"
-            onPress={() => {
-              const o =
-                getActiveOutingForUser() ??
-                state.outings.find(
-                  (x) => x.status === 'open' || x.status === 'full',
-                );
-              if (!o) {
-                Alert.alert('Démo', 'Aucune sortie ouverte.');
-                return;
-              }
-              const r = simulateConfirmRace(o.id);
-              if (!r.ok) Alert.alert('Impossible', r.reason);
-              else
-                Alert.alert(
-                  'Course',
-                  `Gagnant ${r.winnerRequestId.slice(0, 12)}… — perdant expiré.`,
-                );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
-          <Button
-            title="No-show hôte sur moi (1er/2e)"
-            variant="ghost"
-            onPress={() => {
-              const o = getActiveOutingForUser();
-              if (!o) {
-                Alert.alert(
-                  'Démo',
-                  'Publie / ouvre une sortie (hôte) pour enchaîner les strikes.',
-                );
-                return;
-              }
-              const r = reportHostNoShow(o.id);
-              if (!r.ok) Alert.alert('Impossible', r.reason);
-              else
-                Alert.alert(
-                  r.banned ? 'Compte suspendu' : 'Avertissement',
-                  r.banned
-                    ? '2e no-show hôte — ban + cautions remboursées.'
-                    : '1er no-show — warning + note auto + cautions remboursées.',
-                );
-            }}
-            style={{ marginTop: spacing.sm }}
-          />
-        </View>
-
-        <Button
-          title="Réinitialiser la démo"
-          variant="ghost"
-          onPress={onReset}
-          style={{ marginTop: spacing.md }}
-        />
-
         <Text style={styles.demoNote}>
-          Mode démo local — pas de Stripe ni Supabase pour l’instant.
+          Mode démo local — pas de Stripe ni Supabase pour l’instant. Outils QA :
+          5 taps sur le logo Chance.
         </Text>
       </ScrollView>
     </SafeAreaView>
