@@ -140,10 +140,12 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'CREATE_OUTING': {
       const user = state.currentUser;
       if (!user) return state;
+      // Same 1-active rule as createOuting callback (not open|full only).
+      const now = Date.now();
       const hasActive = state.outings.some(
         (o) =>
           o.hostId === user.id &&
-          (o.status === 'open' || o.status === 'full'),
+          outingOccupiesActiveSlot(o, state.requests, now),
       );
       if (hasActive) return state;
       return {
