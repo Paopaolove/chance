@@ -12,6 +12,8 @@ export type CreateOutingParams = {
   excludedTopics?: string;
   /** Heure libre préremplie (ex. « 19:30 » ou « 20h »). */
   timeLabel?: string;
+  /** Paris calendar-day offset from today (0 = today, 1 = tomorrow). */
+  dateOffsetDays?: number;
   flexibleSlot?: boolean;
   /** When proposing from a profile / Dispo card — keep THAT recipient. */
   inviteeUserId?: string;

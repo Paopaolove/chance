@@ -76,7 +76,7 @@ export function PersonCard({ person, onPropose }: Props) {
           </Text>
         </View>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>Dispo ce soir</Text>
+          <Text style={styles.badgeText}>Dispo</Text>
         </View>
       </View>
 

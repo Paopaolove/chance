@@ -42,7 +42,7 @@ export const mockHosts: User[] = [
     customFilters: ['afterwork', 'vin nature'],
     dispoBudgetMax: 30,
     dispoCategories: ['bar', 'restaurant'],
-    dispoSlot: '19:30',
+    dispoSlot: 'soir',
     dispoNeighborhood: 'Oberkampf',
     dispoTopic: 'Vin nature / afterwork',
     dispoExclusions: ['travail'],
@@ -96,7 +96,7 @@ export const mockHosts: User[] = [
     customFilters: [],
     dispoBudgetMax: 30,
     dispoCategories: ['culture', 'autre'],
-    dispoSlot: '18:00',
+    dispoSlot: 'apero',
     dispoNeighborhood: 'Montmartre',
     dispoTopic: 'Expo ou café',
     dispoExpiresAt: '2099-12-31T23:00:00.000Z',
@@ -149,7 +149,7 @@ export const mockHosts: User[] = [
     customFilters: ['vegan'],
     dispoBudgetMax: 30,
     dispoCategories: ['bar', 'autre'],
-    dispoSlot: '20:00',
+    dispoSlot: 'soir',
     dispoNeighborhood: 'Canal Saint-Martin',
     dispoTopic: 'Apéro terrasse',
     dispoExclusions: ['politique'],
@@ -227,7 +227,7 @@ export const mockHosts: User[] = [
     customFilters: ['afterwork'],
     dispoBudgetMax: 30,
     dispoCategories: ['restaurant', 'bar'],
-    dispoSlot: '19:00',
+    dispoSlot: 'soir',
     dispoNeighborhood: 'République',
     dispoTopic: 'Resto ou verre',
     dispoExpiresAt: '2099-12-31T23:00:00.000Z',
@@ -256,7 +256,7 @@ export const mockHosts: User[] = [
     customFilters: [],
     dispoBudgetMax: 30,
     dispoCategories: ['culture', 'bar'],
-    dispoSlot: '21:00',
+    dispoSlot: 'soir',
     dispoNeighborhood: 'Nation',
     dispoTopic: 'Culture / expo',
     dispoExpiresAt: '2099-12-31T23:00:00.000Z',
@@ -285,7 +285,7 @@ export const mockHosts: User[] = [
     customFilters: ['calme', 'bilingual'],
     dispoBudgetMax: 30,
     dispoCategories: ['culture', 'autre', 'restaurant'],
-    dispoSlot: 'flexible',
+    dispoSlot: 'midi',
     dispoNeighborhood: 'Saint-Germain',
     dispoTopic: 'Café calme',
     dispoExclusions: ['bruyant'],
@@ -300,7 +300,7 @@ export const mockHosts: User[] = [
   },
 ];
 
-/** People available tonight (hosts + dispo-only). Prefer filtering mockHosts by dispoSoir. */
+/** People available (hosts + dispo-only). Prefer filtering mockHosts by dispoSoir. */
 export const mockPeople = mockHosts;
 
 function daysFromNow(days: number, hour = 19, minute = 30): string {

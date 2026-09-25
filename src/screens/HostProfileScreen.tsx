@@ -16,6 +16,7 @@ import { mockHosts } from '../data/mockOutings';
 import { OutingCategory } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import { dispoSlotCreatePrefill } from '../utils/dispo';
 import { formatRatingAverage } from '../utils/format';
 import { hostPhotoSize } from '../utils/subscription';
 
@@ -127,7 +128,8 @@ export function HostProfileScreen() {
         const primary = (
           cats.includes('autre') ? 'autre' : (cats[0] ?? 'restaurant')
         ) as OutingCategory;
-        const slot = dispoPerson.dispoSlot ?? '19:30';
+        const slot = dispoPerson.dispoSlot ?? 'soir';
+        const slotPrefill = dispoSlotCreatePrefill(slot);
         return (
           <Button
             title={`Proposer une sortie à ${firstName}`}
@@ -149,8 +151,8 @@ export function HostProfileScreen() {
                   budgetMaxEuros: dispoPerson.dispoBudgetMax ?? 25,
                   topic: dispoPerson.dispoTopic,
                   excludedTopics: dispoPerson.dispoExclusions?.join(', '),
-                  timeLabel: slot === 'flexible' ? '19:30' : slot,
-                  flexibleSlot: slot === 'flexible',
+                  timeLabel: slotPrefill.timeLabel,
+                  dateOffsetDays: slotPrefill.dateOffsetDays,
                 },
               })
             }

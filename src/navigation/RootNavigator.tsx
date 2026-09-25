@@ -96,7 +96,7 @@ export function RootNavigator() {
               name="DispoSoir"
               component={DispoSoirScreen}
               options={{
-                title: 'Dispo ce soir',
+                title: 'Dispo',
                 headerBackTitle: 'Retour',
                 headerTintColor: colors.primary,
               }}

@@ -285,7 +285,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 setDispoProfile({ dispoSoir: false, dispoExpiresAt: null });
                 Alert.alert(
                   'Dispo expirée',
-                  'Simulation minuit local — plus visible ce soir.',
+                  'Simulation expiration — plus visible pour l’instant.',
                 );
               })
             }

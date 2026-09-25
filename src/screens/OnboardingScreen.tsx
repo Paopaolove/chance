@@ -771,11 +771,11 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Prêt ?</Text>
           <Text style={styles.hint}>
-            Dispo ce soir pour une sortie improvisée, ou parcours les
+            Dispo pour une sortie improvisée, ou parcours les
             annonces autour de toi.
           </Text>
           <Button
-            title="Dispo ce soir"
+            title="Dispo"
             onPress={() => finish('dispo')}
             style={styles.cta}
           />

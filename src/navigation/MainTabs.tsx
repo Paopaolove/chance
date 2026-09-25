@@ -33,7 +33,7 @@ export function MainTabs() {
   useEffect(() => {
     if (state.entryIntent === 'dispo') {
       clearEntryIntent();
-      // Land on Dispo ce soir editor after onboarding CTA
+      // Land on Dispo editor after onboarding CTA
       navigation.navigate('DispoSoir');
     } else if (state.entryIntent === 'feed') {
       clearEntryIntent();

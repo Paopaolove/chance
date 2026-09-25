@@ -8,8 +8,8 @@ import React, {
 } from 'react';
 import { Alert, AppState as RNAppState } from 'react-native';
 import {
+  computeDispoExpiresAt,
   isPastLocalMidnight,
-  nextLocalMidnight,
 } from '../utils/dispo';
 import { ALL_CATEGORIES, mockHosts, mockOutings } from './mockOutings';
 import { mockReviews } from './mockReviews';
@@ -480,7 +480,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (p.dispoSoir === true && !next.dispoExpiresAt) {
         next = {
           ...next,
-          dispoExpiresAt: nextLocalMidnight().toISOString(),
+          dispoExpiresAt: computeDispoExpiresAt(
+            next.dispoSlot ?? 'soir',
+          ).toISOString(),
         };
       }
       if (p.dispoSoir === false) {
@@ -1446,13 +1448,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         customFilters: input.customFilters ?? [],
         photoUri: input.photoUri,
         dispoCategories: input.dispoSoir ? ['restaurant', 'bar', 'culture', 'autre'] : [],
-        dispoSlot: input.dispoSoir ? '19:30' : undefined,
+        dispoSlot: input.dispoSoir ? 'soir' : undefined,
         dispoNeighborhood: input.dispoSoir
           ? input.neighborhood.trim()
           : undefined,
-        dispoBudgetMax: input.dispoSoir ? 25 : undefined,
+        dispoBudgetMax: undefined,
         dispoExpiresAt: input.dispoSoir
-          ? nextLocalMidnight(now).toISOString()
+          ? computeDispoExpiresAt('soir', now).toISOString()
           : undefined,
         phone: input.phone.trim(),
         authProvider: input.authProvider,
@@ -1862,11 +1864,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const setDispoSoir = useCallback((value: boolean) => {
     if (value) {
+      const slot = state.currentUser?.dispoSlot ?? 'soir';
       dispatch({
         type: 'SET_DISPO_PROFILE',
         payload: {
           dispoSoir: true,
-          dispoExpiresAt: nextLocalMidnight().toISOString(),
+          dispoSlot: slot,
+          dispoExpiresAt: computeDispoExpiresAt(slot).toISOString(),
         },
       });
     } else {
@@ -1875,7 +1879,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         payload: { dispoSoir: false, dispoExpiresAt: null },
       });
     }
-  }, []);
+  }, [state.currentUser?.dispoSlot]);
 
   const setDispoProfile = useCallback(
     (update: DispoProfileUpdate) => {
@@ -1889,7 +1893,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           next.dispoCategories = [...ALL_CATEGORIES];
         }
         if (next.dispoExpiresAt === undefined) {
-          next.dispoExpiresAt = nextLocalMidnight().toISOString();
+          const slot =
+            next.dispoSlot ??
+            state.currentUser?.dispoSlot ??
+            'soir';
+          next.dispoExpiresAt = computeDispoExpiresAt(
+            typeof slot === 'string' ? slot : 'soir',
+          ).toISOString();
         }
       }
       if (next.dispoSoir === false) {
@@ -1897,10 +1907,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       dispatch({ type: 'SET_DISPO_PROFILE', payload: next });
     },
-    [state.currentUser?.dispoCategories],
+    [state.currentUser?.dispoCategories, state.currentUser?.dispoSlot],
   );
 
-  /** Auto-off Dispo ce soir at local midnight. */
+  /** Auto-off Dispo when dispoExpiresAt is past (slot end / midnight). */
   useEffect(() => {
     const tick = () => {
       const me = state.currentUser;

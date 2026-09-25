@@ -26,6 +26,10 @@ import { Outing, OutingCategory, User } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import { formatParisTime, parisYmd } from '../utils/parisTime';
+import {
+  computeDispoExpiresAt,
+  dispoSlotCreatePrefill,
+} from '../utils/dispo';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
@@ -356,9 +360,10 @@ export function FeedScreen() {
     const primary = (
       cats.includes('autre') ? 'autre' : (cats[0] ?? 'restaurant')
     ) as OutingCategory;
-    const slot = target?.dispoSlot ?? me?.dispoSlot ?? '19:30';
+    const slot = target?.dispoSlot ?? me?.dispoSlot ?? 'soir';
     const detail =
       target?.dispoCategoryDetail ?? me?.dispoCategoryDetail ?? undefined;
+    const slotPrefill = dispoSlotCreatePrefill(slot);
     navigation.navigate('MainTabs', {
       screen: 'Create',
       params: {
@@ -379,8 +384,8 @@ export function FeedScreen() {
         excludedTopics: (target?.dispoExclusions ?? me?.dispoExclusions)?.join(
           ', ',
         ),
-        timeLabel: slot === 'flexible' ? '19:30' : slot,
-        flexibleSlot: slot === 'flexible',
+        timeLabel: slotPrefill.timeLabel,
+        dateOffsetDays: slotPrefill.dateOffsetDays,
       },
     });
   };
@@ -405,24 +410,33 @@ export function FeedScreen() {
   );
 
   const onToggleDispo = (value: boolean) => {
-    setDispoProfile({ dispoSoir: value });
+    if (!value) {
+      setDispoProfile({ dispoSoir: false });
+      return;
+    }
+    const slot = user?.dispoSlot ?? 'soir';
+    setDispoProfile({
+      dispoSoir: true,
+      dispoSlot: slot,
+      dispoExpiresAt: computeDispoExpiresAt(slot).toISOString(),
+    });
   };
 
   const dispoBanner = (
     <View style={[styles.banner, isDispo ? styles.bannerOn : styles.bannerOff]}>
       <Text style={[styles.bannerTitle, isDispo && styles.bannerTitleOn]}>
-        Dispo ce soir
+        Dispo
       </Text>
       <Text style={[styles.bannerBody, isDispo && styles.bannerBodyOn]}>
-        {`Tu es libre ? Les autres peuvent te proposer une sortie.\nÇa s’arrête à minuit, ou dès que tu confirmes une table.`}
+        {`Les autres peuvent te proposer une sortie.\nÇa s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.`}
       </Text>
       <View style={styles.dispoToggleRow}>
         <View style={styles.dispoToggleCopy}>
           <Text style={[styles.dispoToggleLabel, isDispo && styles.bannerTitleOn]}>
-            Je suis dispo ce soir
+            Je suis dispo
           </Text>
           <Text style={styles.dispoToggleHint}>
-            {isDispo ? 'Visible ce soir' : 'Invisible pour l’instant'}
+            {isDispo ? 'Visible' : 'Invisible pour l’instant'}
           </Text>
         </View>
         <Switch
@@ -430,14 +444,14 @@ export function FeedScreen() {
           onValueChange={onToggleDispo}
           trackColor={{ true: colors.primarySoft, false: colors.border }}
           thumbColor={isDispo ? colors.primary : colors.surface}
-          accessibilityLabel="Je suis dispo ce soir"
+          accessibilityLabel="Je suis dispo"
         />
       </View>
       <Pressable
         onPress={() => navigation.navigate('DispoSoir')}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel="Réglages Dispo ce soir"
+        accessibilityLabel="Réglages Dispo"
       >
         <Text style={[styles.bannerCta, isDispo && styles.bannerCtaOn]}>
           Réglages →
@@ -815,7 +829,7 @@ export function FeedScreen() {
               <Text
                 style={[styles.segmentText, selected && styles.segmentTextOn]}
               >
-                {m === 'sorties' ? 'Annonces' : 'Dispo ce soir'}
+                {m === 'sorties' ? 'Annonces' : 'Dispo'}
               </Text>
             </Pressable>
           );
@@ -850,13 +864,13 @@ export function FeedScreen() {
           ListEmptyComponent={
             <EmptyState
               title="Encore peu de sorties ici."
-              subtitle="Crée la première, ou passe en Dispo ce soir."
+              subtitle="Crée la première, ou passe en Dispo."
               actionLabel="Créer la première"
               onAction={() =>
                 navigation.navigate('MainTabs', { screen: 'Create' })
               }
               secondaryActionLabel={
-                categoryFilter === 'all' ? 'Dispo ce soir' : 'Voir toutes'
+                categoryFilter === 'all' ? 'Dispo' : 'Voir toutes'
               }
               onSecondaryAction={() => {
                 if (categoryFilter === 'all') {
@@ -885,9 +899,9 @@ export function FeedScreen() {
           ListHeaderComponent={listHeader}
           ListEmptyComponent={
             <EmptyState
-              title="Personne n’est dispo ce soir."
-              subtitle="Active Dispo ce soir (créneau, catégorie, quartier, budget) ou change de filtre."
-              actionLabel="Dispo ce soir"
+              title="Personne n’est dispo."
+              subtitle="Active Dispo (créneau, catégorie, quartier) ou change de filtre."
+              actionLabel="Dispo"
               onAction={() => navigation.navigate('DispoSoir')}
             />
           }

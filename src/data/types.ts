@@ -65,17 +65,17 @@ export interface User {
   dispoCategories: OutingCategory[];
   /** Free detail when Dispo includes Autre. */
   dispoCategoryDetail?: string;
-  /** Optional max budget when dispo ce soir (€). */
+  /** Optional max budget when Dispo (€) — unused on Dispo screen. */
   dispoBudgetMax?: number;
-  /** Créneau ce soir (ex. « 19:30 » ou « flexible »). */
+  /** Créneau Dispo (shortcut id, custom:…, or legacy HH:mm). */
   dispoSlot?: string;
-  /** Quartier privilégié pour ce soir (sinon neighborhood du profil). */
+  /** Quartier privilégié pour la dispo (sinon neighborhood du profil). */
   dispoNeighborhood?: string;
   /** Sujet de discussion optionnel. */
   dispoTopic?: string;
   /** Sujets à éviter (optionnel). */
   dispoExclusions?: string[];
-  /** ISO local midnight — auto-off Dispo ce soir. */
+  /** ISO — auto-off Dispo (slot end or Paris midnight of that day). */
   dispoExpiresAt?: string;
   phone: string;
   authProvider: AuthProvider;

@@ -15,6 +15,10 @@ import { categoryLabels } from '../data/mockOutings';
 import { describeDepositForfeitMoment, pricing } from '../data/pricing';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
+import {
+  dispoSlotCreatePrefill,
+  dispoSlotLabel,
+} from '../utils/dispo';
 import { planLabel } from '../utils/format';
 import {
   hasFullPhotoAccess,
@@ -258,14 +262,14 @@ export function ProfileScreen() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Dispo ce soir</Text>
+          <Text style={styles.cardLabel}>Dispo</Text>
           <Text style={styles.cardValue}>
-            {user.dispoSoir ? 'Activée · expire à minuit' : 'Désactivée'}
+            {user.dispoSoir ? 'Activée' : 'Désactivée'}
           </Text>
           {user.dispoSoir ? (
             <Text style={styles.cardHint}>
               {[
-                user.dispoSlot,
+                dispoSlotLabel(user.dispoSlot) || user.dispoSlot,
                 user.dispoNeighborhood ?? user.neighborhood,
                 user.dispoBudgetMax != null
                   ? `≤ ${user.dispoBudgetMax} €`
@@ -297,13 +301,14 @@ export function ProfileScreen() {
               title="Créer une annonce"
               variant="secondary"
               onPress={() => {
-                const slot = user.dispoSlot ?? '19:30';
+                const slot = user.dispoSlot ?? 'soir';
                 const cats = user.dispoCategories ?? [];
                 const primary = (
                   cats.includes('autre')
                     ? 'autre'
                     : (cats[0] ?? 'restaurant')
                 );
+                const slotPrefill = dispoSlotCreatePrefill(slot);
                 navigation.navigate('MainTabs', {
                   screen: 'Create',
                   params: {
@@ -318,8 +323,8 @@ export function ProfileScreen() {
                     budgetMaxEuros: user.dispoBudgetMax ?? 25,
                     topic: user.dispoTopic,
                     excludedTopics: user.dispoExclusions?.join(', '),
-                    timeLabel: slot === 'flexible' ? '19:30' : slot,
-                    flexibleSlot: slot === 'flexible',
+                    timeLabel: slotPrefill.timeLabel,
+                    dateOffsetDays: slotPrefill.dateOffsetDays,
                   },
                 });
               }}

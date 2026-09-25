@@ -20,22 +20,74 @@ import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import {
   DISPO_SLOT_OPTIONS,
-  dispoSlotLabel,
-  nextLocalMidnight,
+  computeDispoExpiresAt,
+  dispoSlotCreatePrefill,
+  encodeDispoCustomSlot,
+  frDateInputToYmd,
+  isDispoCustomSlot,
+  isDispoShortcutId,
+  normalizeDispoHhMm,
+  parseDispoCustomSlot,
+  ymdToFrDateInput,
 } from '../utils/dispo';
+import { addParisDays, parisYmd } from '../utils/parisTime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+function initialSlotState(raw?: string): {
+  slot: string;
+  freeDate: string;
+  freeTime: string;
+  useFree: boolean;
+} {
+  const today = parisYmd(Date.now()) || '';
+  if (raw && isDispoCustomSlot(raw)) {
+    const parsed = parseDispoCustomSlot(raw);
+    if (parsed) {
+      return {
+        slot: raw,
+        freeDate: ymdToFrDateInput(parsed.ymd),
+        freeTime: parsed.hhmm,
+        useFree: true,
+      };
+    }
+  }
+  if (raw && isDispoShortcutId(raw)) {
+    return {
+      slot: raw,
+      freeDate: ymdToFrDateInput(today),
+      freeTime: '',
+      useFree: false,
+    };
+  }
+  // Legacy HH:mm → free time today; flexible / missing → Ce soir
+  if (raw && /^\d{1,2}:\d{2}$/.test(raw)) {
+    return {
+      slot: encodeDispoCustomSlot(today, raw.length === 4 ? `0${raw}` : raw),
+      freeDate: ymdToFrDateInput(today),
+      freeTime: raw.length === 4 ? `0${raw}` : raw,
+      useFree: true,
+    };
+  }
+  return {
+    slot: 'soir',
+    freeDate: ymdToFrDateInput(today),
+    freeTime: '',
+    useFree: false,
+  };
+}
 
 export function DispoSoirScreen() {
   const navigation = useNavigation<Nav>();
   const { state, setDispoProfile } = useChance();
   const user = state.currentUser;
 
+  const initial = initialSlotState(user?.dispoSlot);
   const [on, setOn] = useState(!!user?.dispoSoir);
-  const [slot, setSlot] = useState(
-    user?.dispoSlot ?? '19:30',
-  );
+  const [slot, setSlot] = useState(initial.slot);
+  const [useFree, setUseFree] = useState(initial.useFree);
+  const [freeDate, setFreeDate] = useState(initial.freeDate);
+  const [freeTime, setFreeTime] = useState(initial.freeTime);
   const [categories, setCategories] = useState<OutingCategory[]>(
     user?.dispoCategories?.length
       ? [...user.dispoCategories]
@@ -66,6 +118,16 @@ export function DispoSoirScreen() {
     return null;
   }, [on, categories.length]);
 
+  const resolveSlot = (): string | null => {
+    if (useFree) {
+      const ymd = frDateInputToYmd(freeDate);
+      const hhmm = normalizeDispoHhMm(freeTime);
+      if (!ymd || !hhmm) return null;
+      return encodeDispoCustomSlot(ymd, hhmm);
+    }
+    return slot;
+  };
+
   const buildPayload = (forceOn = on) => {
     let nextCats = categories;
     if (forceOn && nextCats.length === 0) {
@@ -76,6 +138,8 @@ export function DispoSoirScreen() {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean);
+    const resolved = forceOn ? resolveSlot() : null;
+    const effectiveSlot = resolved ?? (forceOn ? 'soir' : null);
     return {
       dispoSoir: forceOn,
       dispoCategories: nextCats,
@@ -83,21 +147,30 @@ export function DispoSoirScreen() {
         forceOn && nextCats.includes('autre')
           ? categoryDetail.trim() || null
           : null,
-      dispoSlot: forceOn ? slot : null,
+      dispoSlot: forceOn ? effectiveSlot : null,
       dispoNeighborhood: forceOn ? quartier : null,
       dispoBudgetMax: null,
       dispoTopic: forceOn ? topic.trim() || null : null,
       dispoExclusions: forceOn ? (excl.length ? excl : null) : null,
       dispoExpiresAt: forceOn
-        ? nextLocalMidnight().toISOString()
+        ? computeDispoExpiresAt(effectiveSlot).toISOString()
         : null,
     };
   };
 
   const onSave = () => {
     if (on && !quartier.trim()) {
-      Alert.alert('Quartier requis', 'Indique le quartier pour ce soir.');
+      Alert.alert('Quartier requis', 'Indique le quartier.');
       return;
+    }
+    if (on && useFree) {
+      if (!frDateInputToYmd(freeDate) || !normalizeDispoHhMm(freeTime)) {
+        Alert.alert(
+          'Créneau',
+          'Indique un jour (JJ/MM/AAAA) et une heure (HH:mm) valides.',
+        );
+        return;
+      }
     }
     if (on && categories.includes('autre') && !categoryDetail.trim()) {
       Alert.alert(
@@ -108,9 +181,9 @@ export function DispoSoirScreen() {
     }
     setDispoProfile(buildPayload());
     Alert.alert(
-      on ? 'Visible ce soir' : 'Invisible pour l’instant',
+      on ? 'Visible' : 'Invisible pour l’instant',
       on
-        ? 'Ça s’arrête à minuit, ou dès que tu confirmes une table.'
+        ? 'Ça s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.'
         : 'Les autres ne peuvent plus te proposer de sortie.',
     );
     navigation.goBack();
@@ -118,8 +191,17 @@ export function DispoSoirScreen() {
 
   const onCreateAnnonce = () => {
     if (!quartier.trim()) {
-      Alert.alert('Quartier requis', 'Indique le quartier pour ce soir.');
+      Alert.alert('Quartier requis', 'Indique le quartier.');
       return;
+    }
+    if (useFree) {
+      if (!frDateInputToYmd(freeDate) || !normalizeDispoHhMm(freeTime)) {
+        Alert.alert(
+          'Créneau',
+          'Indique un jour (JJ/MM/AAAA) et une heure (HH:mm) valides.',
+        );
+        return;
+      }
     }
     if (categories.includes('autre') && !categoryDetail.trim()) {
       Alert.alert(
@@ -137,6 +219,7 @@ export function DispoSoirScreen() {
         ? 'autre'
         : (payload.dispoCategories[0] ?? 'restaurant')
     ) as OutingCategory;
+    const prefill = dispoSlotCreatePrefill(payload.dispoSlot ?? 'soir');
     navigation.navigate('MainTabs', {
       screen: 'Create',
       params: {
@@ -147,10 +230,33 @@ export function DispoSoirScreen() {
         neighborhood: quartier,
         topic: topic.trim() || undefined,
         excludedTopics: exclusions.trim() || undefined,
-        timeLabel: slot === 'flexible' ? '19:30' : slot,
-        flexibleSlot: slot === 'flexible',
+        timeLabel: prefill.timeLabel,
+        dateOffsetDays: prefill.dateOffsetDays,
       },
     });
+  };
+
+  const selectShortcut = (id: string) => {
+    setUseFree(false);
+    setSlot(id);
+    setFreeTime('');
+    const today = parisYmd(Date.now()) || '';
+    if (id === 'demain' && today) {
+      setFreeDate(ymdToFrDateInput(addParisDays(today, 1)));
+    } else if (today) {
+      setFreeDate(ymdToFrDateInput(today));
+    }
+  };
+
+  const onFreeDateChange = (t: string) => {
+    setFreeDate(t);
+    setUseFree(true);
+  };
+
+  const onFreeTimeChange = (t: string) => {
+    const cleaned = t.replace(/[^0-9:hH.]/g, '').slice(0, 5);
+    setFreeTime(cleaned);
+    setUseFree(true);
   };
 
   return (
@@ -159,17 +265,17 @@ export function DispoSoirScreen() {
       contentContainerStyle={styles.wrap}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.title}>Dispo ce soir</Text>
+      <Text style={styles.title}>Dispo</Text>
       <Text style={styles.body}>
-        {`Tu es libre ? Les autres peuvent te proposer une sortie.\nÇa s’arrête à minuit, ou dès que tu confirmes une table.`}
+        {`Les autres peuvent te proposer une sortie.\nÇa s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.`}
       </Text>
 
       <View style={styles.card}>
         <View style={styles.row}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Je suis dispo ce soir</Text>
+            <Text style={styles.label}>Je suis dispo</Text>
             <Text style={styles.hint}>
-              {on ? 'Visible ce soir' : 'Invisible pour l’instant'}
+              {on ? 'Visible' : 'Invisible pour l’instant'}
             </Text>
           </View>
           <Switch
@@ -182,14 +288,14 @@ export function DispoSoirScreen() {
       </View>
 
       <Text style={styles.section}>Créneau *</Text>
-      <Text style={styles.sectionHint}>À partir de quelle heure ?</Text>
+      <Text style={styles.sectionHint}>Quand es-tu libre ?</Text>
       <View style={styles.chips}>
         {DISPO_SLOT_OPTIONS.map((s) => {
-          const selected = slot === s.id;
+          const selected = !useFree && slot === s.id;
           return (
             <Pressable
               key={s.id}
-              onPress={() => setSlot(s.id)}
+              onPress={() => selectShortcut(s.id)}
               style={[styles.chip, selected && styles.chipOn]}
             >
               <Text style={[styles.chipText, selected && styles.chipTextOn]}>
@@ -199,6 +305,34 @@ export function DispoSoirScreen() {
           );
         })}
       </View>
+
+      <Text style={styles.sectionHint}>Ou jour et heure libres</Text>
+      <Text style={styles.freeLabel}>Jour</Text>
+      <TextInput
+        style={[styles.input, useFree && styles.inputOn]}
+        value={freeDate}
+        onChangeText={onFreeDateChange}
+        onFocus={() => setUseFree(true)}
+        placeholder="JJ/MM/AAAA"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="numbers-and-punctuation"
+        autoCapitalize="none"
+        autoCorrect={false}
+        accessibilityLabel="Jour libre"
+      />
+      <Text style={styles.freeLabel}>Heure</Text>
+      <TextInput
+        style={[styles.input, useFree && styles.inputOn]}
+        value={freeTime}
+        onChangeText={onFreeTimeChange}
+        onFocus={() => setUseFree(true)}
+        placeholder="HH:mm (ex. 15:30)"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="numbers-and-punctuation"
+        autoCapitalize="none"
+        autoCorrect={false}
+        accessibilityLabel="Heure libre"
+      />
 
       <Text style={styles.section}>Catégorie *</Text>
       <Text style={styles.sectionHint}>
@@ -281,7 +415,6 @@ export function DispoSoirScreen() {
         </View>
       ) : null}
 
-
       <Text style={styles.section}>Sujet</Text>
       <TextInput
         style={styles.input}
@@ -349,6 +482,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginBottom: spacing.md,
   },
+  freeLabel: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
+    marginBottom: spacing.xs,
+  },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -388,6 +527,9 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     marginBottom: spacing.sm,
+  },
+  inputOn: {
+    borderColor: colors.primary,
   },
   quartierList: {
     backgroundColor: colors.surface,

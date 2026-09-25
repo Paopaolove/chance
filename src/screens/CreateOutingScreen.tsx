@@ -117,12 +117,18 @@ function buildStartsAt(dateStr: string, timeStr: string): Date | null {
   return new Date(date.y, date.m - 1, date.d, time.h, time.m, 0, 0);
 }
 
-function defaultDateTime(fromDispo: boolean, timeLabel?: string): {
+function defaultDateTime(
+  fromDispo: boolean,
+  timeLabel?: string,
+  dateOffsetDays?: number,
+): {
   dateStr: string;
   timeStr: string;
 } {
   const base = new Date();
-  if (!fromDispo) {
+  if (typeof dateOffsetDays === 'number' && dateOffsetDays >= 0) {
+    base.setDate(base.getDate() + dateOffsetDays);
+  } else if (!fromDispo) {
     base.setDate(base.getDate() + 1);
   }
   base.setHours(20, 0, 0, 0);
@@ -144,7 +150,11 @@ export function CreateOutingScreen() {
     useChance();
   const active = getActiveOutingForUser();
 
-  const initial = defaultDateTime(!!prefill?.fromDispo, prefill?.timeLabel);
+  const initial = defaultDateTime(
+    !!prefill?.fromDispo,
+    prefill?.timeLabel,
+    prefill?.dateOffsetDays,
+  );
 
   const [category, setCategory] = useState<OutingCategory>(
     prefill?.category ?? 'restaurant',
@@ -195,7 +205,7 @@ export function CreateOutingScreen() {
     // Keep THAT recipient when starting from a profile / Dispo card.
     if (prefill.inviteeUserId) setInviteeUserId(prefill.inviteeUserId);
     if (prefill.inviteeName) setInviteeName(prefill.inviteeName);
-    const next = defaultDateTime(true, prefill.timeLabel);
+    const next = defaultDateTime(true, prefill.timeLabel, prefill.dateOffsetDays);
     setDateStr(next.dateStr);
     setTimeStr(next.timeStr);
     setFromDispoBanner(true);
@@ -278,7 +288,7 @@ export function CreateOutingScreen() {
     ) {
       Alert.alert(
         'Pas de proposition à soi-même',
-        'Choisis quelqu’un d’autre dans Dispo ce soir.',
+        'Choisis quelqu’un d’autre dans Dispo.',
       );
       return;
     }
@@ -407,7 +417,7 @@ export function CreateOutingScreen() {
             <Text style={styles.dispoBannerTitle}>
               {inviteeName
                 ? `Proposition pour ${inviteeName}`
-                : 'Depuis Dispo ce soir'}
+                : 'Depuis Dispo'}
             </Text>
             <Text style={styles.dispoBannerBody}>
               {inviteeName
