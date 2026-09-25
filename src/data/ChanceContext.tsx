@@ -628,7 +628,6 @@ function reducer(state: AppState, action: AppAction): AppState {
         respondedAt,
         respondedByUserId,
         forfeitReporterDeposit,
-        cancelOuting,
       } = action.payload;
       const report = state.imprevuReports.find((r) => r.id === imprevuId);
       if (!report || report.status !== 'pending') return state;
@@ -640,45 +639,73 @@ function reducer(state: AppState, action: AppAction): AppState {
             ? ('auto_refused' as const)
             : ('refused' as const);
 
-      let requests = state.requests.map((r) => {
-        if (r.outingId !== report.outingId) return r;
-        if (cancelOuting && r.status === 'confirmed') {
-          if (r.depositStatus === 'held' || !r.depositStatus) {
-            return {
-              ...r,
-              depositStatus: 'returned' as const,
-              status: 'cancelled' as const,
-            };
+      const outing = state.outings.find((o) => o.id === report.outingId);
+      const reporterIsHost = !!outing && report.reporterId === outing.hostId;
+
+      let requests = state.requests;
+      let outings = state.outings;
+
+      if (decision === 'accepted') {
+        // Guest imprévu accepté = cette participation only (caution rendue, pas
+        // d'absence). Autres confirmés gardent leur place. ≠ cancelOuting hôte.
+        if (!reporterIsHost) {
+          const targetId =
+            report.requestId &&
+            state.requests.some(
+              (r) =>
+                r.id === report.requestId &&
+                r.userId === report.reporterId &&
+                r.outingId === report.outingId,
+            )
+              ? report.requestId
+              : state.requests.find(
+                  (r) =>
+                    r.outingId === report.outingId &&
+                    r.userId === report.reporterId &&
+                    (r.status === 'confirmed' ||
+                      r.status === 'accepted' ||
+                      r.status === 'pending'),
+                )?.id;
+          if (targetId) {
+            const req = state.requests.find((r) => r.id === targetId)!;
+            const heldSeat =
+              req.status === 'accepted' || req.status === 'confirmed';
+            requests = state.requests.map((r) => {
+              if (r.id !== targetId) return r;
+              if (r.status === 'confirmed') {
+                return {
+                  ...r,
+                  status: 'cancelled' as const,
+                  depositStatus:
+                    r.depositStatus === 'held' || !r.depositStatus
+                      ? ('returned' as const)
+                      : r.depositStatus,
+                };
+              }
+              return { ...r, status: 'cancelled' as const };
+            });
+            if (heldSeat) {
+              outings = state.outings.map((o) =>
+                o.id === report.outingId ? withRestoredSeat(o) : o,
+              );
+            }
           }
-          return { ...r, status: 'cancelled' as const };
         }
-        if (
-          forfeitReporterDeposit &&
-          r.userId === report.reporterId &&
-          r.status === 'confirmed' &&
-          (r.depositStatus === 'held' || !r.depositStatus)
-        ) {
-          return { ...r, depositStatus: 'forfeited' as const };
-        }
-        return r;
-      });
-
-      if (cancelOuting) {
-        requests = requests.map((r) =>
-          r.outingId === report.outingId &&
-          (r.status === 'pending' || r.status === 'accepted')
-            ? { ...r, status: 'cancelled' as const }
-            : r,
-        );
+        // Host reporter: acceptation ≠ annuler le groupe — hôte utilise cancelOuting.
+      } else {
+        requests = state.requests.map((r) => {
+          if (r.outingId !== report.outingId) return r;
+          if (
+            forfeitReporterDeposit &&
+            r.userId === report.reporterId &&
+            r.status === 'confirmed' &&
+            (r.depositStatus === 'held' || !r.depositStatus)
+          ) {
+            return { ...r, depositStatus: 'forfeited' as const };
+          }
+          return r;
+        });
       }
-
-      const outings = cancelOuting
-        ? state.outings.map((o) =>
-            o.id === report.outingId
-              ? { ...o, status: 'closed' as const }
-              : o,
-          )
-        : state.outings;
 
       return {
         ...state,
@@ -2477,13 +2504,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             decision: 'accepted',
             respondedAt: nowIso,
             respondedByUserId: user.id,
-            cancelOuting: true,
           },
         });
         const toast: AppToast = {
           id: uid('toast'),
-          title: 'Annulation',
-          body: 'Imprévu accepté. Caution rendue — la sortie est annulée.',
+          title: 'Imprévu accepté',
+          body:
+            'Caution rendue — participation annulée (pas une absence). Les autres places confirmées restent.',
           createdAt: nowIso,
         };
         dispatch({ type: 'SET_TOAST', payload: toast });

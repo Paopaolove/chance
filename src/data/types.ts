@@ -450,8 +450,11 @@ export type AppAction =
          * (absence). Manual refuse must NOT set this (règle 3 h).
          */
         forfeitReporterDeposit?: boolean;
-        /** When accepted: return deposits + close outing (not a no-show). */
-        cancelOuting?: boolean;
+        /**
+         * Accepted = release reporter guest only (deposit returned, no absence).
+         * Never closes the outing / never cancels other confirmed seats.
+         * Whole-outing cancel = host cancelOuting only.
+         */
       };
     }
   | {

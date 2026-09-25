@@ -49,7 +49,7 @@ Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT
 | **Annulation sortie** par l’hôte | `cancelOuting` — toutes les cautions held → returned |
 | **No-show hôte** | `reportHostNoShow` → `RETURN_DEPOSITS_FOR_OUTING` |
 | **Lieu alternatif refusé** par l’invité | `RESPOND_VENUE_ALTERNATE` refused → caution de *cet* invité rendue |
-| **Imprévu accepté** | `RESPOND_IMPREVU` accepted → cautions rendues + sortie fermée ; **pas** d’absence |
+| **Imprévu accepté** | `RESPOND_IMPREVU` accepted → caution du **reporter invité** rendue + sa place annulée ; **pas** d’absence ; autres confirmés restent ; sortie **non** fermée |
 | **Joker** après refus / auto_refus | `USE_JOKER_ON_IMPREVU` → caution returned, **pas** d’absence, **hôte 0 €**, joker consommé le mois Paris |
 | **Sortie terminée** (`completeOuting` / auto H+30 min) | Invité **présent** (`attendance: present`) → `held` → `returned`. Confirmé seul ≠ présent ; absence (`reportGuestNoShow`) reste `forfeited`. |
 
@@ -65,7 +65,7 @@ Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT
 
 | Décision | Effet caution | Sortie |
 |----------|---------------|--------|
-| **Accepté** | Toutes les cautions held → `returned` ; pas d’absence | Outing `closed` |
+| **Accepté** | Caution du reporter invité held → `returned` ; pas d’absence ; sa place seule | Sortie continue (autres confirmés restent) |
 | **Refusé** | Caution **reste `held`** — règle 3 h ; **ou joker** → returned, hôte 0 € | Sortie continue |
 | **Auto-refusé** à l’heure | Comme refus + absence → forfeit si invité ; **ou joker** | Sortie non annulée par l’imprévu |
 
@@ -81,7 +81,6 @@ Ne pas ajouter dans le code ni l’UI :
 - Amendes, pénalités ou montants **autres que** caution **20 €** et le split forfeit **6,90 / 13,10**
 - Remboursement des **frais Chance** / crédits sortie après forfeit ou imprévu
 - Délais Stripe / partial capture / litiges bancaires
-- Imprévu accepté pour **un seul** invité d’un groupe sans fermer toute la sortie (le mock actuel ferme toute la sortie)
 - Barème de « retards » monétaire (les retards signalés ce n’est pas la caution)
 - Toute autre sanction argent hors strikes mock (avertissement / ban / priorité)
 
@@ -98,5 +97,5 @@ Ne pas ajouter dans le code ni l’UI :
 | Forfeit split 6,90 / 13,10 | `DEPOSIT_FORFEIT_CHANCE_EUROS` / `DEPOSIT_FORFEIT_HOST_EUROS` |
 | Joker 1× / mois Paris | `jokerUsedMonthKey` + `parisMonthKey` |
 | Imprévu 1× / personne | garde `REPORT_IMPREVU` |
-| Accepté → pas absence + caution rendue + sortie annulée | `cancelOuting: true` |
+| Accepté → pas absence + caution reporter rendue ; groupe intact | `RESPOND_IMPREVU` accepted (sans fermer la sortie) |
 | Refus → règle 3 h (ou joker) | **pas** de forfeit immédiat au refus manuel |

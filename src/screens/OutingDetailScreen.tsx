@@ -187,7 +187,7 @@ export function OutingDetailScreen() {
                 else
                   Alert.alert(
                     'Imprévu accepté. Caution rendue.',
-                    'La sortie est annulée — ce n’est pas une absence.',
+                    'Participation annulée (pas une absence). Les autres places confirmées restent.',
                   );
               }}
               style={{ marginTop: spacing.md }}
