@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -23,7 +24,6 @@ import { getTravelMinutes } from '../data/travelTime';
 import { Outing, OutingCategory, User } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
-import { dispoSlotLabel } from '../utils/dispo';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
@@ -100,7 +100,7 @@ function dispoMatchScore(
 
 export function FeedScreen() {
   const navigation = useNavigation<Nav>();
-  const { visibleOutings, peopleDispo, state } = useChance();
+  const { visibleOutings, peopleDispo, state, setDispoProfile } = useChance();
   const [demoMenuOpen, setDemoMenuOpen] = useState(false);
   const logoTaps = useRef(0);
   const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -132,7 +132,6 @@ export function FeedScreen() {
 
   const user = state.currentUser;
   const isDispo = !!user?.dispoSoir;
-  const envieCount = user?.dispoCategories?.length ?? 0;
   const userNeighborhood =
     user?.dispoNeighborhood ?? user?.neighborhood ?? '';
   const myDispoPrefs = {
@@ -314,29 +313,65 @@ export function FeedScreen() {
     });
   };
 
+  const inviteBanner = (
+    <View style={[styles.banner, styles.bannerOff]}>
+      <Text style={styles.bannerTitle}>J’invite ce soir</Text>
+      <Text style={styles.bannerBody}>
+        Propose une table, un verre ou une sortie.
+      </Text>
+      <Pressable
+        onPress={() =>
+          navigation.navigate('MainTabs', { screen: 'Create' })
+        }
+        style={styles.inviteCta}
+        accessibilityRole="button"
+        accessibilityLabel="Inviter"
+      >
+        <Text style={styles.inviteCtaText}>Inviter</Text>
+      </Pressable>
+    </View>
+  );
+
+  const onToggleDispo = (value: boolean) => {
+    setDispoProfile({ dispoSoir: value });
+  };
+
   const dispoBanner = (
-    <Pressable
-      onPress={() => navigation.navigate('DispoSoir')}
-      style={[styles.banner, isDispo ? styles.bannerOn : styles.bannerOff]}
-    >
+    <View style={[styles.banner, isDispo ? styles.bannerOn : styles.bannerOff]}>
       <Text style={[styles.bannerTitle, isDispo && styles.bannerTitleOn]}>
-        {isDispo
-          ? envieCount > 0
-            ? `Dispo ce soir · ${envieCount} catégorie${envieCount > 1 ? 's' : ''}${
-                user?.dispoSlot ? ` · ${dispoSlotLabel(user.dispoSlot)}` : ''
-              }`
-            : 'Tu es dispo ce soir'
-          : 'Dispo ce soir ?'}
+        Dispo ce soir
       </Text>
       <Text style={[styles.bannerBody, isDispo && styles.bannerBodyOn]}>
-        {isDispo
-          ? 'Les autres peuvent te proposer une sortie, ou crée une annonce en 2 taps. Expire à minuit.'
-          : 'Indique créneau, catégorie, quartier et budget pour une sortie improvisée ce soir.'}
+        {`Tu es libre ? Les autres peuvent te proposer une sortie.\nÇa s’arrête à minuit, ou dès que tu confirmes une table.`}
       </Text>
-      <Text style={[styles.bannerCta, isDispo && styles.bannerCtaOn]}>
-        {isDispo ? 'Modifier / créer une annonce →' : 'Passer dispo →'}
-      </Text>
-    </Pressable>
+      <View style={styles.dispoToggleRow}>
+        <View style={styles.dispoToggleCopy}>
+          <Text style={[styles.dispoToggleLabel, isDispo && styles.bannerTitleOn]}>
+            Je suis dispo ce soir
+          </Text>
+          <Text style={styles.dispoToggleHint}>
+            {isDispo ? 'Visible ce soir' : 'Invisible pour l’instant'}
+          </Text>
+        </View>
+        <Switch
+          value={isDispo}
+          onValueChange={onToggleDispo}
+          trackColor={{ true: colors.primarySoft, false: colors.border }}
+          thumbColor={isDispo ? colors.primary : colors.surface}
+          accessibilityLabel="Je suis dispo ce soir"
+        />
+      </View>
+      <Pressable
+        onPress={() => navigation.navigate('DispoSoir')}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel="Réglages Dispo ce soir"
+      >
+        <Text style={[styles.bannerCta, isDispo && styles.bannerCtaOn]}>
+          Réglages →
+        </Text>
+      </Pressable>
+    </View>
   );
 
   const filtersActive =
@@ -594,7 +629,7 @@ export function FeedScreen() {
           );
         })}
       </View>
-      {dispoBanner}
+      {mode === 'sorties' ? inviteBanner : dispoBanner}
       {categoryChips}
       {extraFiltersPanel}
     </View>
@@ -747,6 +782,34 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   bannerCtaOn: { color: colors.success },
+  inviteCta: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+  },
+  inviteCtaText: {
+    ...typography.bodyStrong,
+    fontFamily: fonts.semiBold,
+    color: colors.white,
+  },
+  dispoToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  dispoToggleCopy: { flex: 1 },
+  dispoToggleLabel: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
+  },
+  dispoToggleHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
   categoryRow: {
     flexDirection: 'row',
     alignItems: 'center',

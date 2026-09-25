@@ -161,7 +161,7 @@ export function DispoSoirScreen() {
     >
       <Text style={styles.title}>Dispo ce soir</Text>
       <Text style={styles.body}>
-        {`Tu es libre ce soir ? Les autres peuvent te proposer une sortie.\nÇa s’arrête à minuit, ou dès que tu confirmes une table.`}
+        {`Tu es libre ? Les autres peuvent te proposer une sortie.\nÇa s’arrête à minuit, ou dès que tu confirmes une table.`}
       </Text>
 
       <View style={styles.card}>
