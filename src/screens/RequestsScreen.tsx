@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -15,7 +15,8 @@ import { EmptyState } from '../components/EmptyState';
 import { useChance } from '../data/ChanceContext';
 import { Request } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
-import { colors, radius, spacing, typography } from '../theme';
+import { colors, fonts, radius, spacing, typography } from '../theme';
+import { formatCountdown } from '../utils/format';
 import { isStartsAtPast } from '../utils/parisTime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -29,6 +30,11 @@ const statusLabels: Record<string, string> = {
   cancelled: 'Annulée',
 };
 
+function remainingMs(deadlineIso: string | undefined, nowMs: number): number {
+  if (!deadlineIso) return 0;
+  return Math.max(0, new Date(deadlineIso).getTime() - nowMs);
+}
+
 export function RequestsScreen() {
   const navigation = useNavigation<Nav>();
   const {
@@ -40,14 +46,25 @@ export function RequestsScreen() {
     cancelRequest,
     expireRequestIfNeeded,
     state,
-    completeOuting,
   } = useChance();
+
+  const [now, setNow] = useState(Date.now());
+  const hasAcceptedOutgoing = outgoingRequests.some(
+    (r) => r.status === 'accepted',
+  );
+
+  // Tick countdown on Demandes cards while a guest must confirm within 10 min.
+  useEffect(() => {
+    if (!hasAcceptedOutgoing) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [hasAcceptedOutgoing]);
 
   useEffect(() => {
     outgoingRequests.forEach((r) => {
       if (r.status === 'accepted') expireRequestIfNeeded(r.id);
     });
-  }, [outgoingRequests, expireRequestIfNeeded]);
+  }, [now, outgoingRequests, expireRequestIfNeeded]);
 
   const renderIncoming = (r: Request) => {
     const outing = getOutingById(r.outingId);
@@ -144,39 +161,51 @@ export function RequestsScreen() {
 
   const renderOutgoing = (r: Request) => {
     const outing = getOutingById(r.outingId);
-    return (
-      <Pressable
-        key={r.id}
-        style={styles.card}
-        onPress={() => {
-          if (r.status === 'accepted') {
-            navigation.navigate('ConfirmSlot', { requestId: r.id });
-          } else if (r.status === 'confirmed' && outing) {
-            navigation.navigate('ChatPlaceholder', {
-              outingId: outing.id,
-              requestId: r.id,
-            });
-          } else if (outing) {
-            navigation.navigate('OutingDetail', { outingId: outing.id });
-          }
-        }}
-      >
+    const leftMs = remainingMs(r.confirmDeadlineAt, now);
+    const underOneMinute = leftMs > 0 && leftMs < 60_000;
+    const countdown = r.confirmDeadlineAt
+      ? formatCountdown(r.confirmDeadlineAt, now)
+      : '0:00';
+
+    const body = (
+      <>
         <Text style={styles.cardTitle}>{outing?.title ?? 'Sortie'}</Text>
         <Text style={styles.cardMeta}>
           chez {outing?.hostName} · {statusLabels[r.status]}
         </Text>
         {r.status === 'accepted' ? (
           <>
-            <Text style={styles.actionHint}>Touche pour confirmer (10 min)</Text>
-            <Button
-              title="Libérer ma place"
-              variant="ghost"
+            <View style={styles.acceptRow}>
+              <Button
+                title="J’accepte"
+                onPress={() =>
+                  navigation.navigate('ConfirmSlot', { requestId: r.id })
+                }
+                style={styles.acceptBtn}
+              />
+              <Text
+                style={[
+                  styles.cardCountdown,
+                  underOneMinute && styles.cardCountdownDanger,
+                ]}
+                accessibilityRole="timer"
+              >
+                {countdown}
+              </Text>
+            </View>
+            <Pressable
               onPress={() => {
                 cancelRequest(r.id, 'guest');
-                Alert.alert('Place libérée', 'La place est de nouveau disponible.');
+                Alert.alert(
+                  'Place libérée',
+                  'La place est de nouveau disponible.',
+                );
               }}
-              style={{ marginTop: spacing.sm }}
-            />
+              hitSlop={8}
+              style={styles.releaseWrap}
+            >
+              <Text style={styles.releaseLink}>Libérer ma place</Text>
+            </Pressable>
           </>
         ) : null}
         {r.status === 'confirmed' && outing ? (
@@ -200,6 +229,34 @@ export function RequestsScreen() {
             ) : null}
           </>
         ) : null}
+      </>
+    );
+
+    // Accepted: card is source of truth — CTA + countdown visible; no body tap nav.
+    if (r.status === 'accepted') {
+      return (
+        <View key={r.id} style={styles.card}>
+          {body}
+        </View>
+      );
+    }
+
+    return (
+      <Pressable
+        key={r.id}
+        style={styles.card}
+        onPress={() => {
+          if (r.status === 'confirmed' && outing) {
+            navigation.navigate('ChatPlaceholder', {
+              outingId: outing.id,
+              requestId: r.id,
+            });
+          } else if (outing) {
+            navigation.navigate('OutingDetail', { outingId: outing.id });
+          }
+        }}
+      >
+        {body}
       </Pressable>
     );
   };
@@ -286,5 +343,37 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.primaryDark,
     marginTop: spacing.sm,
+  },
+  acceptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  acceptBtn: {
+    flex: 1,
+  },
+  cardCountdown: {
+    fontSize: 36,
+    lineHeight: 40,
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -1,
+    minWidth: 72,
+    textAlign: 'right',
+  },
+  cardCountdownDanger: {
+    color: colors.danger,
+  },
+  releaseWrap: {
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
+  },
+  releaseLink: {
+    ...typography.caption,
+    color: colors.primary,
+    textDecorationLine: 'underline',
   },
 });
