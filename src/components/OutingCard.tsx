@@ -77,7 +77,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               {outing.venueName}
             </Text>
             <Text style={styles.meta}>
-              {outing.urgentOnSite
+              {outing.urgentOnSite && !outing.urgentAutoH90
                 ? 'Maintenant'
                 : formatOutingWhen(outing.startsAt)}{' '}
               · {outing.neighborhood}
@@ -94,7 +94,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               {outing.urgentOnSite ? (
                 <View style={[styles.chip, styles.chipUrgent]}>
                   <Text style={[styles.chipText, styles.chipUrgentText]}>
-                    Maintenant
+                    {outing.urgentAutoH90 ? 'Urgent' : 'Maintenant'}
                   </Text>
                 </View>
               ) : null}

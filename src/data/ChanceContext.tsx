@@ -53,6 +53,7 @@ import {
   isVisibleOnAnnoncesFeed,
   outingOccupiesActiveSlot,
   OUTING_AUTO_COMPLETE_AFTER_MS,
+  shouldAutoPromoteUrgent,
   URGENT_ON_SITE_ACCEPT_MS,
   wasPresent,
 } from '../utils/outingActive';
@@ -768,6 +769,22 @@ function reducer(state: AppState, action: AppAction): AppState {
             : o,
         ),
       };
+
+    case 'MARK_OUTING_URGENT': {
+      const { outingId, urgentAutoH90 } = action.payload;
+      return {
+        ...state,
+        outings: state.outings.map((o) => {
+          if (o.id !== outingId) return o;
+          if (o.urgentOnSite) return o;
+          return {
+            ...o,
+            urgentOnSite: true,
+            ...(urgentAutoH90 ? { urgentAutoH90: true } : {}),
+          };
+        }),
+      };
+    }
 
     case 'SET_PLAN': {
       if (!state.currentUser) return state;
@@ -2701,6 +2718,33 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       sub.remove();
     };
   }, [state.imprevuReports, state.outings]);
+
+  /**
+   * Auto H−90: planned open/full with zero confirmés and startsAt within 90 min
+   * → urgentOnSite + urgentAutoH90 (pill « Urgent », top of feed, chat on confirm,
+   * joinable until startsAt+30). Skip if any confirmed guest already.
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const outing of state.outings) {
+        if (!shouldAutoPromoteUrgent(outing, state.requests, now)) continue;
+        dispatch({
+          type: 'MARK_OUTING_URGENT',
+          payload: { outingId: outing.id, urgentAutoH90: true },
+        });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.outings, state.requests]);
 
   /**
    * Urgent: auto-close listing at startsAt + 30 min (stop accepting).

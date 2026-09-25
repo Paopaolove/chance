@@ -14,8 +14,39 @@ export const OUTING_AUTO_COMPLETE_AFTER_MS = 30 * 60 * 1000; // 30 min after H
  */
 export const URGENT_ON_SITE_ACCEPT_MS = 30 * 60 * 1000; // 30 min after startsAt
 
+/** Planned outing with no confirmés → auto urgent when startsAt is within this window. */
+export const AUTO_URGENT_BEFORE_MS = 90 * 60 * 1000; // H−90
+
 export function isUrgentOnSite(outing: Outing): boolean {
   return outing.urgentOnSite === true;
+}
+
+/** Manual « déjà sur place » vs auto H−90 (pill Maintenant vs Urgent). */
+export function isUrgentAutoH90(outing: Outing): boolean {
+  return outing.urgentOnSite === true && outing.urgentAutoH90 === true;
+}
+
+/**
+ * Planned open/full listing with zero confirmed guests, startsAt within H−90
+ * (and still within the post-start +30 accept window once promoted).
+ */
+export function shouldAutoPromoteUrgent(
+  outing: Outing,
+  requests: Request[],
+  nowMs = Date.now(),
+): boolean {
+  if (outing.urgentOnSite) return false;
+  if (outing.status !== 'open' && outing.status !== 'full') return false;
+  const hasConfirmed = requests.some(
+    (r) => r.outingId === outing.id && r.status === 'confirmed',
+  );
+  if (hasConfirmed) return false;
+  const startMs = new Date(outing.startsAt).getTime();
+  if (!Number.isFinite(startMs)) return false;
+  if (nowMs < startMs - AUTO_URGENT_BEFORE_MS) return false;
+  // After promotion, joinable until startsAt+30 — don't promote past that.
+  if (nowMs > startMs + URGENT_ON_SITE_ACCEPT_MS) return false;
+  return true;
 }
 
 /** Still within the H+30 accept window for an urgent listing. */

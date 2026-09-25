@@ -175,11 +175,18 @@ export interface Outing {
   /** Restaurant closed edge-case (mock). */
   venueIssue?: VenueIssue;
   /**
-   * Invitation urgente « Je suis déjà sur place » — host already at venue,
-   * 1 free seat (friend cancelled). startsAt = now; joinable until startsAt+30 min,
-   * then auto-clôturée. NOT the guest no-show / lapin / imprévu flow.
+   * Invitation urgente — host already at venue (« Je suis déjà sur place »)
+   * OR auto-promoted at H−90 with no confirmed guests.
+   * Joinable until startsAt+30 min, then auto-clôturée.
+   * Chat unlocks immediately on confirm (bypass H−1).
+   * NOT the guest no-show / lapin / imprévu flow.
    */
   urgentOnSite?: boolean;
+  /**
+   * Auto H−90 promotion (no confirmed guests). Pill « Urgent ».
+   * Manual on-site keeps urgentOnSite without this flag → pill « Maintenant ».
+   */
+  urgentAutoH90?: boolean;
 }
 
 export interface Request {
@@ -467,6 +474,11 @@ export type AppAction =
     }
   | { type: 'SET_TOAST'; payload: AppToast | null }
   | { type: 'SHIFT_OUTING_START'; payload: { outingId: string; startsAt: string } }
+  /** Auto H−90 (or future): mark listing urgentOnSite + optional auto flag. */
+  | {
+      type: 'MARK_OUTING_URGENT';
+      payload: { outingId: string; urgentAutoH90?: boolean };
+    }
   /**
    * Plan « terminée » — status completed. Unlocks avis.
    * Unmarked confirmed → attendance present + held deposit returned.
