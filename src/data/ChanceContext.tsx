@@ -1209,7 +1209,7 @@ interface ChanceContextValue {
     approxArea: string;
     exactAddress: string;
     startsAt: string;
-    capacity: 1 | 2 | 3 | 4;
+    capacity: 1 | 2 | 3;
     womenOnly: boolean;
     budgetMaxEuros: number;
     categoryDetail?: string;
@@ -1621,7 +1621,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       approxArea: string;
       exactAddress: string;
       startsAt: string;
-      capacity: 1 | 2 | 3 | 4;
+      capacity: 1 | 2 | 3;
       womenOnly: boolean;
       budgetMaxEuros: number;
       categoryDetail?: string;
@@ -1663,7 +1663,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const excluded = (input.excludedTopics ?? [])
         .map((t) => t.trim())
         .filter(Boolean);
-      const capacity: 1 | 2 | 3 | 4 = urgent ? 1 : input.capacity;
+      const capacity: 1 | 2 | 3 = urgent ? 1 : input.capacity;
       const startsAt = urgent ? new Date().toISOString() : input.startsAt;
       const outing: Outing = {
         id: uid('outing'),

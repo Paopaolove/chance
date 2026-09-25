@@ -148,8 +148,8 @@ export interface Outing {
   /** Stored for host; never shown until request is confirmed. */
   exactAddress: string;
   startsAt: string;
-  /** Core seats 1–3; 4 kept for legacy mocks. */
-  capacity: 1 | 2 | 3 | 4;
+  /** Guest seats only 1 | 2 | 3 (no 4). */
+  capacity: 1 | 2 | 3;
   spotsLeft: number;
   womenOnly: boolean;
   /**
