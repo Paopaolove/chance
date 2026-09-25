@@ -35,8 +35,13 @@ export function MainTabs() {
       clearEntryIntent();
       // Land on Dispo editor after onboarding CTA
       navigation.navigate('DispoSoir');
+    } else if (state.entryIntent === 'create') {
+      clearEntryIntent();
+      // Land on Publier / CreateOuting after « J'invite »
+      navigation.navigate('MainTabs', { screen: 'Create' });
     } else if (state.entryIntent === 'feed') {
       clearEntryIntent();
+      // Feed tab defaults to Annonces (« sorties ») mode
     }
   }, [state.entryIntent, clearEntryIntent, navigation]);
 

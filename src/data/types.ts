@@ -40,7 +40,7 @@ export type PlanId = 'essai' | 'payg' | 'essentiel' | 'illimite';
 export type PlanInterval = 'month' | 'year';
 
 /** Where to land right after onboarding CTAs. */
-export type EntryIntent = 'feed' | 'dispo';
+export type EntryIntent = 'feed' | 'dispo' | 'create';
 
 export interface User {
   id: string;
@@ -333,7 +333,7 @@ export interface AppState {
   currentUser: User | null;
   outings: Outing[];
   requests: Request[];
-  /** Consumed once after onboarding to route into Feed or Dispo. */
+  /** Consumed once after onboarding to route into Create, Feed (Annonces), or Dispo. */
   entryIntent: EntryIntent | null;
   chatMessages: ChatMessage[];
   reviews: Review[];

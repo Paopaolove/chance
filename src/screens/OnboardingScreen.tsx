@@ -24,7 +24,7 @@ import {
   isValidFrPhone,
 } from '../data/interests';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
-import { AuthProvider, Gender } from '../data/types';
+import { AuthProvider, EntryIntent, Gender } from '../data/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { AGE_REQUIRED_HINT, AGE_UNDERAGE_HINT, parseAdultAge } from '../utils/age';
 import { pickProfilePhoto } from '../utils/pickProfilePhoto';
@@ -234,7 +234,7 @@ export function OnboardingScreen() {
     setStep('cta');
   };
 
-  const finish = (intent: 'feed' | 'dispo') => {
+  const finish = (intent: EntryIntent) => {
     if (!authProvider || !gender) return;
     const age = parseAdultAge(ageText);
     if (age == null) return;
@@ -771,20 +771,30 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Prêt ?</Text>
           <Text style={styles.hint}>
-            Dispo pour une sortie improvisée, ou parcours les
-            annonces autour de toi.
+            Invite à ta table, parcours les invitations autour de toi, ou
+            indique que tu es dispo.
           </Text>
           <Button
-            title="Dispo"
-            onPress={() => finish('dispo')}
+            title="J’invite"
+            onPress={() => finish('create')}
             style={styles.cta}
           />
           <Button
-            title="Voir les annonces"
-            variant="secondary"
+            title="Voir les invitations"
+            variant="ghost"
             onPress={() => finish('feed')}
-            style={styles.secondary}
+            style={styles.secondaryOutline}
           />
+          <Pressable
+            onPress={() => finish('dispo')}
+            style={styles.textLinkWrap}
+            accessibilityRole="link"
+            accessibilityLabel="Pas de resto en tête ? Indiquer que je suis dispo"
+          >
+            <Text style={styles.textLink}>
+              Pas de resto en tête ? Indiquer que je suis dispo
+            </Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -935,6 +945,22 @@ const styles = StyleSheet.create({
   chipTextOn: { color: colors.white },
   cta: { marginTop: spacing.xxl },
   secondary: { marginTop: spacing.md },
+  secondaryOutline: {
+    marginTop: spacing.md,
+    borderColor: colors.primary,
+  },
+  textLinkWrap: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  textLink: {
+    ...typography.body,
+    color: colors.primary,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+    fontFamily: fonts.medium,
+  },
   error: { ...typography.caption, color: colors.danger, marginTop: spacing.md },
   toggleCard: {
     flexDirection: 'row',
