@@ -144,3 +144,10 @@ export function addParisDays(ymd: string, days: number): string {
   const noonMs = Date.UTC(y, m - 1, d, 12, 0, 0) + days * 24 * 60 * 60 * 1000;
   return parisYmd(noonMs) || ymd;
 }
+
+/** True if `startsAt` ISO instant is strictly before `nowMs` (Paris-aware storage is UTC). */
+export function isStartsAtPast(startsAtIso: string, nowMs = Date.now()): boolean {
+  const t = new Date(startsAtIso).getTime();
+  if (!Number.isFinite(t)) return false;
+  return t < nowMs;
+}

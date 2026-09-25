@@ -8,6 +8,7 @@ import { DEPOSIT_EUROS, useChance } from '../data/ChanceContext';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, spacing, typography } from '../theme';
 import { formatCountdown } from '../utils/format';
+import { isStartsAtPast } from '../utils/parisTime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'ConfirmSlot'>;
@@ -88,6 +89,25 @@ export function ConfirmSlotScreen() {
     );
   }
 
+  if (
+    outing.status === 'completed' ||
+    isStartsAtPast(outing.startsAt)
+  ) {
+    return (
+      <SafeAreaView style={styles.wrap}>
+        <View style={styles.centerBlock}>
+          <Text style={styles.hero}>Trop tard</Text>
+          <Text style={styles.bodyCenter}>
+            {outing.status === 'completed'
+              ? 'Cette sortie est terminée — confirmation impossible.'
+              : 'L’heure de la sortie est passée — tu ne peux plus confirmer.'}
+          </Text>
+        </View>
+        <Button title="Retour aux annonces" onPress={goFeed} />
+      </SafeAreaView>
+    );
+  }
+
   if (expired || request.status === 'expired') {
     return (
       <SafeAreaView style={styles.wrap}>
@@ -140,6 +160,19 @@ export function ConfirmSlotScreen() {
         showToast(
           'Place prise',
           'Une autre confirmation est arrivée avant (1er timestamp gagne).',
+        );
+        setExpired(true);
+        return;
+      }
+      if (
+        result.reason === 'outing_started' ||
+        result.reason === 'outing_finished'
+      ) {
+        showToast(
+          'Trop tard',
+          result.reason === 'outing_finished'
+            ? 'Cette sortie est terminée.'
+            : 'L’heure de la sortie est passée — confirmation impossible.',
         );
         setExpired(true);
         return;

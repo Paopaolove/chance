@@ -17,6 +17,7 @@ import { OutingCategory } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { dispoSlotCreatePrefill } from '../utils/dispo';
+import { outingOccupiesActiveSlot } from '../utils/outingActive';
 import { formatRatingAverage } from '../utils/format';
 import { hostPhotoSize } from '../utils/subscription';
 
@@ -69,16 +70,15 @@ export function HostProfileScreen() {
   const isNew = stats.outingCount <= 0 || stats.average == null;
   const photoSize = Math.max(72, hostPhotoSize(state.currentUser));
 
-  /** Prefer open, else first active (open | full). */
+  /** Active invitation slot (open/full, or closed-with-confirmés). */
   const activeOuting = useMemo(() => {
-    const open = state.outings.find(
-      (o) => o.hostId === userId && o.status === 'open',
-    );
-    if (open) return open;
+    const now = Date.now();
     return state.outings.find(
-      (o) => o.hostId === userId && o.status === 'full',
+      (o) =>
+        o.hostId === userId &&
+        outingOccupiesActiveSlot(o, state.requests, now),
     );
-  }, [state.outings, userId]);
+  }, [state.outings, state.requests, userId]);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: firstName || 'Profil' });

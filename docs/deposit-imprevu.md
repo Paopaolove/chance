@@ -51,7 +51,7 @@ Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT
 | **Lieu alternatif refusé** par l’invité | `RESPOND_VENUE_ALTERNATE` refused → caution de *cet* invité rendue |
 | **Imprévu accepté** | `RESPOND_IMPREVU` accepted → cautions rendues + sortie fermée ; **pas** d’absence |
 | **Joker** après refus / auto_refus | `USE_JOKER_ON_IMPREVU` → caution returned, **pas** d’absence, **hôte 0 €**, joker consommé le mois Paris |
-| **Sortie terminée** (`completeOuting`) | Invité venu → cautions `held` → `returned` |
+| **Sortie terminée** (`completeOuting` / auto H+30 min) | Invité **présent** (`attendance: present`) → `held` → `returned`. Confirmé seul ≠ présent ; absence (`reportGuestNoShow`) reste `forfeited`. |
 
 ### → `forfeited` (split 6,90 / 13,10)
 

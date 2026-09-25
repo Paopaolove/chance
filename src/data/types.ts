@@ -10,7 +10,8 @@ export type OutingCategory = 'restaurant' | 'bar' | 'culture' | 'autre';
  * - full: spotsLeft === 0 (all seats reserved via accept); no new joins
  * - closed: host closed listing (closeOuting) — no new requests; existing
  *   confirmed guests keep their seats unless individually cancelled
- * - completed: outing ended (after startsAt / demo completeOuting)
+ * - completed: plan « terminée » (host completeOuting OR auto ~30 min after startsAt).
+ *   Unlocks avis + caution settlement. Distinct from closeOuting / cancelOuting.
  */
 export type OutingStatus = 'open' | 'full' | 'closed' | 'completed';
 
@@ -207,6 +208,14 @@ export interface Request {
    * Voir docs/deposit-imprevu.md. Pas d’amendes inventées.
    */
   depositStatus?: 'none' | 'held' | 'returned' | 'forfeited';
+  /**
+   * Presence at the outing — **Confirmé ≠ présent**.
+   * - unset while only confirmed (seat + deposit held; no show-up yet)
+   * - present: marked at completeOuting (unmarked confirmés → present) → caution returned
+   * - absent: reportGuestNoShow → caution forfeited (6,90/13,10)
+   * Reviews / sorties honorées use present, never confirmed alone.
+   */
+  attendance?: 'present' | 'absent';
 }
 
 
@@ -416,7 +425,6 @@ export type AppAction =
       };
     }
   | { type: 'SIMULATE_TRIAL_END' }
-  | { type: 'CONSUME_OUTING_CREDIT' }
   | { type: 'REGISTER_ACCOUNT'; payload: { email: string } }
   | { type: 'RESET_DEMO' }
   | { type: 'SET_PERMISSIONS'; payload: { notificationsGranted?: boolean; locationGranted?: boolean } }
@@ -450,7 +458,11 @@ export type AppAction =
     }
   | { type: 'SET_TOAST'; payload: AppToast | null }
   | { type: 'SHIFT_OUTING_START'; payload: { outingId: string; startsAt: string } }
-  /** End outing after startsAt / demo — status completed (reviews unlock). */
+  /**
+   * Plan « terminée » — status completed. Unlocks avis.
+   * Unmarked confirmed → attendance present + held deposit returned.
+   * Already absent (no-show) stays forfeited. Confirmé ≠ présent.
+   */
   | { type: 'COMPLETE_OUTING'; payload: { outingId: string } }
   | { type: 'ADD_REVIEW'; payload: Review }
   | { type: 'REPLY_TO_REVIEW'; payload: { reviewId: string; reply: string } }

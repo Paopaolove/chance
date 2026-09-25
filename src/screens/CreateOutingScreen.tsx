@@ -24,6 +24,11 @@ import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { OutingCategory } from '../data/types';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import {
+  isStartsAtPast,
+  parisWallToUtc,
+  parisYmd,
+} from '../utils/parisTime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type CreateRoute = RouteProp<MainTabParamList, 'Create'>;
@@ -114,7 +119,19 @@ function buildStartsAt(dateStr: string, timeStr: string): Date | null {
   const date = parseDateInput(dateStr);
   const time = parseTimeInput(timeStr);
   if (!date || !time) return null;
-  return new Date(date.y, date.m - 1, date.d, time.h, time.m, 0, 0);
+  const ymd = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+  const utc = parisWallToUtc(ymd, time.h, time.m);
+  if (!Number.isFinite(utc.getTime())) return null;
+  return utc;
+}
+
+/** True if the typed date alone is before today's Paris calendar day. */
+function isDateStrBeforeParisToday(dateStr: string): boolean {
+  const date = parseDateInput(dateStr);
+  if (!date) return false;
+  const ymd = `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}`;
+  const today = parisYmd(Date.now());
+  return !!today && ymd < today;
 }
 
 function defaultDateTime(
@@ -280,6 +297,13 @@ export function CreateOutingScreen() {
       );
       return;
     }
+    if (isStartsAtPast(when.toISOString()) || isDateStrBeforeParisToday(dateStr)) {
+      Alert.alert(
+        'Date / heure passée',
+        'Choisis un créneau dans le futur (heure de Paris).',
+      );
+      return;
+    }
 
     if (
       inviteeUserId &&
@@ -331,9 +355,11 @@ export function CreateOutingScreen() {
     if (!result.ok) {
       const messages: Record<string, string> = {
         already_active:
-          'Tu as déjà une sortie en cours. Clôture-la pour en ouvrir une autre.',
+          'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
         banned: 'Compte suspendu après 2 no-shows hôte (démo).',
         no_user: 'Profil manquant.',
+        starts_in_past:
+          'Ce créneau est déjà passé. Choisis une date et une heure dans le futur.',
       };
       Alert.alert('Impossible', messages[result.reason] ?? result.reason);
       return;
@@ -371,13 +397,16 @@ export function CreateOutingScreen() {
         </View>
         <View style={styles.blocked}>
           <Text style={styles.blockedTitle}>
-            Une seule annonce active à la fois. Clôture-la pour en ouvrir une
-            autre.
+            Une seule annonce active à la fois
+            {active.status === 'closed'
+              ? ' — tu as encore des confirmés sur une sortie à venir (même clôturée).'
+              : '. Clôture-la pour en ouvrir une autre.'}
           </Text>
           <View style={styles.activeCard}>
             <Text style={styles.activeName}>{active.title}</Text>
             <Text style={styles.activeMeta}>
               {active.neighborhood} · {budgetChipLabel(active.budgetMaxEuros)}
+              {active.status === 'closed' ? ' · inscriptions closes' : ''}
             </Text>
           </View>
           <Button
@@ -387,15 +416,25 @@ export function CreateOutingScreen() {
               navigation.navigate('OutingDetail', { outingId: active.id })
             }
           />
-          <Button
-            title="Clôturer"
-            variant="danger"
-            onPress={() => {
-              closeOuting(active.id);
-              Alert.alert('Clôturée', 'Tu peux publier une nouvelle sortie.');
-            }}
-            style={{ marginTop: spacing.md }}
-          />
+          {active.status === 'open' || active.status === 'full' ? (
+            <Button
+              title="Clôturer les inscriptions"
+              variant="danger"
+              onPress={() => {
+                closeOuting(active.id);
+                Alert.alert(
+                  'Inscriptions closes',
+                  'Les confirmés gardent leur place — le créneau reste actif jusqu’à la fin de la sortie.',
+                );
+              }}
+              style={{ marginTop: spacing.md }}
+            />
+          ) : (
+            <Text style={[styles.activeMeta, { marginTop: spacing.md }]}>
+              Attends la fin de la sortie (ou marque-la terminée après l’heure)
+              pour libérer ton créneau d’annonce.
+            </Text>
+          )}
         </View>
       </SafeAreaView>
     );

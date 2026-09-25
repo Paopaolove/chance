@@ -16,6 +16,7 @@ import { useChance } from '../data/ChanceContext';
 import { Request } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, radius, spacing, typography } from '../theme';
+import { isStartsAtPast } from '../utils/parisTime';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -65,25 +66,48 @@ export function RequestsScreen() {
           </Text>
         ) : null}
         {r.status === 'pending' ? (
-          <View style={styles.row}>
-            <Button
-              title="Accepter"
-              onPress={() => {
-                acceptRequest(r.id);
-                Alert.alert(
-                  'Acceptée',
-                  `${r.userName} a 10 minutes pour confirmer. Sinon la place est libérée. Ses autres demandes en attente sont annulées.`,
-                );
-              }}
-              style={styles.flex}
-            />
-            <Button
-              title="Refuser"
-              variant="ghost"
-              onPress={() => declineRequest(r.id)}
-              style={styles.flex}
-            />
-          </View>
+          outing &&
+          (outing.status === 'completed' || isStartsAtPast(outing.startsAt)) ? (
+            <Text style={styles.msg}>
+              {outing.status === 'completed'
+                ? 'Sortie terminée — plus d’acceptation.'
+                : 'L’heure est passée — plus d’acceptation.'}
+            </Text>
+          ) : (
+            <View style={styles.row}>
+              <Button
+                title="Accepter"
+                onPress={() => {
+                  const res = acceptRequest(r.id);
+                  if (!res.ok) {
+                    const messages: Record<string, string> = {
+                      outing_started:
+                        'L’heure de la sortie est passée — tu ne peux plus accepter.',
+                      outing_finished: 'Cette sortie est terminée.',
+                      invalid: 'Demande invalide.',
+                      not_found: 'Sortie introuvable.',
+                    };
+                    Alert.alert(
+                      'Impossible',
+                      messages[res.reason] ?? res.reason,
+                    );
+                    return;
+                  }
+                  Alert.alert(
+                    'Acceptée',
+                    `${r.userName} a 10 minutes pour confirmer. Sinon la place est libérée. Ses autres demandes en attente sont annulées.`,
+                  );
+                }}
+                style={styles.flex}
+              />
+              <Button
+                title="Refuser"
+                variant="ghost"
+                onPress={() => declineRequest(r.id)}
+                style={styles.flex}
+              />
+            </View>
+          )
         ) : null}
         {r.status === 'confirmed' && outing ? (
           <>
@@ -98,7 +122,7 @@ export function RequestsScreen() {
               }
               style={{ marginTop: spacing.md }}
             />
-            {outing.status === 'completed' ? (
+            {outing.status === 'completed' && r.attendance === 'present' ? (
               <Button
                 title={`Noter ${r.userName}`}
                 variant="secondary"
@@ -160,7 +184,7 @@ export function RequestsScreen() {
             <Text style={styles.actionHint}>
               Touche pour le chat (ouvert 1 h avant)
             </Text>
-            {outing.status === 'completed' ? (
+            {outing.status === 'completed' && r.attendance === 'present' ? (
               <Button
                 title="Noter la sortie"
                 variant="secondary"

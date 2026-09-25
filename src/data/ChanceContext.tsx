@@ -46,7 +46,13 @@ import {
   describeDepositForfeitMoment,
   isCancelFreeWindow,
 } from './pricing';
-import { parisMonthKey } from '../utils/parisTime';
+import { isStartsAtPast, parisMonthKey } from '../utils/parisTime';
+import {
+  isVisibleOnAnnoncesFeed,
+  outingOccupiesActiveSlot,
+  OUTING_AUTO_COMPLETE_AFTER_MS,
+  wasPresent,
+} from '../utils/outingActive';
 import {
   chatThreadKey,
   lateLabel,
@@ -281,6 +287,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!req || req.status !== 'pending') return state;
       const outing = state.outings.find((o) => o.id === req.outingId);
       if (!outing || outing.spotsLeft < 1) return state;
+      if (outing.status === 'completed' || isStartsAtPast(outing.startsAt)) {
+        return state;
+      }
 
       const newSpots = outing.spotsLeft - 1;
       return {
@@ -332,6 +341,19 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Idempotent: already confirmed → no double deposit / no double credit
       if (req && req.status === 'confirmed') return state;
       if (!req || req.status !== 'accepted') return state;
+      {
+        const outingGate = state.outings.find((o) => o.id === req.outingId);
+        if (
+          outingGate &&
+          (outingGate.status === 'completed' ||
+            isStartsAtPast(
+              outingGate.startsAt,
+              new Date(action.payload.confirmedAt).getTime(),
+            ))
+        ) {
+          return state;
+        }
+      }
       if (
         req.confirmDeadlineAt &&
         new Date(action.payload.confirmedAt).getTime() >
@@ -739,34 +761,30 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'CONSUME_OUTING_CREDIT': {
-      if (!state.currentUser) return state;
-      const credits = state.currentUser.outingCredits ?? 0;
-      if (credits <= 0) return state;
-      return {
-        ...state,
-        currentUser: {
-          ...state.currentUser,
-          outingCredits: credits - 1,
-        },
-      };
-    }
-
     case 'COMPLETE_OUTING': {
-      // Guest attended (outing ended) → held deposits returned (product: « rendue si tu viens »).
+      // Plan « terminée ». Confirmé ≠ présent :
+      // unmarked confirmed → present + caution returned ; already absent stays forfeited.
       const { outingId } = action.payload;
       return {
         ...state,
         outings: state.outings.map((o) =>
           o.id === outingId ? { ...o, status: 'completed' as const } : o,
         ),
-        requests: state.requests.map((r) =>
-          r.outingId === outingId &&
-          r.status === 'confirmed' &&
-          (r.depositStatus === 'held' || !r.depositStatus)
-            ? { ...r, depositStatus: 'returned' as const }
-            : r,
-        ),
+        requests: state.requests.map((r) => {
+          if (r.outingId !== outingId || r.status !== 'confirmed') return r;
+          if (r.attendance === 'absent') {
+            // No-show already settled (forfeited) — do not return deposit.
+            return r;
+          }
+          return {
+            ...r,
+            attendance: 'present' as const,
+            depositStatus:
+              r.depositStatus === 'held' || !r.depositStatus
+                ? ('returned' as const)
+                : r.depositStatus,
+          };
+        }),
       };
     }
 
@@ -969,7 +987,11 @@ function reducer(state: AppState, action: AppAction): AppState {
         },
         requests: state.requests.map((r) =>
           r.id === requestId
-            ? { ...r, depositStatus: 'forfeited' as const }
+            ? {
+                ...r,
+                attendance: 'absent' as const,
+                depositStatus: 'forfeited' as const,
+              }
             : r,
         ),
         outings: state.outings.map((o) =>
@@ -1136,7 +1158,10 @@ interface ChanceContextValue {
     ticketsAlreadyBought?: boolean;
   }) =>
     | { ok: true; outingId: string }
-    | { ok: false; reason: 'no_user' | 'already_active' | 'banned' };
+    | {
+        ok: false;
+        reason: 'no_user' | 'already_active' | 'banned' | 'starts_in_past';
+      };
   /**
    * Host closes listing (no new requests). Confirmed guests stay.
    * Pending/accepted cancelled + seats restored. ≠ cancelOuting / completeOuting.
@@ -1164,7 +1189,14 @@ interface ChanceContextValue {
     message?: string,
     suggestedDate?: string,
   ) => { ok: true; requestId: string } | { ok: false; reason: string };
-  acceptRequest: (requestId: string) => void;
+  acceptRequest: (
+    requestId: string,
+  ) =>
+    | { ok: true }
+    | {
+        ok: false;
+        reason: 'not_found' | 'invalid' | 'outing_started' | 'outing_finished';
+      };
   /** Host declines a pending request (no seat was reserved). */
   declineRequest: (requestId: string) => void;
   /**
@@ -1175,7 +1207,16 @@ interface ChanceContextValue {
     requestId: string,
   ) =>
     | { ok: true }
-    | { ok: false; reason: 'expired' | 'invalid' | 'paywall' | 'race_lost' };
+    | {
+        ok: false;
+        reason:
+          | 'expired'
+          | 'invalid'
+          | 'paywall'
+          | 'race_lost'
+          | 'outing_started'
+          | 'outing_finished';
+      };
   expireRequestIfNeeded: (requestId: string) => void;
   setDispoSoir: (value: boolean) => void;
   setDispoProfile: (update: DispoProfileUpdate) => void;
@@ -1497,11 +1538,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   const getActiveOutingForUser = useCallback(() => {
     const user = state.currentUser;
     if (!user) return undefined;
+    const now = Date.now();
     return state.outings.find(
       (o) =>
-        o.hostId === user.id && (o.status === 'open' || o.status === 'full'),
+        o.hostId === user.id &&
+        outingOccupiesActiveSlot(o, state.requests, now),
     );
-  }, [state.currentUser, state.outings]);
+  }, [state.currentUser, state.outings, state.requests]);
 
   const createOuting = useCallback(
     (input: {
@@ -1525,14 +1568,21 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       ticketsAlreadyBought?: boolean;
     }):
       | { ok: true; outingId: string }
-      | { ok: false; reason: 'no_user' | 'already_active' | 'banned' } => {
+      | {
+          ok: false;
+          reason: 'no_user' | 'already_active' | 'banned' | 'starts_in_past';
+        } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       if (user.banned) return { ok: false, reason: 'banned' };
+      if (isStartsAtPast(input.startsAt)) {
+        return { ok: false, reason: 'starts_in_past' };
+      }
+      const now = Date.now();
       const hasActive = state.outings.some(
         (o) =>
           o.hostId === user.id &&
-          (o.status === 'open' || o.status === 'full'),
+          outingOccupiesActiveSlot(o, state.requests, now),
       );
       if (hasActive) return { ok: false, reason: 'already_active' };
       if (input.womenOnly && user.gender !== 'femme') {
@@ -1579,7 +1629,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // Juliette auto-request moved to hidden Démo menu (5 taps on logo).
       return { ok: true, outingId: outing.id };
     },
-    [state.currentUser, state.outings],
+    [state.currentUser, state.outings, state.requests],
   );
 
   const closeOuting = useCallback((outingId: string) => {
@@ -1651,6 +1701,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       if (outing.hostId === user.id) return { ok: false, reason: 'own_outing' };
+      if (outing.status === 'completed' || isStartsAtPast(outing.startsAt)) {
+        return { ok: false, reason: 'outing_started' };
+      }
       if (outing.status !== 'open' || outing.spotsLeft < 1) {
         return { ok: false, reason: 'full' };
       }
@@ -1689,13 +1742,28 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const acceptRequest = useCallback(
-    (requestId: string) => {
+    (
+      requestId: string,
+    ):
+      | { ok: true }
+      | {
+          ok: false;
+          reason: 'not_found' | 'invalid' | 'outing_started' | 'outing_finished';
+        } => {
       const now = new Date();
       const deadline = new Date(now.getTime() + CONFIRM_WINDOW_MS);
       const req = state.requests.find((r) => r.id === requestId);
-      const outing = req
-        ? state.outings.find((o) => o.id === req.outingId)
-        : undefined;
+      if (!req || req.status !== 'pending') {
+        return { ok: false, reason: 'invalid' };
+      }
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      if (outing.status === 'completed') {
+        return { ok: false, reason: 'outing_finished' };
+      }
+      if (isStartsAtPast(outing.startsAt, now.getTime())) {
+        return { ok: false, reason: 'outing_started' };
+      }
       dispatch({
         type: 'ACCEPT_REQUEST',
         payload: {
@@ -1741,6 +1809,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           }
         })();
       }
+      return { ok: true };
     },
     [state.requests, state.outings],
   );
@@ -1767,7 +1836,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       | { ok: true }
       | {
           ok: false;
-          reason: 'expired' | 'invalid' | 'paywall' | 'race_lost';
+          reason:
+            | 'expired'
+            | 'invalid'
+            | 'paywall'
+            | 'race_lost'
+            | 'outing_started'
+            | 'outing_finished';
         } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'invalid' };
@@ -1782,6 +1857,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       if (!req || req.status !== 'accepted') {
         return { ok: false, reason: 'invalid' };
+      }
+      const outingGate = state.outings.find((o) => o.id === req.outingId);
+      if (outingGate?.status === 'completed') {
+        return { ok: false, reason: 'outing_finished' };
+      }
+      if (outingGate && isStartsAtPast(outingGate.startsAt)) {
+        return { ok: false, reason: 'outing_started' };
       }
       if (
         req.confirmDeadlineAt &&
@@ -2549,6 +2631,40 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.imprevuReports, state.outings]);
 
+  /**
+   * Auto plan « terminée » : H + OUTING_AUTO_COMPLETE_AFTER_MS (30 min démo).
+   * Host may also completeOuting once startsAt is past.
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const outing of state.outings) {
+        if (outing.status === 'completed') continue;
+        const startMs = new Date(outing.startsAt).getTime();
+        if (!Number.isFinite(startMs)) continue;
+        if (now < startMs + OUTING_AUTO_COMPLETE_AFTER_MS) continue;
+        // Only auto-complete outings that had a real plan (open/full/closed).
+        if (
+          outing.status !== 'open' &&
+          outing.status !== 'full' &&
+          outing.status !== 'closed'
+        ) {
+          continue;
+        }
+        dispatch({ type: 'COMPLETE_OUTING', payload: { outingId: outing.id } });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 30_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.outings]);
+
   const clearToast = useCallback(() => {
     dispatch({ type: 'SET_TOAST', payload: null });
   }, []);
@@ -2577,9 +2693,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
 
   const completeOuting = useCallback((outingId: string) => {
-    dispatch({ type: 'COMPLETE_OUTING', payload: { outingId } });
     const outing = state.outings.find((o) => o.id === outingId);
-    const title = outing?.title ?? 'ta sortie';
+    if (!outing || outing.status === 'completed') return;
+    // Host / démo may mark terminée; auto-complete still waits H+30 min.
+    dispatch({ type: 'COMPLETE_OUTING', payload: { outingId } });
+    const title = outing.title;
     const toast: AppToast = {
       id: uid('toast'),
       title: 'Noter la sortie',
@@ -2636,10 +2754,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           continue;
         }
         const attended = state.requests.some(
-          (r) =>
-            r.outingId === o.id &&
-            r.userId === userId &&
-            r.status === 'confirmed',
+          (r) => r.outingId === o.id && r.userId === userId && wasPresent(r),
         );
         if (attended) ids.add(o.id);
       }
@@ -2683,23 +2798,24 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'not_completed' };
       }
       const isHost = outing.hostId === user.id;
-      const myConfirmed = state.requests.some(
+      // Confirmé ≠ présent : avis only when attendance is present.
+      const myPresent = state.requests.some(
         (r) =>
           r.outingId === outing.id &&
           r.userId === user.id &&
-          r.status === 'confirmed',
+          wasPresent(r),
       );
-      if (!isHost && !myConfirmed) {
+      if (!isHost && !myPresent) {
         return { ok: false, reason: 'not_participant' };
       }
       const targetIsHost = outing.hostId === toUserId;
-      const targetConfirmed = state.requests.some(
+      const targetPresent = state.requests.some(
         (r) =>
           r.outingId === outing.id &&
           r.userId === toUserId &&
-          r.status === 'confirmed',
+          wasPresent(r),
       );
-      if (!targetIsHost && !targetConfirmed) {
+      if (!targetIsHost && !targetPresent) {
         return { ok: false, reason: 'target_not_participant' };
       }
       const dup = state.reviews.some(
@@ -3040,7 +3156,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     for (const outing of completed) {
       if (outing.hostId === user.id) {
         const guests = state.requests.filter(
-          (r) => r.outingId === outing.id && r.status === 'confirmed',
+          (r) => r.outingId === outing.id && wasPresent(r),
         );
         for (const g of guests) {
           const already = state.reviews.some(
@@ -3063,7 +3179,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           (r) =>
             r.outingId === outing.id &&
             r.userId === user.id &&
-            r.status === 'confirmed',
+            wasPresent(r),
         );
         if (!myConfirmed) continue;
         const already = state.reviews.some(
@@ -3105,8 +3221,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const visibleOutings = useMemo(() => {
+    const now = Date.now();
     return state.outings.filter((o) => {
-      if (o.status !== 'open' && o.status !== 'full') return false;
+      if (!isVisibleOnAnnoncesFeed(o, now)) return false;
       if (o.womenOnly && state.currentUser?.gender !== 'femme') return false;
       return true;
     });

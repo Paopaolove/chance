@@ -28,6 +28,7 @@ import { colors, fonts, radius, spacing, typography } from '../theme';
 import { isChatUnlocked, lateLabel } from '../utils/chat';
 import { imprevuMotiveLabel } from '../utils/imprevu';
 import { formatOutingWhen } from '../utils/format';
+import { isStartsAtPast } from '../utils/parisTime';
 import { makeVenueKey } from '../utils/venue';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 
@@ -48,6 +49,7 @@ export function OutingDetailScreen() {
     incomingRequests,
     closeOuting,
     cancelOuting,
+    completeOuting,
     cancelRequest,
     getLateReportsForOthers,
     respondVenueAlternate,
@@ -120,6 +122,8 @@ export function OutingDetailScreen() {
         full: 'Plus de place disponible.',
         already_requested: 'Tu as déjà une demande en cours.',
         own_outing: 'C’est ta propre sortie.',
+        outing_started:
+          'Cette sortie a déjà commencé ou est terminée — plus de demandes.',
       };
       Alert.alert('Impossible', messages[result.reason] ?? result.reason);
       return;
@@ -474,6 +478,20 @@ export function OutingDetailScreen() {
                 : 'Sortie clôturée / annulée.'}
             </Text>
           )}
+          {outing.status !== 'completed' && isStartsAtPast(outing.startsAt) ? (
+            <Button
+              title="Marquer comme terminée"
+              variant="secondary"
+              onPress={() => {
+                completeOuting(outing.id);
+                Alert.alert(
+                  'Sortie terminée',
+                  'Les présents peuvent laisser un avis. Caution rendue pour les présents (confirmé ≠ présent — les absences signalées restent perdues).',
+                );
+              }}
+              style={{ marginTop: spacing.md }}
+            />
+          ) : null}
           {incomingRequests
             .filter((r) => r.outingId === outing.id && r.status === 'confirmed')
             .map((r) => (
@@ -547,14 +565,23 @@ export function OutingDetailScreen() {
           )}
           {myRequest.status === 'accepted' && (
             <>
-              <Button
-                title="Confirmer ma place"
-                onPress={() =>
-                  navigation.navigate('ConfirmSlot', {
-                    requestId: 'id' in myRequest ? myRequest.id : joinedId!,
-                  })
-                }
-              />
+              {outing.status === 'completed' ||
+              isStartsAtPast(outing.startsAt) ? (
+                <Text style={styles.hint}>
+                  {outing.status === 'completed'
+                    ? 'Sortie terminée — confirmation impossible.'
+                    : 'L’heure est passée — confirmation impossible.'}
+                </Text>
+              ) : (
+                <Button
+                  title="Confirmer ma place"
+                  onPress={() =>
+                    navigation.navigate('ConfirmSlot', {
+                      requestId: 'id' in myRequest ? myRequest.id : joinedId!,
+                    })
+                  }
+                />
+              )}
               {'id' in myRequest ? (
                 <Button
                   title="Libérer ma place"
@@ -696,6 +723,14 @@ export function OutingDetailScreen() {
               ) : null}
             </>
           )}
+        </View>
+      ) : outing.status === 'completed' || isStartsAtPast(outing.startsAt) ? (
+        <View style={styles.actions}>
+          <Text style={styles.hint}>
+            {outing.status === 'completed'
+              ? 'Sortie terminée — plus de demandes.'
+              : 'L’heure est passée — cette annonce n’accepte plus de demandes.'}
+          </Text>
         </View>
       ) : (
         <View style={styles.actions}>
