@@ -160,9 +160,25 @@ function reducer(state: AppState, action: AppAction): AppState {
           outingOccupiesActiveSlot(o, state.requests, now),
       );
       if (hasActive) return state;
+      const targeted = action.targetedRequest;
+      // Keep destinataire id — never rewrite targetedRequest.userId to currentUser.
+      if (
+        targeted &&
+        (targeted.outingId !== action.payload.id ||
+          !action.payload.inviteeUserId ||
+          targeted.userId !== action.payload.inviteeUserId)
+      ) {
+        return {
+          ...state,
+          outings: [action.payload, ...state.outings],
+        };
+      }
       return {
         ...state,
         outings: [action.payload, ...state.outings],
+        requests: targeted
+          ? [targeted, ...state.requests]
+          : state.requests,
       };
     }
 
@@ -1336,6 +1352,12 @@ interface ChanceContextValue {
     ticketsAlreadyBought?: boolean;
     /** Urgent « déjà sur place » — startsAt = now, capacity forced to 1. */
     urgentOnSite?: boolean;
+    /**
+     * Proposition ciblée Dispo/profil — persist THIS recipient id
+     * (never replace with currentUser). Invitee sees it in Demandes.
+     */
+    inviteeUserId?: string;
+    inviteeName?: string;
   }) =>
     | { ok: true; outingId: string }
     | {
@@ -1759,6 +1781,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       inviteExtras?: string;
       ticketsAlreadyBought?: boolean;
       urgentOnSite?: boolean;
+      /** Destinataire réel — never swapped for currentUser. */
+      inviteeUserId?: string;
+      inviteeName?: string;
     }):
       | { ok: true; outingId: string }
       | {
@@ -1792,6 +1817,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         .filter(Boolean);
       const capacity: 1 | 2 | 3 = urgent ? 1 : input.capacity;
       const startsAt = urgent ? new Date().toISOString() : input.startsAt;
+      // Targeted Dispo proposition: keep THAT recipient (never currentUser).
+      const rawInviteeId = input.inviteeUserId?.trim();
+      const inviteeUserId =
+        rawInviteeId && rawInviteeId !== user.id ? rawInviteeId : undefined;
+      const inviteeProfile = inviteeUserId
+        ? mockHosts.find((h) => h.id === inviteeUserId)
+        : undefined;
+      const inviteeName = inviteeUserId
+        ? input.inviteeName?.trim() ||
+          inviteeProfile?.firstName ||
+          'Invité'
+        : undefined;
+      // Pre-reserve one seat for the destinataire (accepted → confirm in Demandes).
+      const spotsLeft = inviteeUserId ? capacity - 1 : capacity;
       const outing: Outing = {
         id: uid('outing'),
         hostId: user.id,
@@ -1807,10 +1846,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         exactAddress: input.exactAddress.trim(),
         startsAt,
         capacity,
-        spotsLeft: capacity,
+        spotsLeft,
         womenOnly: input.womenOnly && user.gender === 'femme',
         budgetMaxEuros: input.budgetMaxEuros,
-        status: 'open',
+        status: spotsLeft < 1 ? 'full' : 'open',
         createdAt: new Date().toISOString(),
         ...(urgent ? { urgentOnSite: true } : {}),
         ...(input.category === 'autre' && categoryDetail
@@ -1822,8 +1861,35 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         ...(inviteIncludes ? { inviteIncludes } : {}),
         ...(inviteExtras ? { inviteExtras } : {}),
         ...(input.ticketsAlreadyBought ? { ticketsAlreadyBought: true } : {}),
+        ...(inviteeUserId
+          ? { inviteeUserId, inviteeName: inviteeName! }
+          : {}),
       };
-      dispatch({ type: 'CREATE_OUTING', payload: outing });
+      let targetedRequest: Request | undefined;
+      if (inviteeUserId && inviteeName) {
+        const acceptedAt = new Date();
+        const confirmDeadlineAt = new Date(
+          acceptedAt.getTime() + CONFIRM_WINDOW_MS,
+        );
+        targetedRequest = {
+          id: uid('req'),
+          outingId: outing.id,
+          userId: inviteeUserId,
+          userName: inviteeName,
+          userAge: inviteeProfile?.age ?? 28,
+          userGender: inviteeProfile?.gender ?? 'femme',
+          message: 'Proposition ciblée depuis Dispo',
+          status: 'accepted',
+          createdAt: acceptedAt.toISOString(),
+          acceptedAt: acceptedAt.toISOString(),
+          confirmDeadlineAt: confirmDeadlineAt.toISOString(),
+        };
+      }
+      dispatch({
+        type: 'CREATE_OUTING',
+        payload: outing,
+        ...(targetedRequest ? { targetedRequest } : {}),
+      });
       // Juliette auto-request moved to hidden Démo menu (5 taps on logo).
       return { ok: true, outingId: outing.id };
     },
@@ -1908,6 +1974,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       if (outing.hostId === user.id) return { ok: false, reason: 'own_outing' };
+      if (outing.inviteeUserId && outing.inviteeUserId !== user.id) {
+        return { ok: false, reason: 'targeted_other' };
+      }
       if (outing.status === 'completed' || outing.status === 'cancelled') {
         return { ok: false, reason: 'outing_finished' };
       }
@@ -3546,6 +3615,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     const now = Date.now();
     return state.outings.filter((o) => {
       if (!isVisibleOnAnnoncesFeed(o, now)) return false;
+      // Targeted Dispo invite: not a public Annonces listing — destinataire
+      // sees it in Demandes (outgoing) when currentUser === inviteeUserId.
+      if (o.inviteeUserId) return false;
       if (o.womenOnly && state.currentUser?.gender !== 'femme') return false;
       return true;
     });

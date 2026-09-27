@@ -428,6 +428,9 @@ export function CreateOutingScreen() {
       inviteExtras: inviteExtras.trim() || undefined,
       ticketsAlreadyBought:
         category === 'culture' ? ticketsAlreadyBought : undefined,
+      ...(inviteeUserId
+        ? { inviteeUserId, inviteeName: inviteeName || undefined }
+        : {}),
     });
 
     if (!result.ok) {
@@ -444,8 +447,10 @@ export function CreateOutingScreen() {
     }
 
     Alert.alert(
-      'Annonce publiée',
-      'Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Chance → Simuler demande Juliette.)',
+      inviteeName ? 'Proposition envoyée' : 'Annonce publiée',
+      inviteeName
+        ? `Proposition pour ${inviteeName} — visible dans ses Demandes (démo : quand currentUser = destinataire). Pas publiée sur Annonces.`
+        : 'Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Chance → Simuler demande Juliette.)',
     );
     setVenueName('');
     setMessage('');
@@ -455,6 +460,9 @@ export function CreateOutingScreen() {
     setInviteIncludes('');
     setInviteExtras('');
     setTicketsAlreadyBought(false);
+    setInviteeUserId(undefined);
+    setInviteeName(undefined);
+    setFromDispoBanner(false);
     setCapacity(1);
     setBudgetMaxEuros(25);
     setCategoryDetail('');

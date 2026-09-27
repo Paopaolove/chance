@@ -191,6 +191,12 @@ export interface Outing {
    * Manual on-site keeps urgentOnSite without this flag → pill « Maintenant ».
    */
   urgentAutoH90?: boolean;
+  /**
+   * Proposition ciblée (Dispo / profil) — destinataire réel.
+   * Pas une annonce publique : réservée à cet user id (Demandes).
+   */
+  inviteeUserId?: string;
+  inviteeName?: string;
 }
 
 export interface Request {
@@ -403,7 +409,12 @@ export type OnboardingInput = {
 export type AppAction =
   | { type: 'COMPLETE_ONBOARDING'; payload: User; entryIntent: EntryIntent }
   | { type: 'CLEAR_ENTRY_INTENT' }
-  | { type: 'CREATE_OUTING'; payload: Outing }
+  | {
+      type: 'CREATE_OUTING';
+      payload: Outing;
+      /** Host→invitee Dispo: seat pre-accepted; invitee confirms in Demandes. */
+      targetedRequest?: Request;
+    }
   /**
    * Host closes listing: no new requests; pending/accepted cancelled (seats
    * restored); confirmed guests KEEP their seats. Distinct from CANCEL_OUTING.
