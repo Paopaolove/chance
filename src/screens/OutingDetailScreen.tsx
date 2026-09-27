@@ -222,46 +222,71 @@ export function OutingDetailScreen() {
               {outing.venueIssue.alternate.budgetMaxEuros} €
             </Text>
           ) : null}
-          {outing.venueIssue.status === 'alternate_proposed' && !isHost ? (
-            <View style={styles.venueIssueActions}>
-              <Button
-                title="Accepter le lieu alternatif"
-                onPress={() => {
-                  const r = respondVenueAlternate(outing.id, 'accepted');
-                  if (!r.ok) Alert.alert('Impossible', r.reason);
-                  else
-                    Alert.alert(
-                      'Lieu mis à jour',
-                      'Même quartier, budget proche. Caution conservée.',
-                    );
-                }}
-              />
-              <Button
-                title="Refuser (caution remboursée)"
-                variant="secondary"
-                onPress={() => {
-                  const r = respondVenueAlternate(outing.id, 'refused');
-                  if (!r.ok) Alert.alert('Impossible', r.reason);
-                  else
-                    Alert.alert(
-                      'Annulé',
-                      'Tu refuses sans perdre ta caution (mock).',
-                    );
-                }}
-                style={{ marginTop: spacing.sm }}
-              />
-            </View>
-          ) : null}
-          {outing.venueIssue.status === 'alternate_accepted' ? (
-            <Text style={styles.venueIssueOk}>
-              Nouveau lieu accepté — caution conservée.
-            </Text>
-          ) : null}
-          {outing.venueIssue.status === 'refused' ? (
-            <Text style={styles.venueIssueOk}>
-              Refus — caution remboursée aux invités concernés.
-            </Text>
-          ) : null}
+          {(() => {
+            const me = state.currentUser?.id;
+            const acceptedIds = outing.venueIssue.acceptedByUserIds ?? [];
+            const refusedIds = outing.venueIssue.refusedByUserIds ?? [];
+            const iAccepted = !!me && acceptedIds.includes(me);
+            const iRefused = !!me && refusedIds.includes(me);
+            const canRespondVenue =
+              !isHost &&
+              outing.venueIssue.status === 'alternate_proposed' &&
+              !!outing.venueIssue.alternate &&
+              myRequest?.status === 'confirmed' &&
+              !iAccepted &&
+              !iRefused;
+            return (
+              <>
+                {canRespondVenue ? (
+                  <View style={styles.venueIssueActions}>
+                    <Button
+                      title="Accepter le lieu alternatif"
+                      onPress={() => {
+                        const r = respondVenueAlternate(outing.id, 'accepted');
+                        if (!r.ok) Alert.alert('Impossible', r.reason);
+                        else
+                          Alert.alert(
+                            'Lieu mis à jour',
+                            'Même quartier, budget proche. Caution conservée.',
+                          );
+                      }}
+                    />
+                    <Button
+                      title="Refuser (caution remboursée)"
+                      variant="secondary"
+                      onPress={() => {
+                        const r = respondVenueAlternate(outing.id, 'refused');
+                        if (!r.ok) Alert.alert('Impossible', r.reason);
+                        else
+                          Alert.alert(
+                            'Tu sors',
+                            'Caution rendue — tu n’es plus participant. Pas d’absence. Les autres peuvent encore répondre.',
+                          );
+                      }}
+                      style={{ marginTop: spacing.sm }}
+                    />
+                  </View>
+                ) : null}
+                {iAccepted ||
+                (outing.venueIssue.status === 'alternate_accepted' &&
+                  !iRefused) ? (
+                  <Text style={styles.venueIssueOk}>
+                    Nouveau lieu accepté — caution conservée.
+                  </Text>
+                ) : null}
+                {iRefused ? (
+                  <Text style={styles.venueIssueOk}>
+                    Tu as refusé — tu sors, caution rendue (pas d’absence).
+                  </Text>
+                ) : null}
+                {outing.venueIssue.status === 'refused' && !iRefused ? (
+                  <Text style={styles.venueIssueOk}>
+                    Nouveau lieu refusé par les invités — cautions rendues.
+                  </Text>
+                ) : null}
+              </>
+            );
+          })()}
         </View>
       ) : null}
 

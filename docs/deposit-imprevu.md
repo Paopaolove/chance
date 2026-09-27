@@ -48,7 +48,7 @@ Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT
 | Annulation **hôte** d’une place confirmée | `cancelRequest` `by: 'host'` |
 | **Annulation sortie** par l’hôte | `cancelOuting` — toutes les cautions held → returned |
 | **No-show hôte** | `reportHostNoShow` → `RETURN_DEPOSITS_FOR_OUTING` |
-| **Lieu alternatif refusé** par l’invité | `RESPOND_VENUE_ALTERNATE` refused → caution de *cet* invité rendue |
+| **Lieu alternatif refusé** par l’invité | `RESPOND_VENUE_ALTERNATE` refused → *cet* invité `cancelled` + caution `returned` (pas d’absence / forfeit) ; autres confirmés peuvent encore répondre ; sortie non annulée |
 | **Imprévu accepté** | `RESPOND_IMPREVU` accepted → caution du **reporter invité** rendue + sa place annulée ; **pas** d’absence ; autres confirmés restent ; sortie **non** fermée |
 | **Joker** après refus / auto_refus | `USE_JOKER_ON_IMPREVU` → caution returned, **pas** d’absence, **hôte 0 €**, joker consommé le mois Paris (**atomique** : pas de double conso) |
 | **Après joker** (cancel / no-show) | Exemption : `CANCEL_REQUEST` / `REPORT_GUEST_NO_SHOW` **ne** re-forfeit **pas** et **ne** comptent **pas** d’absence (`jokerExemption.ts`) |

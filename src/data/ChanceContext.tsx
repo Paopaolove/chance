@@ -1031,26 +1031,69 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'RESPOND_VENUE_ALTERNATE': {
+      // Lot 3: refus par un invité = cette participation only (sorti + caution
+      // rendue, pas d'absence / forfeit). Les autres confirmés peuvent encore
+      // répondre. ≠ annuler toute la sortie.
       const { outingId, userId, decision } = action.payload;
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing?.venueIssue) return state;
+      const issue = outing.venueIssue;
+      const alreadyAccepted = (issue.acceptedByUserIds ?? []).includes(userId);
+      const alreadyRefused = (issue.refusedByUserIds ?? []).includes(userId);
+      if (alreadyAccepted || alreadyRefused) return state;
+
+      const accepted = new Set(issue.acceptedByUserIds ?? []);
+      const refused = new Set(issue.refusedByUserIds ?? []);
+      if (decision === 'accepted') {
+        accepted.add(userId);
+        refused.delete(userId);
+      } else {
+        refused.add(userId);
+        accepted.delete(userId);
+      }
+
+      let requests = state.requests;
+      let seatRestored = false;
+      if (decision === 'refused') {
+        requests = state.requests.map((r) => {
+          if (
+            r.outingId !== outingId ||
+            r.userId !== userId ||
+            r.status !== 'confirmed'
+          ) {
+            return r;
+          }
+          seatRestored = true;
+          return {
+            ...r,
+            status: 'cancelled' as const,
+            depositStatus:
+              r.depositStatus === 'held' || !r.depositStatus
+                ? ('returned' as const)
+                : r.depositStatus,
+          };
+        });
+      }
+
+      const stillPending = requests.some(
+        (r) =>
+          r.outingId === outingId &&
+          r.status === 'confirmed' &&
+          !accepted.has(r.userId) &&
+          !refused.has(r.userId),
+      );
+      const status = stillPending
+        ? ('alternate_proposed' as const)
+        : accepted.size > 0
+          ? ('alternate_accepted' as const)
+          : ('refused' as const);
+
       return {
         ...state,
+        requests,
         outings: state.outings.map((o) => {
           if (o.id !== outingId || !o.venueIssue) return o;
-          const issue = o.venueIssue;
-          const accepted = new Set(issue.acceptedByUserIds ?? []);
-          const refused = new Set(issue.refusedByUserIds ?? []);
-          if (decision === 'accepted') {
-            accepted.add(userId);
-            refused.delete(userId);
-          } else {
-            refused.add(userId);
-            accepted.delete(userId);
-          }
-          const status =
-            decision === 'accepted'
-              ? ('alternate_accepted' as const)
-              : ('refused' as const);
-          return {
+          let next: Outing = {
             ...o,
             venueIssue: {
               ...issue,
@@ -1058,7 +1101,6 @@ function reducer(state: AppState, action: AppAction): AppState {
               acceptedByUserIds: Array.from(accepted),
               refusedByUserIds: Array.from(refused),
             },
-            // Apply alternate venue if accepted
             ...(decision === 'accepted' && issue.alternate
               ? {
                   venueName: issue.alternate.venueName,
@@ -1069,17 +1111,9 @@ function reducer(state: AppState, action: AppAction): AppState {
                 }
               : {}),
           };
+          if (seatRestored) next = withRestoredSeat(next);
+          return next;
         }),
-        requests:
-          decision === 'refused'
-            ? state.requests.map((r) =>
-                r.outingId === outingId &&
-                r.userId === userId &&
-                r.status === 'confirmed'
-                  ? { ...r, depositStatus: 'returned' as const }
-                  : r,
-              )
-            : state.requests,
       };
     }
 
@@ -3635,6 +3669,21 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!user) return { ok: false, reason: 'no_user' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing?.venueIssue) return { ok: false, reason: 'no_issue' };
+      if (outing.venueIssue.status !== 'alternate_proposed') {
+        return { ok: false, reason: 'already_resolved' };
+      }
+      const acceptedIds = outing.venueIssue.acceptedByUserIds ?? [];
+      const refusedIds = outing.venueIssue.refusedByUserIds ?? [];
+      if (acceptedIds.includes(user.id) || refusedIds.includes(user.id)) {
+        return { ok: false, reason: 'already_responded' };
+      }
+      const myConfirmed = state.requests.some(
+        (r) =>
+          r.outingId === outingId &&
+          r.userId === user.id &&
+          r.status === 'confirmed',
+      );
+      if (!myConfirmed) return { ok: false, reason: 'not_confirmed' };
       dispatch({
         type: 'RESPOND_VENUE_ALTERNATE',
         payload: { outingId, userId: user.id, decision },
@@ -3642,8 +3691,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (decision === 'refused') {
         const toast: AppToast = {
           id: uid('toast'),
-          title: 'Annulation',
-          body: 'Tu refuses le lieu alternatif — sortie annulée, caution remboursée (mock).',
+          title: 'Lieu refusé',
+          body:
+            'Tu sors de la sortie — caution rendue (pas d’absence). Les autres peuvent encore répondre.',
           createdAt: new Date().toISOString(),
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
@@ -3680,7 +3730,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       return { ok: true };
     },
-    [state.currentUser, state.outings],
+    [state.currentUser, state.outings, state.requests],
   );
 
 
