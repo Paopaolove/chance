@@ -44,6 +44,7 @@ Taxonomie détaillée : [`docs/deposit-imprevu.md`](docs/deposit-imprevu.md).
 
 - Caution **≠** frais Chance **≠** invitation / addition.
 - Imprévu **1× / personne / sortie** : accepté → caution rendue + sortie annulée (**pas** de no-show) ; refusé → **règle des 3 h** (pas de forfeit immédiat).
+- **Joker 1× / mois Paris** : caution rendue **définitivement** pour ce cas (cancel / no-show après ≠ re-forfeit / ≠ absence) ; quota consommé de façon atomique.
 - **Non tranché — ne pas inventer** : amendes hors 20 €, destinataire de la forfaite, remboursements abonnement, Stripe.
 
 Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricing.ts`).

@@ -312,7 +312,7 @@ export interface ImprevuReport {
   createdAt: string;
   respondedAt?: string;
   respondedByUserId?: string;
-  /** Guest used monthly joker after refuse / auto_refuse → caution returned, pas d’absence. */
+  /** Guest used monthly joker after refuse / auto_refuse → caution returned for good, pas d’absence (cancel/no-show ultérieurs n’annulent pas l’exemption). */
   jokerUsed?: boolean;
 }
 

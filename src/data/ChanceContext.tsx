@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
 } from 'react';
 import { Alert, AppState as RNAppState } from 'react-native';
 import {
@@ -67,6 +68,12 @@ import {
   imprevuNotifTitle,
   normalizeImprevuReason,
 } from '../utils/imprevu';
+import {
+  canConsumeMonthlyJoker,
+  isJokerExempted,
+  resolveGuestCancelDeposit,
+  shouldApplyGuestNoShowPenalty,
+} from '../utils/jokerExemption';
 import { makeVenueKey } from '../utils/venue';
 import {
   ensureAndroidChannel,
@@ -251,22 +258,25 @@ function reducer(state: AppState, action: AppAction): AppState {
       const heldSeat = req.status === 'accepted' || req.status === 'confirmed';
       let depositStatus = req.depositStatus;
       if (req.status === 'confirmed') {
-        const free =
+        const free = Boolean(
           outing &&
-          isCancelFreeWindow(
-            outing.startsAt,
-            new Date(cancelledAt).getTime(),
-          );
-        if (by === 'host') {
-          // Host dropping one guest: return deposit
-          depositStatus =
-            req.depositStatus === 'held' || !req.depositStatus
-              ? 'returned'
-              : req.depositStatus;
-        } else {
-          // Guest cancel: returned if ≥ CANCEL_FREE_BEFORE_HOURS, else forfeited
-          depositStatus = free ? 'returned' : 'forfeited';
-        }
+            isCancelFreeWindow(
+              outing.startsAt,
+              new Date(cancelledAt).getTime(),
+            ),
+        );
+        const jokerExempted = isJokerExempted(state.imprevuReports, {
+          outingId: req.outingId,
+          reporterId: req.userId,
+          requestId: req.id,
+        });
+        // Guest late cancel after joker must NOT re-forfeit (lot 2).
+        depositStatus = resolveGuestCancelDeposit({
+          by,
+          freeWindow: free,
+          jokerExempted,
+          currentDeposit: req.depositStatus,
+        });
       }
       return {
         ...state,
@@ -762,7 +772,12 @@ function reducer(state: AppState, action: AppAction): AppState {
       }
       if (report.jokerUsed) return state;
       let currentUser = state.currentUser;
+      // Atomic monthly quota (lot 2): refuse if already consumed this Paris month
+      // even when two dispatches race past the callback guard.
       if (currentUser && currentUser.id === report.reporterId) {
+        if (!canConsumeMonthlyJoker(currentUser.jokerUsedMonthKey, monthKey)) {
+          return state;
+        }
         currentUser = { ...currentUser, jokerUsedMonthKey: monthKey };
       }
       return {
@@ -1071,6 +1086,31 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'REPORT_GUEST_NO_SHOW': {
       const { outingId, requestId, guestId, strike, lowerPriority } =
         action.payload;
+      // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
+      const jokerExempted = isJokerExempted(state.imprevuReports, {
+        outingId,
+        reporterId: guestId,
+        requestId,
+      });
+      if (!shouldApplyGuestNoShowPenalty(jokerExempted)) {
+        return {
+          ...state,
+          requests: state.requests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  // Keep seat outcome soft; never forfeit a joker return.
+                  depositStatus:
+                    r.depositStatus === 'returned' || r.depositStatus === 'held'
+                      ? ('returned' as const)
+                      : r.depositStatus === 'forfeited'
+                        ? ('returned' as const)
+                        : r.depositStatus,
+                }
+              : r,
+          ),
+        };
+      }
       let currentUser = state.currentUser;
       if (currentUser && currentUser.id === guestId) {
         currentUser = {
@@ -1532,11 +1572,16 @@ interface ChanceContextValue {
           | 'no_request'
           | 'not_guest';
       };
-  /** Confirmed guest absence: forfeit deposit; 2nd → lower priority + profile mention. */
+  /** Confirmed guest absence: forfeit deposit; 2nd → lower priority + profile mention. Joker-exempted cases: no forfeit / no strike. */
   reportGuestNoShow: (
     requestId: string,
   ) =>
-    | { ok: true; strike: number; lowerPriority: boolean }
+    | {
+        ok: true;
+        strike: number;
+        lowerPriority: boolean;
+        jokerExempted?: boolean;
+      }
     | { ok: false; reason: string };
   /** Host publishes often and never honors: 1 warning, 2nd ban. */
   reportHostNeverHonor: (
@@ -1795,13 +1840,19 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       let depositReturned: boolean | undefined;
       let depositForfeited: boolean | undefined;
       if (req.status === 'confirmed' && outing) {
-        if (by === 'host') {
-          depositReturned = true;
-        } else if (isCancelFreeWindow(outing.startsAt)) {
-          depositReturned = true;
-        } else {
-          depositForfeited = true;
-        }
+        const jokerExempted = isJokerExempted(state.imprevuReports, {
+          outingId: req.outingId,
+          reporterId: req.userId,
+          requestId: req.id,
+        });
+        const next = resolveGuestCancelDeposit({
+          by,
+          freeWindow: isCancelFreeWindow(outing.startsAt),
+          jokerExempted,
+          currentDeposit: req.depositStatus,
+        });
+        if (next === 'returned') depositReturned = true;
+        if (next === 'forfeited') depositForfeited = true;
       }
       dispatch({
         type: 'CANCEL_REQUEST',
@@ -1809,7 +1860,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       });
       return { ok: true, depositReturned, depositForfeited };
     },
-    [state.requests, state.outings],
+    [state.requests, state.outings, state.imprevuReports],
   );
 
   const joinOuting = useCallback(
@@ -3634,11 +3685,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
 
 
+  /**
+   * Sync lock for monthly joker claim (lot 2). Complements reducer atomicity so
+   * a double-tap cannot pass the callback guard twice before re-render.
+   */
+  const jokerMonthLockRef = useRef<string | null>(null);
+
   const hasJokerAvailable = useCallback((): boolean => {
     const user = state.currentUser;
     if (!user) return false;
     const month = parisMonthKey();
     if (!month) return false;
+    if (jokerMonthLockRef.current === month) return false;
     return user.jokerUsedMonthKey !== month;
   }, [state.currentUser]);
 
@@ -3671,7 +3729,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       if (report.jokerUsed) return { ok: false, reason: 'already_used' };
       const month = parisMonthKey();
-      if (!month || user.jokerUsedMonthKey === month) {
+      if (
+        !month ||
+        user.jokerUsedMonthKey === month ||
+        jokerMonthLockRef.current === month
+      ) {
         return { ok: false, reason: 'no_joker' };
       }
       const outing = state.outings.find((o) => o.id === report.outingId);
@@ -3691,6 +3753,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         )?.id;
       if (!requestId) return { ok: false, reason: 'no_request' };
 
+      // Claim month synchronously before dispatch (atomic vs double-tap).
+      jokerMonthLockRef.current = month;
       dispatch({
         type: 'USE_JOKER_ON_IMPREVU',
         payload: { imprevuId, requestId, monthKey: month },
@@ -3711,7 +3775,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       requestId: string,
     ):
-      | { ok: true; strike: number; lowerPriority: boolean }
+      | {
+          ok: true;
+          strike: number;
+          lowerPriority: boolean;
+          jokerExempted?: boolean;
+        }
       | { ok: false; reason: string } => {
       const req = state.requests.find((r) => r.id === requestId);
       if (!req || req.status !== 'confirmed') {
@@ -3719,6 +3788,38 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       const outingId = req.outingId;
       const guestId = req.userId;
+      const jokerExempted = isJokerExempted(state.imprevuReports, {
+        outingId,
+        reporterId: guestId,
+        requestId,
+      });
+      if (!shouldApplyGuestNoShowPenalty(jokerExempted)) {
+        // Keep deposit returned; do not count an absence on a joker case.
+        dispatch({
+          type: 'REPORT_GUEST_NO_SHOW',
+          payload: {
+            outingId,
+            requestId,
+            guestId,
+            strike: state.guestNoShowStrikes[guestId] ?? 0,
+            lowerPriority: false,
+          },
+        });
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: 'Joker — caution protégée',
+          body: 'Ce cas a déjà utilisé le joker : caution rendue pour de bon, pas d’absence comptée.',
+          createdAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+        const prev = state.guestNoShowStrikes[guestId] ?? 0;
+        return {
+          ok: true,
+          strike: prev,
+          lowerPriority: false,
+          jokerExempted: true,
+        };
+      }
       const prev = state.guestNoShowStrikes[guestId] ?? 0;
       const strike = prev + 1;
       const lowerPriority = strike >= 2;
@@ -3755,7 +3856,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_TOAST', payload: toast });
       return { ok: true, strike, lowerPriority };
     },
-    [state.requests, state.guestNoShowStrikes],
+    [state.requests, state.guestNoShowStrikes, state.imprevuReports],
   );
 
   const reportHostNeverHonor = useCallback(

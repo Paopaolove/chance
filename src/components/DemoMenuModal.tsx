@@ -279,6 +279,11 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 }
                 const r = reportGuestNoShow(req.id);
                 if (!r.ok) Alert.alert('Impossible', r.reason);
+                else if (r.jokerExempted)
+                  Alert.alert(
+                    'Joker — caution protégée',
+                    'Ce cas a déjà utilisé le joker : caution rendue pour de bon, pas d’absence comptée.',
+                  );
                 else
                   Alert.alert(
                     r.lowerPriority ? 'Priorité baissée' : 'Caution perdue',
@@ -305,6 +310,11 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 }
                 const r = reportGuestNoShow(req.id);
                 if (!r.ok) Alert.alert('Impossible', r.reason);
+                else if (r.jokerExempted)
+                  Alert.alert(
+                    'Joker — caution protégée',
+                    'Ce cas a déjà utilisé le joker : caution rendue pour de bon, pas d’absence comptée.',
+                  );
                 else
                   Alert.alert(
                     'Absence invité',

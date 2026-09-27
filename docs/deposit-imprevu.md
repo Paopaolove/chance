@@ -50,15 +50,16 @@ Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT
 | **No-show hôte** | `reportHostNoShow` → `RETURN_DEPOSITS_FOR_OUTING` |
 | **Lieu alternatif refusé** par l’invité | `RESPOND_VENUE_ALTERNATE` refused → caution de *cet* invité rendue |
 | **Imprévu accepté** | `RESPOND_IMPREVU` accepted → caution du **reporter invité** rendue + sa place annulée ; **pas** d’absence ; autres confirmés restent ; sortie **non** fermée |
-| **Joker** après refus / auto_refus | `USE_JOKER_ON_IMPREVU` → caution returned, **pas** d’absence, **hôte 0 €**, joker consommé le mois Paris |
+| **Joker** après refus / auto_refus | `USE_JOKER_ON_IMPREVU` → caution returned, **pas** d’absence, **hôte 0 €**, joker consommé le mois Paris (**atomique** : pas de double conso) |
+| **Après joker** (cancel / no-show) | Exemption : `CANCEL_REQUEST` / `REPORT_GUEST_NO_SHOW` **ne** re-forfeit **pas** et **ne** comptent **pas** d’absence (`jokerExemption.ts`) |
 | **Présence explicite** (`markGuestPresent`) | Invité **présent** → `held` → `returned`. Confirmé seul ≠ présent. `completeOuting` / auto H+30 / clôture urgente **ne** marquent **pas** présent. Absence (`reportGuestNoShow`) → `forfeited`. |
 
 ### → `forfeited` (split 6,90 / 13,10)
 
 | Événement | Détail code |
 |-----------|-------------|
-| Annulation **invité** confirmé **trop tard** (< 3 h) | `cancelRequest` guest |
-| **Absence** invité après confirm | `reportGuestNoShow` |
+| Annulation **invité** confirmé **trop tard** (< 3 h) | `cancelRequest` guest — **sauf** exemption joker (reste `returned`) |
+| **Absence** invité après confirm | `reportGuestNoShow` — **sauf** exemption joker (pas de strike / forfeit) |
 | **Imprévu sans réponse à `startsAt`** (`auto_refused`) si reporter **invité** | Forfeit reporter (sauf joker ensuite) |
 
 ### Imprévu refusé (manuel) — règle des 3 h + joker
@@ -95,7 +96,8 @@ Ne pas ajouter dans le code ni l’UI :
 | Free cancel ≥ 3 h | `CANCEL_FREE_BEFORE_HOURS` + `isCancelFreeWindow` |
 | Caution 20 € | `DEPOSIT_EUROS` |
 | Forfeit split 6,90 / 13,10 | `DEPOSIT_FORFEIT_CHANCE_EUROS` / `DEPOSIT_FORFEIT_HOST_EUROS` |
-| Joker 1× / mois Paris | `jokerUsedMonthKey` + `parisMonthKey` |
+| Joker 1× / mois Paris | `jokerUsedMonthKey` + `parisMonthKey` + conso atomique reducer / lock |
+| Exemption après joker | `isJokerExempted` — cancel / no-show ne re-perdent pas la caution |
 | Imprévu 1× / personne | garde `REPORT_IMPREVU` |
 | Accepté → pas absence + caution reporter rendue ; groupe intact | `RESPOND_IMPREVU` accepted (sans fermer la sortie) |
 | Refus → règle 3 h (ou joker) | **pas** de forfeit immédiat au refus manuel |
