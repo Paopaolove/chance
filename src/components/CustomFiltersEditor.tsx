@@ -76,7 +76,7 @@ export function CustomFiltersEditor({
           onPress={add}
           accessibilityRole="button"
           accessibilityLabel="Ajouter le centre d’intérêt"
-          hitSlop={8}
+          hitSlop={12}
           style={({ pressed }) => [
             styles.addBtn,
             pressed && styles.addPressed,
@@ -167,8 +167,9 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderRadius: radius.full,
+    minHeight: 44,
   },
   chipText: {
     ...typography.caption,

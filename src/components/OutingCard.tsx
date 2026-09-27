@@ -53,7 +53,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
           onPress={openHostProfile}
           accessibilityRole="button"
           accessibilityLabel={`Profil de ${outing.hostName}`}
-          hitSlop={6}
+          hitSlop={12}
           style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
           <Avatar
@@ -171,8 +171,10 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: radius.full,
+    minHeight: 32,
+    justifyContent: 'center',
   },
   chipOrange: { backgroundColor: colors.primarySoft },
   chipUrgent: { backgroundColor: colors.primarySoft },

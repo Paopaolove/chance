@@ -71,7 +71,7 @@ export function RatingLine({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={isNew ? label : `Avis · ${label}`}
-      hitSlop={8}
+      hitSlop={12}
     >
       {content}
     </Pressable>

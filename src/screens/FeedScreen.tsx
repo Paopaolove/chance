@@ -509,7 +509,7 @@ export function FeedScreen() {
       </View>
       <Pressable
         onPress={() => navigation.navigate('DispoSoir')}
-        hitSlop={8}
+        hitSlop={12}
         accessibilityRole="button"
         accessibilityLabel="Réglages Dispo"
       >
@@ -902,7 +902,7 @@ export function FeedScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <Pressable onPress={onLogoTap} hitSlop={8}>
+        <Pressable onPress={onLogoTap} hitSlop={12}>
           <Text style={styles.brand}>Chance</Text>
         </Pressable>
         <Text style={styles.title}>Autour de toi</Text>
@@ -1002,9 +1002,11 @@ const styles = StyleSheet.create({
   },
   segmentItem: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: radius.full,
     alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   segmentItemOn: {
     backgroundColor: colors.surface,
@@ -1113,10 +1115,13 @@ const styles = StyleSheet.create({
   chip: {
     backgroundColor: colors.chip,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderRadius: radius.full,
     borderWidth: 1,
     borderColor: 'transparent',
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   filtresChip: {
     flexShrink: 0,

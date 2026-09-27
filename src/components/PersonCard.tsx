@@ -41,7 +41,7 @@ export function PersonCard({ person, onPropose }: Props) {
           onPress={openHostProfile}
           accessibilityRole="button"
           accessibilityLabel={`Profil de ${person.firstName}`}
-          hitSlop={6}
+          hitSlop={12}
           style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
           <Avatar
@@ -160,8 +160,10 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
     borderRadius: radius.full,
+    minHeight: 32,
+    justifyContent: 'center',
   },
   chipText: {
     ...typography.small,
@@ -186,8 +188,10 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     backgroundColor: colors.primarySoft,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderRadius: radius.full,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   ctaText: {
     ...typography.caption,

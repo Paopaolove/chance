@@ -10,8 +10,10 @@ export const colors = {
   /** Soft aperçu orange crème */
   primarySoft: '#FFE4C8',
   text: '#1C1917',
-  textSecondary: '#78716C',
-  textMuted: '#A8A29E',
+  /** Secondary labels — darkened for cream/white contrast (lot 8) */
+  textSecondary: '#57534E',
+  /** Muted / captions — was too pale (#A8A29E) on crème */
+  textMuted: '#78716C',
   border: '#F0D9C0',
   success: '#3F6B4A',
   successSoft: '#E4EFE7',
@@ -21,7 +23,7 @@ export const colors = {
   dangerSoft: '#FCE8E6',
   chip: '#FFE8D1',
   overlay: 'rgba(28, 25, 23, 0.45)',
-  tabInactive: '#A8A29E',
+  tabInactive: '#78716C',
   white: '#FFFFFF',
 } as const;
 

@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { useChance } from '../data/ChanceContext';
-import { Request } from '../data/types';
+import { Outing, Request } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatCountdown } from '../utils/format';
@@ -23,6 +23,22 @@ import {
 } from '../utils/outingActive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+type SectionKey = 'urgent' | 'confirm' | 'pending' | 'history';
+
+const SECTION_ORDER: SectionKey[] = [
+  'urgent',
+  'confirm',
+  'pending',
+  'history',
+];
+
+const SECTION_TITLES: Record<SectionKey, string> = {
+  urgent: 'Urgentes',
+  confirm: 'À confirmer',
+  pending: 'En attente',
+  history: 'Historique',
+};
 
 const statusLabels: Record<string, string> = {
   pending: 'En attente',
@@ -36,6 +52,47 @@ const statusLabels: Record<string, string> = {
 function remainingMs(deadlineIso: string | undefined, nowMs: number): number {
   if (!deadlineIso) return 0;
   return Math.max(0, new Date(deadlineIso).getTime() - nowMs);
+}
+
+function classifyRequest(
+  r: Request,
+  outing: Outing | undefined,
+  nowMs: number,
+): SectionKey {
+  if (
+    r.status === 'expired' ||
+    r.status === 'declined' ||
+    r.status === 'cancelled' ||
+    r.status === 'confirmed'
+  ) {
+    return 'history';
+  }
+
+  if (r.status === 'accepted') {
+    const left = remainingMs(r.confirmDeadlineAt, nowMs);
+    const outingDead =
+      !!outing &&
+      (outing.status === 'completed' ||
+        outing.status === 'cancelled' ||
+        outing.status === 'closed');
+    if (left <= 0 || outingDead) return 'history';
+    if (outing && isUrgentOnSite(outing)) return 'urgent';
+    return 'confirm';
+  }
+
+  // pending
+  if (outing && isUrgentOnSite(outing) && isOutingAcceptingRequests(outing, nowMs)) {
+    return 'urgent';
+  }
+  if (
+    outing &&
+    (outing.status === 'completed' ||
+      outing.status === 'cancelled' ||
+      !isOutingAcceptingRequests(outing, nowMs))
+  ) {
+    return 'history';
+  }
+  return 'pending';
 }
 
 export function RequestsScreen() {
@@ -69,16 +126,54 @@ export function RequestsScreen() {
     });
   }, [now, outgoingRequests, expireRequestIfNeeded]);
 
+  type Row = { kind: 'in' | 'out'; request: Request };
+
+  const sections = useMemo(() => {
+    const buckets: Record<SectionKey, Row[]> = {
+      urgent: [],
+      confirm: [],
+      pending: [],
+      history: [],
+    };
+
+    const push = (kind: 'in' | 'out', r: Request) => {
+      const outing = getOutingById(r.outingId);
+      const key = classifyRequest(r, outing, now);
+      buckets[key].push({ kind, request: r });
+    };
+
+    incomingRequests.forEach((r) => push('in', r));
+    outgoingRequests.forEach((r) => push('out', r));
+
+    return SECTION_ORDER.map((key) => ({
+      key,
+      title: SECTION_TITLES[key],
+      rows: buckets[key],
+    })).filter((s) => s.rows.length > 0);
+  }, [incomingRequests, outgoingRequests, getOutingById, now]);
+
   const renderIncoming = (r: Request) => {
     const outing = getOutingById(r.outingId);
     return (
-      <View key={r.id} style={styles.card}>
-        <Text style={styles.cardTitle}>
-          {r.userName}, {r.userAge}
-        </Text>
+      <View key={`in-${r.id}`} style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>
+            {r.userName}, {r.userAge}
+          </Text>
+          <View style={styles.rolePill}>
+            <Text style={styles.rolePillText}>Reçue</Text>
+          </View>
+        </View>
         <Text style={styles.cardMeta}>
           pour « {outing?.title ?? 'sortie'} » · {statusLabels[r.status]}
         </Text>
+        {outing && isUrgentOnSite(outing) ? (
+          <View style={styles.urgentPill}>
+            <Text style={styles.urgentPillText}>
+              {outing.urgentAutoH90 ? 'Urgent' : 'Maintenant'}
+            </Text>
+          </View>
+        ) : null}
         {r.message ? <Text style={styles.msg}>« {r.message} »</Text> : null}
         {r.suggestedDate ? (
           <Text style={styles.msg}>
@@ -178,10 +273,22 @@ export function RequestsScreen() {
 
     const body = (
       <>
-        <Text style={styles.cardTitle}>{outing?.title ?? 'Sortie'}</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>{outing?.title ?? 'Sortie'}</Text>
+          <View style={styles.rolePill}>
+            <Text style={styles.rolePillText}>Envoyée</Text>
+          </View>
+        </View>
         <Text style={styles.cardMeta}>
           chez {outing?.hostName} · {statusLabels[r.status]}
         </Text>
+        {outing && isUrgentOnSite(outing) ? (
+          <View style={styles.urgentPill}>
+            <Text style={styles.urgentPillText}>
+              {outing.urgentAutoH90 ? 'Urgent' : 'Maintenant'}
+            </Text>
+          </View>
+        ) : null}
         {r.status === 'accepted' ? (
           outing &&
           (outing.status === 'completed' ||
@@ -228,8 +335,10 @@ export function RequestsScreen() {
                     'La place est de nouveau disponible.',
                   );
                 }}
-                hitSlop={8}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                 style={styles.releaseWrap}
+                accessibilityRole="button"
+                accessibilityLabel="Libérer ma place"
               >
                 <Text style={styles.releaseLink}>Libérer ma place</Text>
               </Pressable>
@@ -263,7 +372,7 @@ export function RequestsScreen() {
     // Accepted: card is source of truth — CTA + countdown visible; no body tap nav.
     if (r.status === 'accepted') {
       return (
-        <View key={r.id} style={styles.card}>
+        <View key={`out-${r.id}`} style={[styles.card, styles.cardConfirm]}>
           {body}
         </View>
       );
@@ -271,7 +380,7 @@ export function RequestsScreen() {
 
     return (
       <Pressable
-        key={r.id}
+        key={`out-${r.id}`}
         style={styles.card}
         onPress={() => {
           if (r.status === 'confirmed' && outing) {
@@ -306,23 +415,19 @@ export function RequestsScreen() {
             subtitle="Rejoins une sortie autour de toi, ou publie la tienne."
           />
         ) : (
-          <>
-            <Text style={styles.section}>Reçues (hôte)</Text>
-            {incomingRequests.length === 0 ? (
-              <Text style={styles.emptyLine}>Aucune demande reçue.</Text>
-            ) : (
-              incomingRequests.map(renderIncoming)
-            )}
-
-            <Text style={[styles.section, { marginTop: spacing.xl }]}>
-              Envoyées
-            </Text>
-            {outgoingRequests.length === 0 ? (
-              <Text style={styles.emptyLine}>Aucune demande envoyée.</Text>
-            ) : (
-              outgoingRequests.map(renderOutgoing)
-            )}
-          </>
+          sections.map((section, idx) => (
+            <View
+              key={section.key}
+              style={idx > 0 ? styles.sectionBlock : undefined}
+            >
+              <Text style={styles.section}>{section.title}</Text>
+              {section.rows.map((row) =>
+                row.kind === 'in'
+                  ? renderIncoming(row.request)
+                  : renderOutgoing(row.request),
+              )}
+            </View>
+          ))
         )}
       </ScrollView>
     </SafeAreaView>
@@ -339,12 +444,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: spacing.lg,
   },
+  sectionBlock: { marginTop: spacing.xl },
   section: {
-    ...typography.bodyStrong,
+    ...typography.subtitle,
+    fontFamily: fonts.bold,
     color: colors.text,
     marginBottom: spacing.md,
   },
-  emptyLine: { ...typography.caption, color: colors.textMuted },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -353,7 +459,48 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.md,
   },
-  cardTitle: { ...typography.bodyStrong, color: colors.text },
+  /** Slight border accent for cards waiting on guest confirm */
+  cardConfirm: {
+    borderColor: colors.primary,
+    borderWidth: 1.5,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  cardTitle: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    flex: 1,
+  },
+  rolePill: {
+    backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  rolePillText: {
+    ...typography.small,
+    color: colors.textSecondary,
+    fontFamily: fonts.semiBold,
+  },
+  urgentPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    marginTop: spacing.sm,
+    minHeight: 28,
+    justifyContent: 'center',
+  },
+  urgentPillText: {
+    ...typography.small,
+    color: colors.primaryDark,
+    fontFamily: fonts.semiBold,
+  },
   cardMeta: {
     ...typography.caption,
     color: colors.textSecondary,
@@ -380,6 +527,7 @@ const styles = StyleSheet.create({
   },
   acceptBtn: {
     flex: 1,
+    minHeight: 56,
   },
   cardCountdown: {
     fontSize: 36,
@@ -397,11 +545,15 @@ const styles = StyleSheet.create({
   releaseWrap: {
     marginTop: spacing.sm,
     alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.md,
   },
+  /** Secondary action — less salient than primary « J’accepte » */
   releaseLink: {
     ...typography.caption,
-    color: colors.primary,
-    textDecorationLine: 'underline',
+    color: colors.textSecondary,
+    fontFamily: fonts.medium,
   },
 });
