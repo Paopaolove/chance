@@ -85,12 +85,14 @@ import {
 } from '../utils/participationRights';
 import { makeVenueKey } from '../utils/venue';
 import {
+  cancelScheduledNotificationIds,
   ensureAndroidChannel,
   scheduleAcceptedConfirmNotifications,
   scheduleChatUnlockNotification,
   simulateDemoNotifications,
   sendPriorityPush,
   type PriorityNotifType,
+  type ScheduledNotifIds,
 } from '../utils/notifications';
 
 /**
@@ -902,9 +904,10 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'COMPLETE_OUTING': {
-      // Plan « terminée » — status only. Confirmé ≠ présent :
+      // Plan « terminée ». Confirmé ≠ présent :
       // never auto-mark attendance (that is MARK_GUEST_PRESENT).
-      // H+30 / CLOSE_OUTING must not side-effect presence via this path.
+      // Pending/accepted must not stay actionable — cancel + restore accepted seats
+      // (same cleanup as CLOSE_OUTING; confirmed guests keep their row).
       const { outingId } = action.payload;
       const target = state.outings.find((o) => o.id === outingId);
       if (
@@ -914,10 +917,24 @@ function reducer(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
+      const acceptedCount = state.requests.filter(
+        (r) => r.outingId === outingId && r.status === 'accepted',
+      ).length;
       return {
         ...state,
-        outings: state.outings.map((o) =>
-          o.id === outingId ? { ...o, status: 'completed' as const } : o,
+        outings: state.outings.map((o) => {
+          if (o.id !== outingId) return o;
+          let spotsLeft = o.spotsLeft;
+          for (let i = 0; i < acceptedCount; i++) {
+            spotsLeft = Math.min(o.capacity, spotsLeft + 1);
+          }
+          return { ...o, status: 'completed' as const, spotsLeft };
+        }),
+        requests: state.requests.map((r) =>
+          r.outingId === outingId &&
+          (r.status === 'pending' || r.status === 'accepted')
+            ? { ...r, status: 'cancelled' as const }
+            : r,
         ),
       };
     }
@@ -1736,6 +1753,55 @@ const ChanceContext = createContext<ChanceContextValue | null>(null);
 export function ChanceProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
 
+  /** Local push / in-app reminder handles — cancel when request/outing dies. */
+  type ScheduledHandles = ScheduledNotifIds & {
+    outingId?: string;
+    reminderTimer?: ReturnType<typeof setTimeout>;
+    chatTimer?: ReturnType<typeof setTimeout>;
+  };
+  const scheduledByRequestRef = useRef<Map<string, ScheduledHandles>>(new Map());
+
+  const clearRequestSchedules = useCallback(
+    (
+      requestId: string,
+      opts?: { keepChat?: boolean },
+    ) => {
+      const entry = scheduledByRequestRef.current.get(requestId);
+      if (!entry) return;
+      const dropPush: Array<string | undefined> = [
+        entry.accepted,
+        entry.reminder3min,
+      ];
+      if (!opts?.keepChat) dropPush.push(entry.chatUnlock);
+      void cancelScheduledNotificationIds(dropPush);
+      if (entry.reminderTimer) clearTimeout(entry.reminderTimer);
+      if (!opts?.keepChat && entry.chatTimer) clearTimeout(entry.chatTimer);
+      if (opts?.keepChat) {
+        scheduledByRequestRef.current.set(requestId, {
+          outingId: entry.outingId,
+          chatUnlock: entry.chatUnlock,
+          chatTimer: entry.chatTimer,
+        });
+      } else {
+        scheduledByRequestRef.current.delete(requestId);
+      }
+    },
+    [],
+  );
+
+  const clearOutingSchedules = useCallback(
+    (outingId: string) => {
+      for (const [requestId, entry] of [
+        ...scheduledByRequestRef.current.entries(),
+      ]) {
+        if (entry.outingId === outingId) {
+          clearRequestSchedules(requestId);
+        }
+      }
+    },
+    [clearRequestSchedules],
+  );
+
   const completeOnboarding = useCallback((input: OnboardingInput) => {
       const now = new Date();
       const trial = new Date(now);
@@ -1950,8 +2016,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const closeOuting = useCallback((outingId: string) => {
+    clearOutingSchedules(outingId);
     dispatch({ type: 'CLOSE_OUTING', payload: { outingId } });
-  }, []);
+  }, [clearOutingSchedules]);
 
   const cancelOuting = useCallback(
     (outingId: string): { ok: true } | { ok: false; reason: string } => {
@@ -1963,13 +2030,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outing.status === 'cancelled') {
         return { ok: false, reason: 'already_cancelled' };
       }
+      clearOutingSchedules(outingId);
       dispatch({
         type: 'CANCEL_OUTING',
         payload: { outingId, cancelledAt: new Date().toISOString() },
       });
       return { ok: true };
     },
-    [state.outings],
+    [state.outings, clearOutingSchedules],
   );
 
   const cancelRequest = useCallback(
@@ -2007,13 +2075,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         if (next === 'returned') depositReturned = true;
         if (next === 'forfeited') depositForfeited = true;
       }
+      clearRequestSchedules(requestId);
       dispatch({
         type: 'CANCEL_REQUEST',
         payload: { requestId, cancelledAt, by },
       });
       return { ok: true, depositReturned, depositForfeited };
     },
-    [state.requests, state.outings, state.imprevuReports],
+    [state.requests, state.outings, state.imprevuReports, clearRequestSchedules],
   );
 
   const joinOuting = useCallback(
@@ -2113,6 +2182,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             confirmDeadlineAt: deadline.toISOString(),
             requestId,
           });
+          const handles: ScheduledHandles = {
+            outingId: outing.id,
+            accepted: scheduled.accepted,
+            reminder3min: scheduled.reminder3min,
+          };
           // In-app toast for « accepté + fenêtre 10 min »
           const toast: AppToast = {
             id: uid('toast'),
@@ -2123,11 +2197,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           dispatch({ type: 'SET_TOAST', payload: toast });
           if (!scheduled.pushOk) {
             Alert.alert(toast.title, toast.body);
-            // Fallback rappel ~3 min left
+            // Fallback rappel ~3 min left — cleared if confirm/expire/cancel
             const deadlineMs = deadline.getTime();
             const reminderIn = (deadlineMs - 3 * 60 * 1000 - Date.now()) / 1000;
             if (reminderIn > 2) {
-              setTimeout(() => {
+              handles.reminderTimer = setTimeout(() => {
+                const live = scheduledByRequestRef.current.get(requestId);
+                if (!live?.reminderTimer) return; // already cleared
                 const t: AppToast = {
                   id: uid('toast'),
                   title: 'Plus que 3 min',
@@ -2139,6 +2215,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
               }, reminderIn * 1000);
             }
           }
+          scheduledByRequestRef.current.set(requestId, handles);
         })();
       }
       return { ok: true };
@@ -2147,18 +2224,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const declineRequest = useCallback((requestId: string) => {
+    clearRequestSchedules(requestId);
     dispatch({ type: 'DECLINE_REQUEST', payload: { requestId } });
-  }, []);
+  }, [clearRequestSchedules]);
 
   const expireRequestIfNeeded = useCallback(
     (requestId: string) => {
       const req = state.requests.find((r) => r.id === requestId);
       if (!req || req.status !== 'accepted' || !req.confirmDeadlineAt) return;
       if (Date.now() > new Date(req.confirmDeadlineAt).getTime()) {
+        clearRequestSchedules(requestId);
         dispatch({ type: 'EXPIRE_REQUEST', payload: { requestId } });
       }
     },
-    [state.requests],
+    [state.requests, clearRequestSchedules],
   );
 
   const confirmSlot = useCallback(
@@ -2231,6 +2310,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       // Credit consumed inside CONFIRM_SLOT reducer on accepted→confirmed only
       const consumeCredit = shouldConsumeCreditOnConfirm(user);
+      // Drop accept + 3 min reminder — seat is confirmed.
+      clearRequestSchedules(requestId, { keepChat: true });
       dispatch({
         type: 'CONFIRM_SLOT',
         payload: {
@@ -2264,6 +2345,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           }
           if (urgentChat) {
             // Urgent: chat already unlocked — no H−1 schedule.
+            clearRequestSchedules(requestId);
             return;
           }
           const chatId = await scheduleChatUnlockNotification({
@@ -2271,6 +2353,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             startsAt: outingForChat.startsAt,
             outingId: outingForChat.id,
           });
+          const handles: ScheduledHandles = {
+            outingId: outingForChat.id,
+            chatUnlock: chatId ?? undefined,
+          };
           if (!chatId) {
             // Fallback H−1 in-app when push scheduling fails
             const opensIn =
@@ -2279,7 +2365,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
                 Date.now()) /
               1000;
             if (opensIn > 2 && opensIn < 48 * 3600) {
-              setTimeout(() => {
+              handles.chatTimer = setTimeout(() => {
+                const live = scheduledByRequestRef.current.get(requestId);
+                if (!live?.chatTimer) return;
                 const t: AppToast = {
                   id: uid('toast'),
                   title: 'Chat ouvert',
@@ -2291,11 +2379,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
               }, opensIn * 1000);
             }
           }
+          scheduledByRequestRef.current.set(requestId, handles);
         })();
       }
       return { ok: true };
     },
-    [state.requests, state.currentUser, state.outings],
+    [state.requests, state.currentUser, state.outings, clearRequestSchedules],
   );
 
   const setDispoSoir = useCallback((value: boolean) => {
@@ -2999,6 +3088,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       for (const req of state.requests) {
         if (req.status !== 'accepted' || !req.confirmDeadlineAt) continue;
         if (now > new Date(req.confirmDeadlineAt).getTime()) {
+          clearRequestSchedules(req.id);
           dispatch({ type: 'EXPIRE_REQUEST', payload: { requestId: req.id } });
         }
       }
@@ -3012,7 +3102,101 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       clearInterval(id);
       sub.remove();
     };
-  }, [state.requests]);
+  }, [state.requests, clearRequestSchedules]);
+
+  /**
+   * Lot 7 — faux pending/accepted: purge when outing is dead or the seat is
+   * no longer confirmable / joinable. Restores accepted seats via EXPIRE_REQUEST;
+   * pending → cancelled.
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const req of state.requests) {
+        if (req.status !== 'pending' && req.status !== 'accepted') continue;
+        const outing = state.outings.find((o) => o.id === req.outingId);
+        const outingDead =
+          !outing ||
+          outing.status === 'completed' ||
+          outing.status === 'cancelled' ||
+          outing.status === 'closed';
+
+        if (req.status === 'pending') {
+          if (
+            outingDead ||
+            (outing != null && !isOutingAcceptingRequests(outing, now))
+          ) {
+            clearRequestSchedules(req.id);
+            dispatch({
+              type: 'CANCEL_REQUEST',
+              payload: {
+                requestId: req.id,
+                cancelledAt: new Date(now).toISOString(),
+                by: 'host',
+              },
+            });
+          }
+          continue;
+        }
+
+        // accepted
+        const unconfirmable =
+          outingDead ||
+          (outing != null &&
+            (isUrgentOnSite(outing)
+              ? outing.status !== 'open' && outing.status !== 'full'
+              : isStartsAtPast(outing.startsAt, now)));
+        if (unconfirmable) {
+          clearRequestSchedules(req.id);
+          dispatch({ type: 'EXPIRE_REQUEST', payload: { requestId: req.id } });
+        }
+      }
+    };
+    tick();
+    const id = setInterval(tick, 5_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.requests, state.outings, clearRequestSchedules]);
+
+  /**
+   * Lot 7 — drop dead local pushes / in-app reminder timers when request or
+   * outing leaves an actionable state (also covers reducer-only paths like
+   * auto CLOSE/COMPLETE that bypass closeOuting/cancelOuting callbacks).
+   */
+  useEffect(() => {
+    for (const [requestId, entry] of [
+      ...scheduledByRequestRef.current.entries(),
+    ]) {
+      const req = state.requests.find((r) => r.id === requestId);
+      const outing = state.outings.find(
+        (o) => o.id === (entry.outingId ?? req?.outingId),
+      );
+      const outingDead =
+        !!outing &&
+        (outing.status === 'cancelled' ||
+          outing.status === 'completed' ||
+          outing.status === 'closed');
+      if (!req || outingDead) {
+        clearRequestSchedules(requestId);
+        continue;
+      }
+      if (req.status === 'accepted') continue; // keep confirm reminder
+      if (req.status === 'confirmed') {
+        // Keep chat unlock only; drop accept/reminder if any lingered.
+        if (entry.accepted || entry.reminder3min || entry.reminderTimer) {
+          clearRequestSchedules(requestId, { keepChat: true });
+        }
+        continue;
+      }
+      // expired / declined / cancelled / pending — nothing to fire
+      clearRequestSchedules(requestId);
+    }
+  }, [state.requests, state.outings, clearRequestSchedules]);
 
   /**
    * Auto H−90: planned open/full with zero confirmés and startsAt within 90 min

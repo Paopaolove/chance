@@ -296,6 +296,19 @@ export async function simulateDemoNotifications(input?: {
   return { ok: true, pushOk: anyOk };
 }
 
+export async function cancelScheduledNotificationIds(
+  ids: Array<string | null | undefined>,
+): Promise<void> {
+  for (const id of ids) {
+    if (!id) continue;
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // ignore — already fired or unknown id
+    }
+  }
+}
+
 export async function cancelAllChanceNotifications(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();

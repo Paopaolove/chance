@@ -29,6 +29,7 @@ import {
   parisWallToUtc,
   parisYmd,
 } from '../utils/parisTime';
+import { clampInt, parseLooseInt } from '../utils/parseLooseNumber';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type CreateRoute = RouteProp<MainTabParamList, 'Create'>;
@@ -46,10 +47,7 @@ const BUDGET_PRESETS = [15, 25, 40] as const;
 const URGENT_ON_SITE_MESSAGE =
   'Une place est libre, mon ami ne vient plus.';
 function clampCreateBudget(n: number): number {
-  return Math.min(
-    BUDGET_MAX_EUROS,
-    Math.max(BUDGET_MIN_EUROS, Math.round(n)),
-  );
+  return clampInt(n, BUDGET_MIN_EUROS, BUDGET_MAX_EUROS);
 }
 
 /** Preset chips / initial default — OK to auto-switch to Gratuit on Autre. */
@@ -644,15 +642,14 @@ export function CreateOutingScreen() {
                     style={styles.budgetMontantInput}
                     value={String(Math.round(budgetMaxEuros))}
                     onChangeText={(t) => {
-                      const digits = t.replace(/\D/g, '');
-                      if (digits === '') return;
-                      const n = parseInt(digits, 10);
-                      if (!Number.isNaN(n)) {
+                      if (t.trim() === '') return;
+                      const n = parseLooseInt(t);
+                      if (n != null) {
                         setBudgetMaxEuros(clampCreateBudget(n));
                       }
                     }}
-                    keyboardType="number-pad"
-                    maxLength={2}
+                    keyboardType="decimal-pad"
+                    maxLength={5}
                     selectTextOnFocus
                   />
                   <Text style={styles.budgetMontantSuffix}>€</Text>
@@ -948,15 +945,14 @@ export function CreateOutingScreen() {
                   style={styles.budgetMontantInput}
                   value={String(Math.round(budgetMaxEuros))}
                   onChangeText={(t) => {
-                    const digits = t.replace(/\D/g, '');
-                    if (digits === '') return;
-                    const n = parseInt(digits, 10);
-                    if (!Number.isNaN(n)) {
+                    if (t.trim() === '') return;
+                    const n = parseLooseInt(t);
+                    if (n != null) {
                       setBudgetMaxEuros(clampCreateBudget(n));
                     }
                   }}
-                  keyboardType="number-pad"
-                  maxLength={2}
+                  keyboardType="decimal-pad"
+                  maxLength={5}
                   selectTextOnFocus
                   accessibilityLabel="Montant budget en euros"
                 />

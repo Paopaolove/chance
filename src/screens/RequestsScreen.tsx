@@ -183,39 +183,58 @@ export function RequestsScreen() {
           chez {outing?.hostName} · {statusLabels[r.status]}
         </Text>
         {r.status === 'accepted' ? (
-          <>
-            <View style={styles.acceptRow}>
-              <Button
-                title="J’accepte"
-                onPress={() =>
-                  navigation.navigate('ConfirmSlot', { requestId: r.id })
-                }
-                style={styles.acceptBtn}
-              />
-              <Text
-                style={[
-                  styles.cardCountdown,
-                  underOneMinute && styles.cardCountdownDanger,
-                ]}
-                accessibilityRole="timer"
+          outing &&
+          (outing.status === 'completed' ||
+            outing.status === 'cancelled' ||
+            outing.status === 'closed' ||
+            leftMs <= 0) ? (
+            <Text style={styles.msg}>
+              {leftMs <= 0 &&
+              outing.status !== 'completed' &&
+              outing.status !== 'cancelled' &&
+              outing.status !== 'closed'
+                ? 'Délai de confirmation dépassé — place libérée.'
+                : outing.status === 'cancelled'
+                  ? 'Sortie annulée — plus de confirmation.'
+                  : outing.status === 'completed'
+                    ? 'Sortie terminée — plus de confirmation.'
+                    : 'Annonce clôturée — plus de confirmation.'}
+            </Text>
+          ) : (
+            <>
+              <View style={styles.acceptRow}>
+                <Button
+                  title="J’accepte"
+                  onPress={() =>
+                    navigation.navigate('ConfirmSlot', { requestId: r.id })
+                  }
+                  style={styles.acceptBtn}
+                />
+                <Text
+                  style={[
+                    styles.cardCountdown,
+                    underOneMinute && styles.cardCountdownDanger,
+                  ]}
+                  accessibilityRole="timer"
+                >
+                  {countdown}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  cancelRequest(r.id, 'guest');
+                  Alert.alert(
+                    'Place libérée',
+                    'La place est de nouveau disponible.',
+                  );
+                }}
+                hitSlop={8}
+                style={styles.releaseWrap}
               >
-                {countdown}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => {
-                cancelRequest(r.id, 'guest');
-                Alert.alert(
-                  'Place libérée',
-                  'La place est de nouveau disponible.',
-                );
-              }}
-              hitSlop={8}
-              style={styles.releaseWrap}
-            >
-              <Text style={styles.releaseLink}>Libérer ma place</Text>
-            </Pressable>
-          </>
+                <Text style={styles.releaseLink}>Libérer ma place</Text>
+              </Pressable>
+            </>
+          )
         ) : null}
         {r.status === 'confirmed' && outing ? (
           <>

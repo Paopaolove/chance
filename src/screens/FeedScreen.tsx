@@ -21,7 +21,7 @@ import { PersonCard } from '../components/PersonCard';
 import { useChance } from '../data/ChanceContext';
 import { categoryLabels } from '../data/mockOutings';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
-import { getTravelMinutes } from '../data/travelTime';
+import { getTravelMinutes, isResolvableNeighborhood } from '../data/travelTime';
 import { Outing, OutingCategory, User } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
@@ -30,6 +30,7 @@ import {
   computeDispoExpiresAt,
   dispoSlotCreatePrefill,
 } from '../utils/dispo';
+import { clampInt, parseLooseInt } from '../utils/parseLooseNumber';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
@@ -68,7 +69,7 @@ const WHEN_DAY_OPTIONS: { id: WhenDay; label: string }[] = [
 ];
 
 function clampBudgetEuros(n: number): number {
-  return Math.min(BUDGET_FREE_MAX, Math.max(BUDGET_FREE_MIN, Math.round(n)));
+  return clampInt(n, BUDGET_FREE_MIN, BUDGET_FREE_MAX);
 }
 
 /** Paris calendar Y-M-D for today / tomorrow / day-after (noon UTC anchors). */
@@ -200,14 +201,42 @@ export function FeedScreen() {
   const [whenFromTime, setWhenFromTime] = useState('');
 
   const clampTravelMinutes = (n: number) =>
-    Math.min(TRAVEL_MAX_MINUTES, Math.max(TRAVEL_MIN_MINUTES, Math.round(n)));
+    clampInt(n, TRAVEL_MIN_MINUTES, TRAVEL_MAX_MINUTES);
 
   const user = state.currentUser;
   const isDispo = !!user?.dispoSoir;
   const userNeighborhood =
     user?.dispoNeighborhood ?? user?.neighborhood ?? '';
-  const filterOriginNeighborhood =
-    annoncesQuartier.trim() || userNeighborhood;
+  /**
+   * Quartier d’origine trajet (Annonces):
+   * - chip / free-text résolu → l’utiliser
+   * - fragment court en cours de frappe → garder le profil (évite jump centre Paris)
+   * - free-text long même inconnu → l’appliquer (pas d’ignore silencieux)
+   */
+  const filterOriginNeighborhood = useMemo(() => {
+    const free = annoncesQuartier.trim();
+    if (!free) return userNeighborhood;
+    if (isResolvableNeighborhood(free)) return free;
+    if (free.length < 4) return userNeighborhood;
+    return free;
+  }, [annoncesQuartier, userNeighborhood]);
+
+  /** Keep last valid HH:MM while typing incomplete « 19:0 » (avoid flicker to now). */
+  const lastValidWhenFromRef = useRef('');
+  const appliedWhenFromTime = useMemo(() => {
+    const trimmed = whenFromTime.trim();
+    if (!trimmed) {
+      lastValidWhenFromRef.current = '';
+      return '';
+    }
+    const normalized = normalizeHhMm(whenFromTime);
+    if (normalized) {
+      lastValidWhenFromRef.current = normalized;
+      return normalized;
+    }
+    return lastValidWhenFromRef.current;
+  }, [whenFromTime]);
+
   const myDispoPrefs = {
     categories: user?.dispoCategories,
     neighborhood: userNeighborhood || undefined,
@@ -246,7 +275,7 @@ export function FeedScreen() {
 
     list = list.filter((o) => o.travelMinutes <= travelMaxMinutes);
     list = list.filter((o) =>
-      outingMatchesWhen(o.startsAt, whenDay, whenFromTime, Date.now(), {
+      outingMatchesWhen(o.startsAt, whenDay, appliedWhenFromTime, Date.now(), {
         urgentOnSite: o.urgentOnSite,
       }),
     );
@@ -256,8 +285,15 @@ export function FeedScreen() {
     }
     // Invitation model: do NOT hide outings when invite cap > guest budget
     // preference (ex. 40 EUR invite stays visible under a 25 EUR filter).
-    // budgetFilter / dispo budgetMax are preference signals only — not used
-    // to hide higher host invitation caps.
+    // budgetFilter is a soft preference signal (matchScore), not a hard cut.
+    if (budgetFilter !== 'all') {
+      list = list.map((o) => ({
+        ...o,
+        matchScore:
+          o.matchScore +
+          (o.budgetMaxEuros <= budgetFilter ? 25 : 0),
+      }));
+    }
     if (alignDispo && isDispo) {
       if (myDispoPrefs.categories?.length) {
         list = list.filter((o) =>
@@ -271,7 +307,7 @@ export function FeedScreen() {
       const au = a.urgentOnSite ? 1 : 0;
       const bu = b.urgentOnSite ? 1 : 0;
       if (bu !== au) return bu - au;
-      if (alignDispo || isDispo) {
+      if (alignDispo || isDispo || budgetFilter !== 'all') {
         if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
       }
       if (a.travelMinutes !== b.travelMinutes) {
@@ -287,7 +323,7 @@ export function FeedScreen() {
     travelMaxMinutes,
     filterOriginNeighborhood,
     whenDay,
-    whenFromTime,
+    appliedWhenFromTime,
     alignDispo,
     isDispo,
     myDispoPrefs.categories,
@@ -321,11 +357,12 @@ export function FeedScreen() {
       );
     }
     if (budgetFilter !== 'all') {
-      list = list.filter(
-        (x) =>
-          x.person.dispoBudgetMax === undefined ||
-          x.person.dispoBudgetMax <= budgetFilter,
-      );
+      list = list.filter((x) => {
+        const b = x.person.dispoBudgetMax;
+        // No preference set → keep visible; otherwise honor max.
+        if (b == null || !Number.isFinite(b)) return true;
+        return b <= budgetFilter;
+      });
     }
     if (quartierFilter !== 'all') {
       const needle = quartierFilter.trim().toLowerCase();
@@ -586,20 +623,19 @@ export function FeedScreen() {
           style={styles.budgetFreeInput}
           value={budgetFilter === 'all' ? '' : String(budgetFilter)}
           onChangeText={(t) => {
-            const digits = t.replace(/\D/g, '');
-            if (digits === '') {
+            if (t.trim() === '') {
               setBudgetFilter('all');
               return;
             }
-            const n = parseInt(digits, 10);
-            if (!Number.isNaN(n)) {
+            const n = parseLooseInt(t);
+            if (n != null) {
               setBudgetFilter(clampBudgetEuros(n));
             }
           }}
           placeholder="_"
           placeholderTextColor={colors.textMuted}
-          keyboardType="number-pad"
-          maxLength={3}
+          keyboardType="decimal-pad"
+          maxLength={5}
           selectTextOnFocus
           accessibilityLabel="Budget maximum en euros"
         />
@@ -819,15 +855,14 @@ export function FeedScreen() {
               style={styles.travelInput}
               value={String(travelMaxMinutes)}
               onChangeText={(t) => {
-                const digits = t.replace(/\D/g, '');
-                if (digits === '') return;
-                const n = parseInt(digits, 10);
-                if (!Number.isNaN(n)) {
+                if (t.trim() === '') return;
+                const n = parseLooseInt(t);
+                if (n != null) {
                   setTravelMaxMinutes(clampTravelMinutes(n));
                 }
               }}
-              keyboardType="number-pad"
-              maxLength={2}
+              keyboardType="decimal-pad"
+              maxLength={4}
               selectTextOnFocus
               accessibilityLabel="Temps de trajet maximum en minutes"
             />

@@ -120,3 +120,23 @@ export function isWithinRelevance(
 export function missingNeighborhoodCoords(): string[] {
   return PARIS_NEIGHBORHOODS.filter((n) => !COORDS[n]);
 }
+
+/**
+ * True when `name` maps to a known Paris quartier (exact or fuzzy),
+ * not the silent Paris-centre fallback. Used so free-text filters don't
+ * jump travel times while the user is mid-typing.
+ */
+export function isResolvableNeighborhood(name: string): boolean {
+  const n = name.trim();
+  if (!n) return false;
+  if (COORDS[n]) return true;
+  const lower = n.toLowerCase();
+  // Avoid matching almost everything on 1–2 chars ("Le", "St"…).
+  if (lower.length < 3) return false;
+  return Object.keys(COORDS).some(
+    (k) =>
+      k.toLowerCase() === lower ||
+      lower.includes(k.toLowerCase()) ||
+      k.toLowerCase().includes(lower),
+  );
+}
