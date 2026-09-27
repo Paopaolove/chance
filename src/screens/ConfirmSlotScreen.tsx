@@ -9,6 +9,7 @@ import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, spacing, typography } from '../theme';
 import { formatCountdown } from '../utils/format';
 import { isStartsAtPast } from '../utils/parisTime';
+import { isUrgentOnSite } from '../utils/outingActive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'ConfirmSlot'>;
@@ -89,10 +90,19 @@ export function ConfirmSlotScreen() {
     );
   }
 
+  // Urgent: startsAt is « now » — still confirmable while open/full (H+30 window).
+  const urgentBlocked =
+    isUrgentOnSite(outing) &&
+    outing.status !== 'open' &&
+    outing.status !== 'full';
+  const normalPast =
+    !isUrgentOnSite(outing) && isStartsAtPast(outing.startsAt);
+
   if (
     outing.status === 'completed' ||
     outing.status === 'cancelled' ||
-    isStartsAtPast(outing.startsAt)
+    urgentBlocked ||
+    normalPast
   ) {
     return (
       <SafeAreaView style={styles.wrap}>
@@ -103,7 +113,9 @@ export function ConfirmSlotScreen() {
               ? 'Cette sortie est terminée — confirmation impossible.'
               : outing.status === 'cancelled'
                 ? 'Cette sortie est annulée — confirmation impossible.'
-                : 'L’heure de la sortie est passée — tu ne peux plus confirmer.'}
+                : isUrgentOnSite(outing)
+                  ? 'Cette invitation urgente n’accepte plus de confirmation.'
+                  : 'L’heure de la sortie est passée — tu ne peux plus confirmer.'}
           </Text>
         </View>
         <Button title="Retour aux annonces" onPress={goFeed} />

@@ -47,7 +47,7 @@ import {
   describeDepositForfeitMoment,
   isCancelFreeWindow,
 } from './pricing';
-import { isStartsAtPast, parisMonthKey } from '../utils/parisTime';
+import { isStartsAtPast, parisMonthKey, parisYmd } from '../utils/parisTime';
 import {
   isOutingAcceptingRequests,
   isUrgentOnSite,
@@ -347,9 +347,11 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!isOutingAcceptingRequests(outing)) return state;
 
       const newSpots = outing.spotsLeft - 1;
+      // Same Paris calendar day only — accepting mardi must not cancel samedi.
+      const acceptedDay = parisYmd(outing.startsAt);
       return {
         ...state,
-        // Accept this seat; cancel the requester's other pending requests.
+        // Accept this seat; cancel requester's other pending on the *same* day only.
         requests: state.requests.map((r) => {
           if (r.id === action.payload.requestId) {
             return {
@@ -364,7 +366,15 @@ function reducer(state: AppState, action: AppAction): AppState {
             r.id !== req.id &&
             r.status === 'pending'
           ) {
-            return { ...r, status: 'cancelled' as const };
+            const other = state.outings.find((o) => o.id === r.outingId);
+            if (
+              other &&
+              acceptedDay &&
+              parisYmd(other.startsAt) === acceptedDay
+            ) {
+              return { ...r, status: 'cancelled' as const };
+            }
+            return r;
           }
           return r;
         }),
@@ -2930,6 +2940,31 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       sub.remove();
     };
   }, [state.imprevuReports, state.outings]);
+
+  /**
+   * Global 10 min confirm window — expire accepted seats even if Demandes /
+   * ConfirmSlot are unmounted (UI intervals alone are not enough).
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const req of state.requests) {
+        if (req.status !== 'accepted' || !req.confirmDeadlineAt) continue;
+        if (now > new Date(req.confirmDeadlineAt).getTime()) {
+          dispatch({ type: 'EXPIRE_REQUEST', payload: { requestId: req.id } });
+        }
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.requests]);
 
   /**
    * Auto H−90: planned open/full with zero confirmés and startsAt within 90 min

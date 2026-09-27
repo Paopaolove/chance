@@ -29,6 +29,10 @@ import { isChatUnlocked, lateLabel } from '../utils/chat';
 import { imprevuMotiveLabel } from '../utils/imprevu';
 import { formatOutingWhen } from '../utils/format';
 import { isStartsAtPast } from '../utils/parisTime';
+import {
+  isOutingAcceptingRequests,
+  isUrgentOnSite,
+} from '../utils/outingActive';
 import { makeVenueKey } from '../utils/venue';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 
@@ -651,11 +655,18 @@ export function OutingDetailScreen() {
           {myRequest.status === 'accepted' && (
             <>
               {outing.status === 'completed' ||
-              isStartsAtPast(outing.startsAt) ? (
+              outing.status === 'cancelled' ||
+              (isUrgentOnSite(outing)
+                ? outing.status !== 'open' && outing.status !== 'full'
+                : isStartsAtPast(outing.startsAt)) ? (
                 <Text style={styles.hint}>
                   {outing.status === 'completed'
                     ? 'Sortie terminée — confirmation impossible.'
-                    : 'L’heure est passée — confirmation impossible.'}
+                    : outing.status === 'cancelled'
+                      ? 'Sortie annulée — confirmation impossible.'
+                      : isUrgentOnSite(outing)
+                        ? 'Invitation urgente close — confirmation impossible.'
+                        : 'L’heure est passée — confirmation impossible.'}
                 </Text>
               ) : (
                 <Button
@@ -811,12 +822,18 @@ export function OutingDetailScreen() {
             </>
           )}
         </View>
-      ) : outing.status === 'completed' || isStartsAtPast(outing.startsAt) ? (
+      ) : outing.status === 'completed' ||
+        outing.status === 'cancelled' ||
+        !isOutingAcceptingRequests(outing) ? (
         <View style={styles.actions}>
           <Text style={styles.hint}>
             {outing.status === 'completed'
               ? 'Sortie terminée — plus de demandes.'
-              : 'L’heure est passée — cette annonce n’accepte plus de demandes.'}
+              : outing.status === 'cancelled'
+                ? 'Sortie annulée — plus de demandes.'
+                : isUrgentOnSite(outing)
+                  ? 'Fenêtre urgente terminée — plus de demandes.'
+                  : 'L’heure est passée — cette annonce n’accepte plus de demandes.'}
           </Text>
         </View>
       ) : (

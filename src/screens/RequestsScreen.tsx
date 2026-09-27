@@ -17,7 +17,10 @@ import { Request } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatCountdown } from '../utils/format';
-import { isStartsAtPast } from '../utils/parisTime';
+import {
+  isOutingAcceptingRequests,
+  isUrgentOnSite,
+} from '../utils/outingActive';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -84,11 +87,17 @@ export function RequestsScreen() {
         ) : null}
         {r.status === 'pending' ? (
           outing &&
-          (outing.status === 'completed' || isStartsAtPast(outing.startsAt)) ? (
+          (outing.status === 'completed' ||
+            outing.status === 'cancelled' ||
+            !isOutingAcceptingRequests(outing)) ? (
             <Text style={styles.msg}>
               {outing.status === 'completed'
                 ? 'Sortie terminée — plus d’acceptation.'
-                : 'L’heure est passée — plus d’acceptation.'}
+                : outing.status === 'cancelled'
+                  ? 'Sortie annulée — plus d’acceptation.'
+                  : isUrgentOnSite(outing)
+                    ? 'Fenêtre urgente terminée — plus d’acceptation.'
+                    : 'L’heure est passée — plus d’acceptation.'}
             </Text>
           ) : (
             <View style={styles.row}>
@@ -112,7 +121,7 @@ export function RequestsScreen() {
                   }
                   Alert.alert(
                     'Acceptée',
-                    `${r.userName} a 10 minutes pour confirmer. Sinon la place est libérée. Ses autres demandes en attente sont annulées.`,
+                    `${r.userName} a 10 minutes pour confirmer. Sinon la place est libérée. Ses autres demandes du même jour sont annulées.`,
                   );
                 }}
                 style={styles.flex}
