@@ -91,6 +91,7 @@ export function ConfirmSlotScreen() {
 
   if (
     outing.status === 'completed' ||
+    outing.status === 'cancelled' ||
     isStartsAtPast(outing.startsAt)
   ) {
     return (
@@ -100,7 +101,9 @@ export function ConfirmSlotScreen() {
           <Text style={styles.bodyCenter}>
             {outing.status === 'completed'
               ? 'Cette sortie est terminée — confirmation impossible.'
-              : 'L’heure de la sortie est passée — tu ne peux plus confirmer.'}
+              : outing.status === 'cancelled'
+                ? 'Cette sortie est annulée — confirmation impossible.'
+                : 'L’heure de la sortie est passée — tu ne peux plus confirmer.'}
           </Text>
         </View>
         <Button title="Retour aux annonces" onPress={goFeed} />

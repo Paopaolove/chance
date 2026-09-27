@@ -8,12 +8,16 @@ export type OutingCategory = 'restaurant' | 'bar' | 'culture' | 'autre';
  * Outing lifecycle (listing-level — distinct from per-guest RequestStatus):
  * - open: accepts new join requests while spotsLeft > 0
  * - full: spotsLeft === 0 (all seats reserved via accept); no new joins
- * - closed: host closed listing (closeOuting) — no new requests; existing
- *   confirmed guests keep their seats unless individually cancelled
- * - completed: plan « terminée » (host completeOuting OR auto ~30 min after startsAt).
- *   Unlocks avis + caution settlement. Distinct from closeOuting / cancelOuting.
+ * - closed: clôture — no new acceptances (host closeOuting, capacity full
+ *   already handled via full, or urgent H+30 join window ends). Confirmed
+ *   guests keep their seats. ≠ cancelled / completed / attendance.
+ * - cancelled: annulation — host cancelOuting; all seats cancelled; deposits
+ *   returned. ≠ closed (keeps confirmés) / completed (terminée).
+ * - completed: fin de sortie « terminée » (host completeOuting OR auto after
+ *   startsAt+grace). Unlocks avis for guests marked present. Does NOT imply
+ *   attendance. Distinct from closeOuting / cancelOuting.
  */
-export type OutingStatus = 'open' | 'full' | 'closed' | 'completed';
+export type OutingStatus = 'open' | 'full' | 'closed' | 'cancelled' | 'completed';
 
 /**
  * Per-guest reservation states (seat machine):
@@ -224,8 +228,9 @@ export interface Request {
   /**
    * Presence at the outing — **Confirmé ≠ présent**.
    * - unset while only confirmed (seat + deposit held; no show-up yet)
-   * - present: marked at completeOuting (unmarked confirmés → present) → caution returned
+   * - present: explicit markGuestPresent (host / check-in) → caution returned
    * - absent: reportGuestNoShow → caution forfeited (6,90/13,10)
+   * Never set as a side-effect of CLOSE_OUTING, urgent H+30, or COMPLETE_OUTING.
    * Reviews / sorties honorées use present, never confirmed alone.
    */
   attendance?: 'present' | 'absent';
@@ -480,11 +485,16 @@ export type AppAction =
       payload: { outingId: string; urgentAutoH90?: boolean };
     }
   /**
-   * Plan « terminée » — status completed. Unlocks avis.
-   * Unmarked confirmed → attendance present + held deposit returned.
-   * Already absent (no-show) stays forfeited. Confirmé ≠ présent.
+   * Plan « terminée » — status completed only. Unlocks avis for guests
+   * already marked present. Does NOT set attendance (Confirmé ≠ présent).
+   * Deposit return for present guests happens in MARK_GUEST_PRESENT.
    */
   | { type: 'COMPLETE_OUTING'; payload: { outingId: string } }
+  /**
+   * Explicit presence (host / check-in). Confirmé → present + held deposit
+   * returned. Idempotent. Cannot override absent. ≠ COMPLETE_OUTING / CLOSE.
+   */
+  | { type: 'MARK_GUEST_PRESENT'; payload: { requestId: string } }
   | { type: 'ADD_REVIEW'; payload: Review }
   | { type: 'REPLY_TO_REVIEW'; payload: { reviewId: string; reply: string } }
   | {

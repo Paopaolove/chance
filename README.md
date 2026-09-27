@@ -24,9 +24,10 @@ Machine à places par demande (`RequestStatus`) + cycle de l’annonce (`OutingS
 | **accept** | Réserve une place (`spotsLeft--`), fenêtre **10 min** (`CONFIRM_WINDOW_MS`) ; deadline en **ISO UTC** |
 | **confirmSlot** | Idempotent (2e confirm → ok, pas de double caution / crédit) ; après deadline → expire ; course capacité → `race_lost` |
 | **cancel** (`cancelRequest`) | Invité retire *sa* demande (pending/accepted/confirmed) — ne casse pas les autres confirmés |
-| **closeOuting** | Hôte ferme les inscriptions ; confirmés **gardent** leur place |
-| **cancelOuting** | Hôte annule toute la sortie (y compris confirmés) ; cautions rendues |
-| **completeOuting** | Sortie terminée (après `startsAt` / démo) → `completed` |
+| **closeOuting** | Clôture : plus de nouvelles inscriptions ; confirmés **gardent** leur place (`closed`) |
+| **cancelOuting** | Annulation : toute la sortie annulée (y compris confirmés) → `cancelled` ; cautions rendues |
+| **completeOuting** | Fin de sortie « terminée » → `completed` (avis si **présent**). Ne marque pas la présence. |
+| **markGuestPresent** | Présence explicite (confirmé ≠ présent) → caution rendue |
 
 Affichage horaires : **Europe/Paris** (`src/utils/parisTime.ts`). Stockage : UTC. Annulation invité confirmé : caution rendue si ≥ `CANCEL_FREE_BEFORE_HOURS` (3 h) avant `startsAt`, sinon perdue.
 

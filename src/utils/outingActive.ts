@@ -3,14 +3,16 @@ import { isStartsAtPast } from './parisTime';
 
 /**
  * Delay after startsAt before auto `completed` (« terminée ») for the demo.
+ * terminée ≠ clôture ≠ présence : auto-complete never marks attendance.
  * Host can also completeOuting earlier once H is past.
  */
 export const OUTING_AUTO_COMPLETE_AFTER_MS = 30 * 60 * 1000; // 30 min after H
 
 /**
  * Urgent invitations (déjà sur place / H−90 style): stay visible & joinable
- * until startsAt + 30 min, then auto-clôturée. startsAt = now for on-site
- * → window is now + 30 min. Normal (non-urgent) keep hard past-start cut.
+ * until startsAt + 30 min, then auto-clôturée (CLOSE_OUTING only — no
+ * attendance side-effect). startsAt = now for on-site → window is now + 30 min.
+ * Normal (non-urgent) keep hard past-start cut.
  */
 export const URGENT_ON_SITE_ACCEPT_MS = 30 * 60 * 1000; // 30 min after startsAt
 
@@ -69,7 +71,13 @@ export function isOutingAcceptingRequests(
   outing: Outing,
   nowMs = Date.now(),
 ): boolean {
-  if (outing.status === 'completed' || outing.status === 'closed') return false;
+  if (
+    outing.status === 'completed' ||
+    outing.status === 'closed' ||
+    outing.status === 'cancelled'
+  ) {
+    return false;
+  }
   if (outing.status !== 'open' && outing.status !== 'full') return false;
   if (isUrgentOnSite(outing)) {
     return isUrgentAcceptWindowOpen(outing, nowMs);
@@ -89,7 +97,9 @@ export function outingOccupiesActiveSlot(
   requests: Request[],
   nowMs = Date.now(),
 ): boolean {
-  if (outing.status === 'completed') return false;
+  if (outing.status === 'completed' || outing.status === 'cancelled') {
+    return false;
+  }
 
   const hasConfirmed = requests.some(
     (r) => r.outingId === outing.id && r.status === 'confirmed',

@@ -50,6 +50,8 @@ export function OutingDetailScreen() {
     closeOuting,
     cancelOuting,
     completeOuting,
+    markGuestPresent,
+    reportGuestNoShow,
     cancelRequest,
     getLateReportsForOthers,
     respondVenueAlternate,
@@ -475,10 +477,16 @@ export function OutingDetailScreen() {
             <Text style={styles.hint}>
               {outing.status === 'completed'
                 ? 'Sortie terminée.'
-                : 'Sortie clôturée / annulée.'}
+                : outing.status === 'cancelled'
+                  ? 'Sortie annulée.'
+                  : outing.status === 'closed'
+                    ? 'Inscriptions closes — les confirmés gardent leur place.'
+                    : null}
             </Text>
           )}
-          {outing.status !== 'completed' && isStartsAtPast(outing.startsAt) ? (
+          {outing.status !== 'completed' &&
+          outing.status !== 'cancelled' &&
+          isStartsAtPast(outing.startsAt) ? (
             <Button
               title="Marquer comme terminée"
               variant="secondary"
@@ -486,7 +494,7 @@ export function OutingDetailScreen() {
                 completeOuting(outing.id);
                 Alert.alert(
                   'Sortie terminée',
-                  'Les présents peuvent laisser un avis. Caution rendue pour les présents (confirmé ≠ présent — les absences signalées restent perdues).',
+                  'Confirme la présence de chaque invité pour rendre la caution et débloquer les avis (confirmé ≠ présent).',
                 );
               }}
               style={{ marginTop: spacing.md }}
@@ -495,18 +503,70 @@ export function OutingDetailScreen() {
           {incomingRequests
             .filter((r) => r.outingId === outing.id && r.status === 'confirmed')
             .map((r) => (
-              <Button
-                key={r.id}
-                title={`Chat avec ${r.userName}`}
-                variant="secondary"
-                onPress={() =>
-                  navigation.navigate('ChatPlaceholder', {
-                    outingId: outing.id,
-                    requestId: r.id,
-                  })
-                }
-                style={{ marginTop: spacing.md }}
-              />
+              <View key={r.id} style={{ marginTop: spacing.md }}>
+                <Button
+                  title={`Chat avec ${r.userName}`}
+                  variant="secondary"
+                  onPress={() =>
+                    navigation.navigate('ChatPlaceholder', {
+                      outingId: outing.id,
+                      requestId: r.id,
+                    })
+                  }
+                />
+                {outing.status !== 'cancelled' && !r.attendance ? (
+                  <Button
+                    title={`Marquer ${r.userName} présent`}
+                    variant="secondary"
+                    onPress={() => {
+                      const res = markGuestPresent(r.id);
+                      if (res.ok) {
+                        Alert.alert(
+                          'Présent',
+                          `Caution rendue pour ${r.userName} (mock). Confirmé ≠ présent.`,
+                        );
+                      } else {
+                        Alert.alert('Impossible', res.reason);
+                      }
+                    }}
+                    style={{ marginTop: spacing.sm }}
+                  />
+                ) : null}
+                {r.attendance === 'present' ? (
+                  <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                    {r.userName} · présent · caution rendue
+                  </Text>
+                ) : null}
+                {r.attendance === 'absent' ? (
+                  <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                    {r.userName} · absence · caution perdue
+                  </Text>
+                ) : null}
+                {outing.status !== 'cancelled' &&
+                !r.attendance &&
+                isStartsAtPast(outing.startsAt) ? (
+                  <Button
+                    title={`Signaler absence de ${r.userName}`}
+                    variant="ghost"
+                    onPress={() => {
+                      const res = reportGuestNoShow(r.id);
+                      if (res.ok) {
+                        Alert.alert(
+                          res.lowerPriority
+                            ? 'Priorité baissée'
+                            : 'Absence signalée',
+                          res.lowerPriority
+                            ? '2e absence — priorité baissée + mention profil.'
+                            : 'Caution perdue : 6,90 € Chance / 13,10 € hôte.',
+                        );
+                      } else {
+                        Alert.alert('Impossible', res.reason);
+                      }
+                    }}
+                    style={{ marginTop: spacing.sm }}
+                  />
+                ) : null}
+              </View>
             ))}
           {incomingRequests.some(
             (r) => r.outingId === outing.id && r.status === 'confirmed',

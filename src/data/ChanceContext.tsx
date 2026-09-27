@@ -91,9 +91,13 @@ import {
  */
 const CONFIRM_WINDOW_MS = 10 * 60 * 1000;
 
-/** Restore one reserved seat (after expire / cancel accepted|confirmed). Never reopen closed/completed. */
+/** Restore one reserved seat (after expire / cancel accepted|confirmed). Never reopen closed/cancelled/completed. */
 function withRestoredSeat(o: Outing): Outing {
-  if (o.status === 'closed' || o.status === 'completed') {
+  if (
+    o.status === 'closed' ||
+    o.status === 'cancelled' ||
+    o.status === 'completed'
+  ) {
     return { ...o, spotsLeft: Math.min(o.capacity, o.spotsLeft + 1) };
   }
   const spotsLeft = Math.min(o.capacity, o.spotsLeft + 1);
@@ -160,7 +164,12 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Pending/accepted cancelled; accepted seats restored (spotsLeft).
       const outingId = action.payload.outingId;
       const target = state.outings.find((o) => o.id === outingId);
-      if (!target || target.status === 'completed' || target.status === 'closed') {
+      if (
+        !target ||
+        target.status === 'completed' ||
+        target.status === 'closed' ||
+        target.status === 'cancelled'
+      ) {
         return state;
       }
       const acceptedCount = state.requests.filter(
@@ -187,14 +196,23 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'CANCEL_OUTING': {
       // Host cancels the whole outing (incl. confirmed). Distinct from CLOSE_OUTING.
+      // Outing status → cancelled (≠ closed clôture / completed terminée).
       // Deposits: host-initiated → always returned (guests not at fault).
       // Guest free-cancel window is CANCEL_FREE_BEFORE_HOURS (≥3h) via isCancelFreeWindow
       // on CANCEL_REQUEST; host cancel never forfeits guest deposits.
       const { outingId } = action.payload;
+      const target = state.outings.find((o) => o.id === outingId);
+      if (
+        !target ||
+        target.status === 'completed' ||
+        target.status === 'cancelled'
+      ) {
+        return state;
+      }
       return {
         ...state,
         outings: state.outings.map((o) =>
-          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+          o.id === outingId ? { ...o, status: 'cancelled' as const } : o,
         ),
         requests: state.requests.map((r) => {
           if (r.outingId !== outingId) return r;
@@ -297,7 +315,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!req || req.status !== 'pending') return state;
       const outing = state.outings.find((o) => o.id === req.outingId);
       if (!outing || outing.spotsLeft < 1) return state;
-      if (outing.status === 'completed') return state;
+      if (outing.status === 'completed' || outing.status === 'cancelled') {
+        return state;
+      }
       if (!isOutingAcceptingRequests(outing)) return state;
 
       const newSpots = outing.spotsLeft - 1;
@@ -353,7 +373,12 @@ function reducer(state: AppState, action: AppAction): AppState {
       {
         const outingGate = state.outings.find((o) => o.id === req.outingId);
         if (outingGate) {
-          if (outingGate.status === 'completed') return state;
+          if (
+            outingGate.status === 'completed' ||
+            outingGate.status === 'cancelled'
+          ) {
+            return state;
+          }
           // Urgent: startsAt is « now » — allow confirm while listing still open/full
           // (accepted seats are cancelled on closeOuting). Normal: block once started.
           if (
@@ -825,19 +850,35 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'COMPLETE_OUTING': {
-      // Plan « terminée ». Confirmé ≠ présent :
-      // unmarked confirmed → present + caution returned ; already absent stays forfeited.
+      // Plan « terminée » — status only. Confirmé ≠ présent :
+      // never auto-mark attendance (that is MARK_GUEST_PRESENT).
+      // H+30 / CLOSE_OUTING must not side-effect presence via this path.
       const { outingId } = action.payload;
+      const target = state.outings.find((o) => o.id === outingId);
+      if (
+        !target ||
+        target.status === 'completed' ||
+        target.status === 'cancelled'
+      ) {
+        return state;
+      }
       return {
         ...state,
         outings: state.outings.map((o) =>
           o.id === outingId ? { ...o, status: 'completed' as const } : o,
         ),
+      };
+    }
+
+    case 'MARK_GUEST_PRESENT': {
+      // Explicit presence (host / check-in). ≠ COMPLETE_OUTING / CLOSE_OUTING.
+      const { requestId } = action.payload;
+      return {
+        ...state,
         requests: state.requests.map((r) => {
-          if (r.outingId !== outingId || r.status !== 'confirmed') return r;
-          if (r.attendance === 'absent') {
-            // No-show already settled (forfeited) — do not return deposit.
-            return r;
+          if (r.id !== requestId || r.status !== 'confirmed') return r;
+          if (r.attendance === 'absent' || r.attendance === 'present') {
+            return r; // idempotent; cannot override absent
           }
           return {
             ...r,
@@ -1388,6 +1429,13 @@ interface ChanceContextValue {
     minutesAhead?: number,
   ) => void;
   completeOuting: (outingId: string) => void;
+  /**
+   * Explicit presence (host / check-in). Confirmé ≠ présent.
+   * Sets attendance present + returns held deposit. Idempotent.
+   */
+  markGuestPresent: (
+    requestId: string,
+  ) => { ok: true } | { ok: false; reason: string };
   addReview: (input: {
     outingId: string;
     toUserId: string;
@@ -1714,6 +1762,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outing.status === 'completed') {
         return { ok: false, reason: 'already_completed' };
       }
+      if (outing.status === 'cancelled') {
+        return { ok: false, reason: 'already_cancelled' };
+      }
       dispatch({
         type: 'CANCEL_OUTING',
         payload: { outingId, cancelledAt: new Date().toISOString() },
@@ -1772,7 +1823,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       if (outing.hostId === user.id) return { ok: false, reason: 'own_outing' };
-      if (outing.status === 'completed') {
+      if (outing.status === 'completed' || outing.status === 'cancelled') {
         return { ok: false, reason: 'outing_finished' };
       }
       if (!isOutingAcceptingRequests(outing) || outing.status !== 'open') {
@@ -1832,7 +1883,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       const outing = state.outings.find((o) => o.id === req.outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
-      if (outing.status === 'completed') {
+      if (outing.status === 'completed' || outing.status === 'cancelled') {
         return { ok: false, reason: 'outing_finished' };
       }
       if (!isOutingAcceptingRequests(outing, now.getTime())) {
@@ -1933,7 +1984,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'invalid' };
       }
       const outingGate = state.outings.find((o) => o.id === req.outingId);
-      if (outingGate?.status === 'completed') {
+      if (
+        outingGate?.status === 'completed' ||
+        outingGate?.status === 'cancelled'
+      ) {
         return { ok: false, reason: 'outing_finished' };
       }
       if (outingGate) {
@@ -2442,7 +2496,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!outing) {
         return { ok: false as const, reason: 'outing_closed' as const };
       }
-      if (outing.status === 'closed' || outing.status === 'completed') {
+      if (
+        outing.status === 'closed' ||
+        outing.status === 'cancelled' ||
+        outing.status === 'completed'
+      ) {
         return { ok: false as const, reason: 'outing_closed' as const };
       }
       const normalized = normalizeImprevuReason(reason);
@@ -2748,7 +2806,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Urgent: auto-close listing at startsAt + 30 min (stop accepting).
-   * Confirmed guests keep seats via CLOSE_OUTING; 1-active slot rules unchanged.
+   * Clôture only (CLOSE_OUTING) — never marks confirmés present.
+   * Confirmed guests keep seats; 1-active slot rules unchanged.
    */
   useEffect(() => {
     const tick = () => {
@@ -2775,15 +2834,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   /**
    * Auto plan « terminée » : H + OUTING_AUTO_COMPLETE_AFTER_MS (30 min démo).
-   * Urgent accept window also ends at H+30 (auto-close above); terminée uses
-   * the same H+30 anchor so we don't leave open/full after the grace.
+   * Urgent join window ends at H+30 via CLOSE_OUTING above (clôture only).
+   * terminée is distinct: status → completed, never marks attendance present.
    * Host may also completeOuting once startsAt is past.
    */
   useEffect(() => {
     const tick = () => {
       const now = Date.now();
       for (const outing of state.outings) {
-        if (outing.status === 'completed') continue;
+        if (outing.status === 'completed' || outing.status === 'cancelled') {
+          continue;
+        }
         const startMs = new Date(outing.startsAt).getTime();
         if (!Number.isFinite(startMs)) continue;
         // After H+30 inclusive (same boundary as urgent accept window).
@@ -2839,8 +2900,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const completeOuting = useCallback((outingId: string) => {
     const outing = state.outings.find((o) => o.id === outingId);
-    if (!outing || outing.status === 'completed') return;
-    // Host / démo may mark terminée; auto-complete still waits H+30 min.
+    if (
+      !outing ||
+      outing.status === 'completed' ||
+      outing.status === 'cancelled'
+    ) {
+      return;
+    }
+    // terminée only — does not mark confirmés present (use markGuestPresent).
     dispatch({ type: 'COMPLETE_OUTING', payload: { outingId } });
     const title = outing.title;
     const toast: AppToast = {
@@ -3046,6 +3113,31 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     },
     [state.reviews],
   );
+
+  const markGuestPresent = useCallback(
+    (
+      requestId: string,
+    ): { ok: true } | { ok: false; reason: string } => {
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req || req.status !== 'confirmed') {
+        return { ok: false, reason: 'not_confirmed' };
+      }
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing || outing.status === 'cancelled') {
+        return { ok: false, reason: 'outing_cancelled' };
+      }
+      if (req.attendance === 'absent') {
+        return { ok: false, reason: 'already_absent' };
+      }
+      if (req.attendance === 'present') {
+        return { ok: true }; // idempotent
+      }
+      dispatch({ type: 'MARK_GUEST_PRESENT', payload: { requestId } });
+      return { ok: true };
+    },
+    [state.requests, state.outings],
+  );
+
 
   const addReview = useCallback(
     (input: {
@@ -3835,6 +3927,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       clearToast,
       simulateOutingInMinutes,
       completeOuting,
+      markGuestPresent,
       addReview,
       replyToReview,
       requestHideReviewText,
@@ -3910,6 +4003,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       clearToast,
       simulateOutingInMinutes,
       completeOuting,
+      markGuestPresent,
       addReview,
       replyToReview,
       requestHideReviewText,

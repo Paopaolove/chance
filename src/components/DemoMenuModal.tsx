@@ -39,6 +39,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     simulateOtherImprevu,
     reportVenueClosed,
     completeOuting,
+    markGuestPresent,
     setDispoProfile,
     simulateLocalNotifications,
     showToast,
@@ -151,10 +152,26 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   Alert.alert('Démo', 'Aucune sortie confirmée à terminer.');
                   return;
                 }
-                completeOuting(firstConfirmedOuting.id);
+                const outingId = firstConfirmedOuting.id;
+                completeOuting(outingId);
+                // Présence = acte explicite (≠ side-effect de terminée).
+                const confirmed = [
+                  ...incomingRequests,
+                  ...outgoingRequests,
+                ].filter(
+                  (r) =>
+                    r.outingId === outingId &&
+                    r.status === 'confirmed' &&
+                    !r.attendance,
+                );
+                for (const r of confirmed) {
+                  markGuestPresent(r.id);
+                }
                 Alert.alert(
                   'Noter la sortie',
-                  'Tu peux noter ton binôme depuis Profil.',
+                  confirmed.length
+                    ? 'Sortie terminée + présents marqués (démo). Tu peux noter depuis Profil.'
+                    : 'Sortie terminée. Marque les présents pour débloquer les avis.',
                 );
               })
             }
