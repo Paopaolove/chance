@@ -55,7 +55,9 @@ Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricin
 - Champs inscription / édition de profil harmonisés (prénom*, âge*, quartier*, bio optionnelle…).
 - Boutons Apple / Google = **connexion démo** (pas de vraie auth) — indiqué dans l’UI.
 - Trust stats « X sorties » = sorties **honorées** (terminées / participées), pas le nombre d’avis.
-- Avis seulement entre participants d’une sortie **terminée** (`completed`).
+- Avis seulement entre participants d’une sortie **terminée** (`completed`) **et présents** (`attendance === 'present'` ; Confirmé ≠ présent).
+- Sanctions idempotentes (un même no-show / absence ne double pas les strikes) ; invité : 2e → priorité, 3e → compte fermé ; hôte : 1 avertissement, 2e → compte fermé.
+- Crédit sortie : seul le titulaire de la demande confirme (`confirmSlot`) ; `blockUser` = blocage pair local ≠ fermeture de compte (`banned`).
 - Signaler / bloquer ≠ note publique ; un signalement = un enregistrement (pas de multi-sanctions inventées).
 - Dispo ce soir : pas de proposition à soi-même ; destinataire conservé depuis un profil.
 - Dispo expire à minuit **Europe/Paris** (`nextParisMidnight`).

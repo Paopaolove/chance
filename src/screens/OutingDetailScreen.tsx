@@ -581,12 +581,16 @@ export function OutingDetailScreen() {
                       const res = reportGuestNoShow(r.id);
                       if (res.ok) {
                         Alert.alert(
-                          res.lowerPriority
-                            ? 'Priorité baissée'
-                            : 'Absence signalée',
-                          res.lowerPriority
-                            ? '2e absence — priorité baissée + mention profil.'
-                            : 'Caution perdue : 6,90 € Chance / 13,10 € hôte.',
+                          res.banned
+                            ? 'Compte fermé'
+                            : res.lowerPriority
+                              ? 'Priorité baissée'
+                              : 'Absence signalée',
+                          res.banned
+                            ? '3e absence — compte fermé. Caution perdue : 6,90 € Chance / 13,10 € hôte.'
+                            : res.lowerPriority
+                              ? '2e absence — priorité baissée + mention profil.'
+                              : 'Caution perdue : 6,90 € Chance / 13,10 € hôte.',
                         );
                       } else {
                         Alert.alert('Impossible', res.reason);

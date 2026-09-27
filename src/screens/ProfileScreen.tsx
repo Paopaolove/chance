@@ -135,7 +135,7 @@ export function ProfileScreen() {
             <Text style={styles.warnTitle}>Caution perdue</Text>
             <Text style={styles.warnBody}>
               1re absence après confirmation — {describeDepositForfeitMoment()}{' '}
-              Un 2e baisse ta priorité + mention profil.
+              Un 2e baisse ta priorité ; au bout de trois, le compte est fermé.
             </Text>
           </View>
         ) : null}

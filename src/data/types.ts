@@ -93,7 +93,7 @@ export interface User {
   createdAt: string;
   /** Host no-shows: 1 = warning, 2+ = ban (mock). */
   hostNoShowCount?: number;
-  /** Guest absence after confirm: 1 = forfeit deposit, 2+ = lower priority + profile mention. */
+  /** Guest absence after confirm: 1 = forfeit; 2 = lower priority; 3+ = compte fermé. */
   guestNoShowCount?: number;
   /** After 2nd guest no-show — deprioritized in host queues (mock). */
   lowerPriority?: boolean;
@@ -101,7 +101,10 @@ export interface User {
   profileMention?: string;
   /** Publishes often / never honors: 1 = warning, 2+ = ban (mock). */
   hostPublishStrikeCount?: number;
-  /** Banned after 2nd host no-show or never-honor (mock). */
+  /**
+   * Compte fermé (démo) : 2e no-show hôte / never-honor, ou 3e absence invité.
+   * ≠ blockUser (blocage pair local).
+   */
   banned?: boolean;
   bannedReason?: string;
   /**
@@ -197,6 +200,13 @@ export interface Outing {
    */
   inviteeUserId?: string;
   inviteeName?: string;
+  /**
+   * Lot 6: host no-show already counted on this outing (idempotent).
+   * Same event must not increment strikes twice.
+   */
+  hostNoShowReported?: boolean;
+  /** Lot 6: never-honor sanction already applied on this outing. */
+  hostNeverHonorReported?: boolean;
 }
 
 export interface Request {
@@ -554,6 +564,8 @@ export type AppAction =
         guestId: string;
         strike: number;
         lowerPriority: boolean;
+        /** 3e absence → compte fermé. */
+        banned?: boolean;
       };
     }
   | {

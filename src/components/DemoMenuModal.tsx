@@ -286,10 +286,16 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   );
                 else
                   Alert.alert(
-                    r.lowerPriority ? 'Priorité baissée' : 'Caution perdue',
-                    r.lowerPriority
-                      ? '2e absence — priorité baissée + mention profil.'
-                      : `1re absence — ${describeDepositForfeitMoment()}`,
+                    r.banned
+                      ? 'Compte fermé'
+                      : r.lowerPriority
+                        ? 'Priorité baissée'
+                        : 'Caution perdue',
+                    r.banned
+                      ? '3e absence — compte fermé.'
+                      : r.lowerPriority
+                        ? '2e absence — priorité baissée + mention profil.'
+                        : `1re absence — ${describeDepositForfeitMoment()}`,
                   );
               })
             }
@@ -318,9 +324,11 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 else
                   Alert.alert(
                     'Absence invité',
-                    r.lowerPriority
-                      ? '2e — priorité baissée pour cet invité.'
-                      : describeDepositForfeitMoment(),
+                    r.banned
+                      ? '3e — compte fermé pour cet invité.'
+                      : r.lowerPriority
+                        ? '2e — priorité baissée pour cet invité.'
+                        : describeDepositForfeitMoment(),
                   );
               })
             }
@@ -390,15 +398,18 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             disabled={busy}
             onPress={() =>
               run('Host no-show', () => {
-                const o = getActiveOutingForUser();
-                if (!o) {
+                // Lot 6: acteur = invité confirmé (pas l’hôte).
+                const req = outgoingRequests.find(
+                  (x) => x.status === 'confirmed',
+                );
+                if (!req) {
                   Alert.alert(
                     'Démo',
-                    'Publie / ouvre une sortie (hôte) pour enchaîner les strikes.',
+                    'Il faut une place confirmée (outgoing) pour signaler le no-show hôte. Un 2e strike nécessite une autre sortie.',
                   );
                   return;
                 }
-                const r = reportHostNoShow(o.id);
+                const r = reportHostNoShow(req.outingId);
                 if (!r.ok) Alert.alert('Impossible', r.reason);
                 else
                   Alert.alert(

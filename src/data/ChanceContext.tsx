@@ -74,6 +74,15 @@ import {
   resolveGuestCancelDeposit,
   shouldApplyGuestNoShowPenalty,
 } from '../utils/jokerExemption';
+import {
+  canActorBlockUser,
+  canActorConfirmSlot,
+  canActorMarkGuestPresent,
+  canActorReportGuestNoShow,
+  canActorReportHostNoShow,
+  guestSanctionFromStrike,
+  hostSanctionFromStrike,
+} from '../utils/participationRights';
 import { makeVenueKey } from '../utils/venue';
 import {
   ensureAndroidChannel,
@@ -476,10 +485,12 @@ function reducer(state: AppState, action: AppAction): AppState {
           dispoExpiresAt: undefined,
         };
       }
-      // Consume credit once on accepted→confirmed only (idempotent path returned above)
+      // Consume credit once on accepted→confirmed only (idempotent path returned above).
+      // Lot 6: only the request owner’s credits — never the host’s.
       if (
         action.payload.consumeCredit &&
         nextUser &&
+        nextUser.id === req.userId &&
         (nextUser.outingCredits ?? 0) > 0
       ) {
         nextUser = {
@@ -983,12 +994,15 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'REPORT_HOST_NO_SHOW': {
       const { outingId, hostId, strike, banned } = action.payload;
+      const outing = state.outings.find((o) => o.id === outingId);
+      // Lot 6: same outing / event → no double strike.
+      if (outing?.hostNoShowReported) return state;
       let currentUser = state.currentUser;
       if (currentUser && currentUser.id === hostId) {
         currentUser = {
           ...currentUser,
           hostNoShowCount: strike,
-          banned,
+          banned: banned || currentUser.banned,
           bannedReason: banned
             ? '2e no-show hôte — compte suspendu (démo)'
             : currentUser.bannedReason,
@@ -1002,7 +1016,13 @@ function reducer(state: AppState, action: AppAction): AppState {
           [hostId]: strike,
         },
         outings: state.outings.map((o) =>
-          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+          o.id === outingId
+            ? {
+                ...o,
+                status: 'closed' as const,
+                hostNoShowReported: true,
+              }
+            : o,
         ),
       };
     }
@@ -1144,8 +1164,11 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'REPORT_GUEST_NO_SHOW': {
-      const { outingId, requestId, guestId, strike, lowerPriority } =
+      const { outingId, requestId, guestId, strike, lowerPriority, banned } =
         action.payload;
+      const existing = state.requests.find((r) => r.id === requestId);
+      // Lot 6: same absence event → no double strike / forfeit.
+      if (existing?.attendance === 'absent') return state;
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -1178,8 +1201,14 @@ function reducer(state: AppState, action: AppAction): AppState {
           guestNoShowCount: strike,
           lowerPriority: lowerPriority || currentUser.lowerPriority,
           profileMention: lowerPriority
-            ? 'Absence après confirmation (démo)'
+            ? banned
+              ? '3e absence — compte fermé (démo)'
+              : 'Absence après confirmation (démo)'
             : currentUser.profileMention,
+          banned: banned || currentUser.banned,
+          bannedReason: banned
+            ? '3e absence après confirmation — compte fermé (démo)'
+            : currentUser.bannedReason,
         };
       }
       return {
@@ -1206,6 +1235,9 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'REPORT_HOST_NEVER_HONOR': {
       const { outingId, hostId, strike, banned } = action.payload;
+      const outing = state.outings.find((o) => o.id === outingId);
+      // Lot 6: same outing → no double never-honor strike.
+      if (outing?.hostNeverHonorReported) return state;
       let currentUser = state.currentUser;
       if (currentUser && currentUser.id === hostId) {
         currentUser = {
@@ -1225,7 +1257,13 @@ function reducer(state: AppState, action: AppAction): AppState {
           [hostId]: strike,
         },
         outings: state.outings.map((o) =>
-          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+          o.id === outingId
+            ? {
+                ...o,
+                status: 'closed' as const,
+                hostNeverHonorReported: true,
+              }
+            : o,
         ),
       };
     }
@@ -1638,7 +1676,11 @@ interface ChanceContextValue {
           | 'no_request'
           | 'not_guest';
       };
-  /** Confirmed guest absence: forfeit deposit; 2nd → lower priority + profile mention. Joker-exempted cases: no forfeit / no strike. */
+  /**
+   * Guest absence after confirm (acteur = hôte ou invité).
+   * 1 → forfeit ; 2 → priorité ; 3 → compte fermé. Idempotent per request.
+   * Joker-exempted: no forfeit / no strike.
+   */
   reportGuestNoShow: (
     requestId: string,
   ) =>
@@ -1646,6 +1688,7 @@ interface ChanceContextValue {
         ok: true;
         strike: number;
         lowerPriority: boolean;
+        banned?: boolean;
         jokerExempted?: boolean;
       }
     | { ok: false; reason: string };
@@ -2135,10 +2178,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'invalid' };
+      if (user.banned) return { ok: false, reason: 'invalid' };
       const req = state.requests.find((r) => r.id === requestId);
       // Idempotent double-tap: already confirmed → ok (no deposit/credit again)
       if (req && req.status === 'confirmed') {
         return { ok: true };
+      }
+      // Lot 6: only the guest who owns the request may confirm / consume credit.
+      if (req && !canActorConfirmSlot(user.id, req.userId)) {
+        return { ok: false, reason: 'invalid' };
       }
       const gate = gateCanConfirmOuting(user);
       if (!gate.ok) {
@@ -3260,7 +3308,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     ): { ok: true } | { ok: false; reason: string } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
-      if (targetUserId === user.id) return { ok: false, reason: 'self' };
+      // Lot 6: peer block local ≠ fermeture de compte (banned via sanctions).
+      if (!canActorBlockUser(user.id, targetUserId)) {
+        return { ok: false, reason: 'self' };
+      }
       dispatch({ type: 'BLOCK_USER', payload: { userId: targetUserId } });
       return { ok: true };
     },
@@ -3307,6 +3358,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       requestId: string,
     ): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
       const req = state.requests.find((r) => r.id === requestId);
       if (!req || req.status !== 'confirmed') {
         return { ok: false, reason: 'not_confirmed' };
@@ -3314,6 +3367,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outing = state.outings.find((o) => o.id === req.outingId);
       if (!outing || outing.status === 'cancelled') {
         return { ok: false, reason: 'outing_cancelled' };
+      }
+      // Lot 6: only the host marks presence.
+      if (!canActorMarkGuestPresent(user.id, outing.hostId)) {
+        return { ok: false, reason: 'not_host' };
       }
       if (req.attendance === 'absent') {
         return { ok: false, reason: 'already_absent' };
@@ -3324,7 +3381,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'MARK_GUEST_PRESENT', payload: { requestId } });
       return { ok: true };
     },
-    [state.requests, state.outings],
+    [state.currentUser, state.requests, state.outings],
   );
 
 
@@ -3353,24 +3410,27 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outing.status !== 'completed') {
         return { ok: false, reason: 'not_completed' };
       }
+      // Lot 6: align with canLeaveReview — avis seulement si présent
+      // (Confirmé ≠ présent). Hôte note les invités présents ; invité présent
+      // note l’hôte.
       const isHost = outing.hostId === user.id;
-      const myConfirmed = state.requests.some(
+      const myPresent = state.requests.some(
         (r) =>
           r.outingId === outing.id &&
           r.userId === user.id &&
-          r.status === 'confirmed',
+          wasPresent(r),
       );
-      if (!isHost && !myConfirmed) {
+      if (!isHost && !myPresent) {
         return { ok: false, reason: 'not_participant' };
       }
       const targetIsHost = outing.hostId === input.toUserId;
-      const targetConfirmed = state.requests.some(
+      const targetPresent = state.requests.some(
         (r) =>
           r.outingId === outing.id &&
           r.userId === input.toUserId &&
-          r.status === 'confirmed',
+          wasPresent(r),
       );
-      if (!targetIsHost && !targetConfirmed) {
+      if (!targetIsHost && !targetPresent) {
         return { ok: false, reason: 'target_not_participant' };
       }
       const dup = state.reviews.some(
@@ -3680,12 +3740,35 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     ):
       | { ok: true; strike: number; banned: boolean }
       | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
+      if (outing.status === 'cancelled') {
+        return { ok: false, reason: 'outing_cancelled' };
+      }
+      // Lot 6: same event idempotent.
+      if (outing.hostNoShowReported) {
+        const prev = state.hostNoShowStrikes[outing.hostId] ?? 0;
+        return {
+          ok: true,
+          strike: prev,
+          banned: hostSanctionFromStrike(prev).banned,
+        };
+      }
       const hostId = outing.hostId;
+      const actorIsConfirmedGuest = state.requests.some(
+        (r) =>
+          r.outingId === outingId &&
+          r.userId === user.id &&
+          r.status === 'confirmed',
+      );
+      if (!canActorReportHostNoShow(user.id, hostId, actorIsConfirmedGuest)) {
+        return { ok: false, reason: 'not_participant' };
+      }
       const prev = state.hostNoShowStrikes[hostId] ?? 0;
       const strike = prev + 1;
-      const banned = strike >= 2;
+      const { banned } = hostSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_HOST_NO_SHOW',
         payload: { outingId, hostId, strike, banned },
@@ -3728,7 +3811,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_TOAST', payload: toast });
       return { ok: true, strike, banned };
     },
-    [state.outings, state.hostNoShowStrikes, state.requests],
+    [state.currentUser, state.outings, state.hostNoShowStrikes, state.requests],
   );
 
   const reportVenueClosed = useCallback(
@@ -3936,15 +4019,41 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           ok: true;
           strike: number;
           lowerPriority: boolean;
+          banned?: boolean;
           jokerExempted?: boolean;
         }
       | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
       const req = state.requests.find((r) => r.id === requestId);
       if (!req || req.status !== 'confirmed') {
         return { ok: false, reason: 'not_confirmed' };
       }
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      if (outing.status === 'cancelled') {
+        return { ok: false, reason: 'outing_cancelled' };
+      }
       const outingId = req.outingId;
       const guestId = req.userId;
+      // Lot 6: acteur = hôte ou l’invité (auto-aveu / démo).
+      if (!canActorReportGuestNoShow(user.id, outing.hostId, guestId)) {
+        return { ok: false, reason: 'not_participant' };
+      }
+      if (req.attendance === 'present') {
+        return { ok: false, reason: 'already_present' };
+      }
+      // Lot 6: same absence event — no double strike.
+      if (req.attendance === 'absent') {
+        const prev = state.guestNoShowStrikes[guestId] ?? 0;
+        const s = guestSanctionFromStrike(prev);
+        return {
+          ok: true,
+          strike: prev,
+          lowerPriority: s.lowerPriority,
+          banned: s.banned,
+        };
+      }
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
         reporterId: guestId,
@@ -3960,6 +4069,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             guestId,
             strike: state.guestNoShowStrikes[guestId] ?? 0,
             lowerPriority: false,
+            banned: false,
           },
         });
         const toast: AppToast = {
@@ -3974,12 +4084,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           ok: true,
           strike: prev,
           lowerPriority: false,
+          banned: false,
           jokerExempted: true,
         };
       }
       const prev = state.guestNoShowStrikes[guestId] ?? 0;
       const strike = prev + 1;
-      const lowerPriority = strike >= 2;
+      const { lowerPriority, banned } = guestSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_GUEST_NO_SHOW',
         payload: {
@@ -3988,6 +4099,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           guestId,
           strike,
           lowerPriority,
+          banned,
         },
       });
       const note: ChatMessage = {
@@ -3996,24 +4108,38 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         outingId,
         requestId,
         kind: 'system',
-        text: lowerPriority
-          ? 'Note auto · 2e absence invité — priorité baissée + mention profil. Caution perdue (6,90 € Chance / 13,10 € hôte).'
-          : 'Note auto · absence après confirmation — caution perdue (6,90 € Chance / 13,10 € hôte).',
+        text: banned
+          ? 'Note auto · 3e absence invité — compte fermé. Caution perdue (6,90 € Chance / 13,10 € hôte).'
+          : lowerPriority
+            ? 'Note auto · 2e absence invité — priorité baissée + mention profil. Caution perdue (6,90 € Chance / 13,10 € hôte).'
+            : 'Note auto · absence après confirmation — caution perdue (6,90 € Chance / 13,10 € hôte).',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
       const toast: AppToast = {
         id: uid('toast'),
-        title: lowerPriority ? 'Priorité baissée' : 'Caution perdue',
-        body: lowerPriority
-          ? '2e no-show invité — priorité baissée + mention sur le profil.'
-          : 'Absence après confirmation — caution perdue : 6,90 € pour Chance, 13,10 € pour l’hôte.',
+        title: banned
+          ? 'Compte fermé'
+          : lowerPriority
+            ? 'Priorité baissée'
+            : 'Caution perdue',
+        body: banned
+          ? '3e absence — compte fermé. Caution perdue : 6,90 € Chance / 13,10 € hôte.'
+          : lowerPriority
+            ? '2e no-show invité — priorité baissée + mention sur le profil.'
+            : 'Absence après confirmation — caution perdue : 6,90 € pour Chance, 13,10 € pour l’hôte.',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
-      return { ok: true, strike, lowerPriority };
+      return { ok: true, strike, lowerPriority, banned };
     },
-    [state.requests, state.guestNoShowStrikes, state.imprevuReports],
+    [
+      state.currentUser,
+      state.requests,
+      state.outings,
+      state.guestNoShowStrikes,
+      state.imprevuReports,
+    ],
   );
 
   const reportHostNeverHonor = useCallback(
@@ -4024,10 +4150,19 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       | { ok: false; reason: string } => {
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
+      // Lot 6: same outing never-honor once.
+      if (outing.hostNeverHonorReported) {
+        const prev = state.hostPublishStrikes[outing.hostId] ?? 0;
+        return {
+          ok: true,
+          strike: prev,
+          banned: hostSanctionFromStrike(prev).banned,
+        };
+      }
       const hostId = outing.hostId;
       const prev = state.hostPublishStrikes[hostId] ?? 0;
       const strike = prev + 1;
-      const banned = strike >= 2;
+      const { banned } = hostSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_HOST_NEVER_HONOR',
         payload: { outingId, hostId, strike, banned },
