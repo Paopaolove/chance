@@ -1653,7 +1653,11 @@ interface ChanceContextValue {
     requestId?: string;
   }[];
   getDisplayName: (userId: string) => string;
-  showToast: (title: string, body: string) => void;
+  showToast: (
+    title: string,
+    body: string,
+    meta?: { type?: string; outingId?: string; requestId?: string },
+  ) => void;
   reportHostNoShow: (
     outingId: string,
   ) =>
@@ -2035,6 +2039,25 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         type: 'CANCEL_OUTING',
         payload: { outingId, cancelledAt: new Date().toISOString() },
       });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: 'Annulation',
+        body: `« ${outing.title} » a été annulée.`,
+        createdAt: new Date().toISOString(),
+        type: 'cancellation',
+        outingId,
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      void (async () => {
+        void ensureAndroidChannel();
+        const push = await sendPriorityPush({
+          type: 'cancellation',
+          title: toast.title,
+          body: toast.body,
+          data: { outingId },
+        });
+        if (!push.pushOk) Alert.alert(toast.title, toast.body);
+      })();
       return { ok: true };
     },
     [state.outings, clearOutingSchedules],
@@ -2181,6 +2204,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             hostName: outing.hostName,
             confirmDeadlineAt: deadline.toISOString(),
             requestId,
+            outingId: outing.id,
           });
           const handles: ScheduledHandles = {
             outingId: outing.id,
@@ -2193,6 +2217,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             title: 'Tu es accepté !',
             body: `${outing.hostName} t’a accepté pour « ${outing.title} ». Confirme ta place dans 10 min.`,
             createdAt: new Date().toISOString(),
+            type: 'accepted',
+            requestId,
+            outingId: outing.id,
           };
           dispatch({ type: 'SET_TOAST', payload: toast });
           if (!scheduled.pushOk) {
@@ -2209,6 +2236,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
                   title: 'Plus que 3 min',
                   body: `Confirme ta place pour « ${outing.title} » avant la fin du délai.`,
                   createdAt: new Date().toISOString(),
+                  type: 'confirm_reminder',
+                  requestId,
+                  outingId: outing.id,
                 };
                 dispatch({ type: 'SET_TOAST', payload: t });
                 Alert.alert(t.title, t.body);
@@ -2331,6 +2361,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             ? `« ${outingForChat.title} » est confirmée. Le chat est ouvert.`
             : `« ${outingForChat.title} » est confirmée. Chat à H−1.`,
           createdAt: new Date().toISOString(),
+          type: 'confirmed',
+          requestId,
+          outingId: outingForChat.id,
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
         void (async () => {
@@ -2352,6 +2385,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             outingTitle: outingForChat.title,
             startsAt: outingForChat.startsAt,
             outingId: outingForChat.id,
+            requestId,
           });
           const handles: ScheduledHandles = {
             outingId: outingForChat.id,
@@ -2373,6 +2407,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
                   title: 'Chat ouvert',
                   body: `Le chat pour « ${outingForChat.title} » est déverrouillé (H−1).`,
                   createdAt: new Date().toISOString(),
+                  type: 'chat_unlock',
+                  outingId: outingForChat.id,
+                  requestId,
                 };
                 dispatch({ type: 'SET_TOAST', payload: t });
                 Alert.alert(t.title, t.body);
@@ -2564,6 +2601,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: 'Nouvelle demande',
         body: `${request.userName} veut rejoindre « ${outing.title} ».`,
         createdAt: new Date().toISOString(),
+        type: 'new_request',
+        outingId,
+        requestId: request.id,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
       void (async () => {
@@ -2767,6 +2807,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: 'Retard',
         body: `${otherName} a un retard (${lateLabel(minutes)}).`,
         createdAt: now,
+        type: 'late',
+        outingId,
+        requestId,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
       void (async () => {
@@ -2775,7 +2818,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           type: 'late',
           title: toast.title,
           body: toast.body,
-          data: { outingId },
+          data: {
+            outingId,
+            ...(requestId ? { requestId } : {}),
+          },
         });
         if (!push.pushOk) Alert.alert(toast.title, toast.body);
       })();
@@ -2890,6 +2936,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           body:
             'Caution rendue — participation annulée (pas une absence). Les autres places confirmées restent.',
           createdAt: nowIso,
+          type: 'cancellation',
+          outingId: report.outingId,
+          requestId: report.requestId,
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
         void (async () => {
@@ -2898,7 +2947,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             type: 'cancellation',
             title: toast.title,
             body: toast.body,
-            data: { outingId: report.outingId },
+            data: {
+              outingId: report.outingId,
+              ...(report.requestId ? { requestId: report.requestId } : {}),
+            },
           });
           if (!push.pushOk) Alert.alert(toast.title, toast.body);
         })();
@@ -2926,6 +2978,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: 'Imprévu refusé',
         body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Chance / 13,10 € hôte). Tu peux utiliser ton joker si tu en as un.`,
         createdAt: nowIso,
+        type: 'imprevu',
+        outingId: report.outingId,
+        requestId: report.requestId,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
       return {
@@ -3036,8 +3091,24 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: imprevuNotifTitle(otherName),
         body: `${imprevuMotiveLabel(motive)} · ${normalized}`,
         createdAt: now,
+        type: 'imprevu',
+        outingId,
+        requestId: linkedRequestId,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
+      void (async () => {
+        void ensureAndroidChannel();
+        const push = await sendPriorityPush({
+          type: 'imprevu',
+          title: toast.title,
+          body: toast.body,
+          data: {
+            outingId,
+            ...(linkedRequestId ? { requestId: linkedRequestId } : {}),
+          },
+        });
+        if (!push.pushOk) Alert.alert(toast.title, toast.body);
+      })();
       return { ok: true as const };
     },
     [state.outings, state.requests, state.currentUser, state.imprevuReports],
@@ -3336,6 +3407,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       title: 'Noter la sortie',
       body: `Comment s’est passée « ${title} » ? Laisse une note.`,
       createdAt: new Date().toISOString(),
+      type: 'rate_after',
+      outingId,
     };
     dispatch({ type: 'SET_TOAST', payload: toast });
     void (async () => {
@@ -3752,15 +3825,25 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.reviews],
   );
 
-  const showToast = useCallback((title: string, body: string) => {
-    const toast: AppToast = {
-      id: uid('toast'),
-      title,
-      body,
-      createdAt: new Date().toISOString(),
-    };
-    dispatch({ type: 'SET_TOAST', payload: toast });
-  }, []);
+  const showToast = useCallback(
+    (
+      title: string,
+      body: string,
+      meta?: { type?: string; outingId?: string; requestId?: string },
+    ) => {
+      const toast: AppToast = {
+        id: uid('toast'),
+        title,
+        body,
+        createdAt: new Date().toISOString(),
+        type: meta?.type,
+        outingId: meta?.outingId,
+        requestId: meta?.requestId,
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+    },
+    [],
+  );
 
   /**
    * Priority in-app toast always. Try local push; if push impossible, Alert
@@ -3781,6 +3864,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           title: input.title,
           body: input.body,
           createdAt: new Date().toISOString(),
+          type: input.type,
+          outingId: input.data?.outingId,
+          requestId: input.data?.requestId,
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
       };
@@ -4017,6 +4103,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: 'Nouveau lieu',
         body: `Restaurant fermé — proposition : ${alternate.venueName} · ${alternate.neighborhood} · ≤ ${alternate.budgetMaxEuros} €`,
         createdAt: new Date().toISOString(),
+        type: 'new_venue',
+        outingId,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
       void (async () => {
@@ -4069,6 +4157,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           body:
             'Tu sors de la sortie — caution rendue (pas d’absence). Les autres peuvent encore répondre.',
           createdAt: new Date().toISOString(),
+          type: 'cancellation',
+          outingId,
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
         void (async () => {
@@ -4089,6 +4179,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             ? `${outing.venueIssue.alternate.venueName} · caution conservée`
             : 'Lieu mis à jour',
           createdAt: new Date().toISOString(),
+          type: 'new_venue',
+          outingId,
         };
         dispatch({ type: 'SET_TOAST', payload: toast });
         void (async () => {
@@ -4434,6 +4526,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: 'Course confirmation',
         body: `1er timestamp gagne (${winner.userName}) — ${loser.userName} perd la place.`,
         createdAt: new Date().toISOString(),
+        type: 'confirmed',
+        outingId,
+        requestId: winner.id,
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
       return {

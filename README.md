@@ -72,6 +72,11 @@ Helper UI : `describeDepositOutcome` / `DEPOSIT_STATUS_LABELS` (`src/data/pricin
 
 **Rappel caution :** carte enregistrée (futur SetupIntent) **≠** caution bloquée (hold 20 € à la confirmation). Voir Lot C / [`docs/deposit-imprevu.md`](docs/deposit-imprevu.md).
 
+### Notifications (démo locale)
+
+Notifs **locales** uniquement (`expo-notifications` + toasts cliquables). Tap → bon écran via `openNotificationTarget` (Demandes / ConfirmSlot / fiche sortie / notation…).  
+**Deux téléphones = plus tard serveur** (pas de push croisé aujourd’hui). Détail : [`docs/notifications.md`](docs/notifications.md).
+
 ## Lancer la démo
 
 ```bash

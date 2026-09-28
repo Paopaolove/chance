@@ -1,9 +1,10 @@
-import { useNavigation } from '@react-navigation/native';
+import { CompositeNavigationProp, RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { ensureAndroidChannel } from '../utils/notifications';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
@@ -13,7 +14,7 @@ import { useChance } from '../data/ChanceContext';
 import { mergeProfileTags } from '../data/interests';
 import { categoryLabels } from '../data/mockOutings';
 import { describeDepositForfeitMoment, pricing } from '../data/pricing';
-import { RootStackParamList } from '../navigation/types';
+import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import {
   dispoSlotCreatePrefill,
@@ -28,10 +29,17 @@ import {
 } from '../utils/subscription';
 import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 
-type Nav = NativeStackNavigationProp<RootStackParamList>;
+type Nav = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, 'Profile'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+type ProfileRoute = RouteProp<MainTabParamList, 'Profile'>;
 
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<ProfileRoute>();
+  const scrollRef = useRef<ScrollView>(null);
+  const rateSectionY = useRef(0);
   const {
     state,
     getActiveOutingForUser,
@@ -43,6 +51,19 @@ export function ProfileScreen() {
   const user = state.currentUser;
   const active = getActiveOutingForUser();
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (route.params?.focusSection !== 'rate') return;
+    const t = setTimeout(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, rateSectionY.current - 24),
+        animated: true,
+      });
+      // Clear so a later rate_after tap can scroll again
+      navigation.setParams({ focusSection: undefined });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [route.params?.focusSection, navigation]);
 
   if (!user) {
     return (
@@ -101,7 +122,7 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         <Text style={styles.brand}>Chance</Text>
         {user.banned ? (
           <View style={styles.banBanner}>
@@ -451,7 +472,12 @@ export function ProfileScreen() {
         </View>
 
 
-        <View style={styles.card}>
+        <View
+          style={styles.card}
+          onLayout={(e) => {
+            rateSectionY.current = e.nativeEvent.layout.y;
+          }}
+        >
           <Text style={styles.cardLabel}>Mes sorties à noter</Text>
           <Text style={styles.cardHint}>
             Après une sortie terminée, note la personne et le lieu

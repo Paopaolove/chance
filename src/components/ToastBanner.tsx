@@ -3,10 +3,19 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChance } from '../data/ChanceContext';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import { openNotificationTarget } from '../utils/openNotificationTarget';
 
-/** In-app mock notification for late alerts etc. */
+/** In-app mock notification — tappable when type + ids are present. */
 export function ToastBanner() {
-  const { state, clearToast } = useChance();
+  const {
+    state,
+    clearToast,
+    getOutingById,
+    getRequestById,
+    getPendingImprevuForMe,
+    canLeaveReview,
+    getOutingsToRate,
+  } = useChance();
   const insets = useSafeAreaInsets();
   const toast = state.toast;
 
@@ -18,15 +27,48 @@ export function ToastBanner() {
 
   if (!toast) return null;
 
+  const clickable = !!(
+    toast.type &&
+    (toast.outingId || toast.requestId || toast.type === 'new_request')
+  );
+
+  const onPress = () => {
+    clearToast();
+    if (!clickable || !toast.type) return;
+    openNotificationTarget(
+      {
+        type: toast.type,
+        outingId: toast.outingId,
+        requestId: toast.requestId,
+      },
+      {
+        getOutingById,
+        getRequestById,
+        getPendingImprevuForMe,
+        canLeaveReview,
+        getOutingsToRate,
+      },
+    );
+  };
+
   return (
     <View
       pointerEvents="box-none"
       style={[styles.wrap, { top: insets.top + spacing.sm }]}
     >
-      <Pressable style={styles.card} onPress={clearToast}>
+      <Pressable
+        style={styles.card}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityHint={
+          clickable ? 'Ouvre l’écran concerné' : 'Ferme la notification'
+        }
+      >
         <Text style={styles.title}>{toast.title}</Text>
         <Text style={styles.body}>{toast.body}</Text>
-        <Text style={styles.dismiss}>Toucher pour fermer</Text>
+        <Text style={styles.dismiss}>
+          {clickable ? 'Toucher pour ouvrir' : 'Toucher pour fermer'}
+        </Text>
       </Pressable>
     </View>
   );

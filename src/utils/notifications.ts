@@ -18,7 +18,9 @@ export type PriorityNotifType =
   | 'confirm_reminder'
   | 'confirmed'
   | 'chat_unlock'
+  | 'message'
   | 'late'
+  | 'imprevu'
   | 'cancellation'
   | 'new_venue'
   | 'rate_after';
@@ -154,17 +156,21 @@ export async function scheduleAcceptedConfirmNotifications(input: {
   hostName: string;
   confirmDeadlineAt: string;
   requestId: string;
+  outingId?: string;
 }): Promise<ScheduledNotifIds & { pushOk: boolean }> {
   const ids: ScheduledNotifIds = {};
   const granted = await ensureNotificationPermissions();
   if (!granted) return { ...ids, pushOk: false };
+
+  const idsData: Record<string, string> = { requestId: input.requestId };
+  if (input.outingId) idsData.outingId = input.outingId;
 
   const accepted = await sendPriorityPush({
     type: 'accepted',
     title: 'Tu es accepté !',
     body: `${input.hostName} t’a accepté pour « ${input.outingTitle} ». Confirme ta place dans 10 min.`,
     delaySeconds: 1,
-    data: { requestId: input.requestId },
+    data: idsData,
   });
   if (accepted.pushOk) ids.accepted = accepted.id;
 
@@ -177,7 +183,7 @@ export async function scheduleAcceptedConfirmNotifications(input: {
       title: 'Plus que 3 min',
       body: `Confirme ta place pour « ${input.outingTitle} » avant la fin du délai.`,
       delaySeconds: secondsUntilReminder,
-      data: { requestId: input.requestId },
+      data: idsData,
     });
     if (reminder.pushOk) ids.reminder3min = reminder.id;
   }
@@ -189,9 +195,12 @@ export async function scheduleChatUnlockNotification(input: {
   outingTitle: string;
   startsAt: string;
   outingId: string;
+  requestId?: string;
 }): Promise<string | null> {
   const granted = await ensureNotificationPermissions();
   if (!granted) return null;
+  const data: Record<string, string> = { outingId: input.outingId };
+  if (input.requestId) data.requestId = input.requestId;
   const opensAt = getChatOpensAt(input.startsAt);
   const seconds = (opensAt.getTime() - Date.now()) / 1000;
   if (seconds > 2) {
@@ -200,7 +209,7 @@ export async function scheduleChatUnlockNotification(input: {
       title: 'Chat ouvert',
       body: `Le chat pour « ${input.outingTitle} » est déverrouillé (H−1).`,
       delaySeconds: seconds,
-      data: { outingId: input.outingId },
+      data,
     });
     return r.pushOk ? r.id : null;
   }
@@ -208,7 +217,7 @@ export async function scheduleChatUnlockNotification(input: {
     'Chat ouvert',
     `Le chat pour « ${input.outingTitle} » est déverrouillé (H−1).`,
     opensAt,
-    { type: 'chat_unlock', outingId: input.outingId },
+    { type: 'chat_unlock', ...data },
   );
 }
 

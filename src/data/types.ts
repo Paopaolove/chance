@@ -337,6 +337,10 @@ export interface AppToast {
   title: string;
   body: string;
   createdAt: string;
+  /** When set (+ ids), toast is tappable → openNotificationTarget. */
+  type?: string;
+  outingId?: string;
+  requestId?: string;
 }
 
 /** Moderation report — private, ≠ public rating / stars. */

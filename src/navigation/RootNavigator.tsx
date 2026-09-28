@@ -20,7 +20,9 @@ import { HostProfileScreen } from '../screens/HostProfileScreen';
 import { ReviewsScreen } from '../screens/ReviewsScreen';
 import { VenueDetailScreen } from '../screens/VenueDetailScreen';
 import { colors } from '../theme';
+import { NotificationTapHandler } from '../components/NotificationTapHandler';
 import { MainTabs } from './MainTabs';
+import { navigationRef } from './navigationRef';
 import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -44,7 +46,8 @@ export function RootNavigator() {
   const { state } = useChance();
 
   return (
-    <NavigationContainer theme={chanceNavTheme}>
+    <NavigationContainer ref={navigationRef} theme={chanceNavTheme}>
+      <NotificationTapHandler />
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
