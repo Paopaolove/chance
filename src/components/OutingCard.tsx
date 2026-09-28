@@ -9,10 +9,8 @@ import {
 import { Outing } from '../data/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import { formatOutingWhen } from '../utils/format';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hostPhotoSize } from '../utils/subscription';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/types';
 import { Avatar } from './Avatar';
 import { RatingLine } from './RatingLine';
 
@@ -24,8 +22,7 @@ interface Props {
 }
 
 export function OutingCard({ outing, onPress, travelMinutes }: Props) {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const openProfile = useOpenUserProfile();
   const { state } = useChance();
   const viewer = state.currentUser;
   const from = state.currentUser?.neighborhood;
@@ -42,15 +39,13 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
     return mockHosts.find((h) => h.id === outing.hostId)?.photoUri;
   }, [state.currentUser, outing.hostId]);
 
-  const openHostProfile = () => {
-    navigation.navigate('HostProfile', { userId: outing.hostId });
-  };
+  const openHost = () => openProfile(outing.hostId);
 
   return (
     <View style={styles.card}>
       <View style={styles.mainRow}>
         <Pressable
-          onPress={openHostProfile}
+          onPress={openHost}
           accessibilityRole="button"
           accessibilityLabel={`Profil de ${outing.hostName}`}
           hitSlop={12}
@@ -65,20 +60,34 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
           <RatingLine
             userId={outing.hostId}
             firstName={outing.hostName}
-            onPress={openHostProfile}
+            onPress={openHost}
             variant="underPhoto"
           />
         </Pressable>
         <View style={styles.mainText}>
+          {/* Photo / prénom / notes → profil (Pressable séparé) */}
+          <Pressable
+            onPress={openHost}
+            accessibilityRole="button"
+            accessibilityLabel={`Profil de ${outing.hostName}`}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <Text style={styles.title} numberOfLines={1}>
+              {outing.hostName} t'invite
+            </Text>
+            {outing.description.trim() ? (
+              <Text style={styles.message} numberOfLines={2}>
+                {outing.description.trim()}
+              </Text>
+            ) : null}
+          </Pressable>
+          {/* Reste carte → sortie */}
           <Pressable
             onPress={onPress}
             accessibilityRole="button"
             accessibilityLabel={`Sortie ${outing.venueName}`}
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Text style={styles.title} numberOfLines={1}>
-              {outing.hostName} t'invite
-            </Text>
             <Text style={styles.venue} numberOfLines={1}>
               {outing.venueName}
             </Text>
@@ -91,11 +100,6 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
                 ? ` · ${formatTravelMinutes(minutes)}`
                 : ''}
             </Text>
-            {outing.description.trim() ? (
-              <Text style={styles.message} numberOfLines={2}>
-                {outing.description.trim()}
-              </Text>
-            ) : null}
             <View style={styles.chipsRow}>
               {outing.urgentOnSite ? (
                 <View style={[styles.chip, styles.chipUrgent]}>
@@ -153,6 +157,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
     color: colors.text,
     marginBottom: 4,
+    marginTop: spacing.xs,
   },
   meta: {
     ...typography.caption,
@@ -162,7 +167,7 @@ const styles = StyleSheet.create({
   message: {
     ...typography.body,
     color: colors.text,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   chipsRow: {
     flexDirection: 'row',

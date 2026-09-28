@@ -1,13 +1,16 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { DEPOSIT_EUROS, useChance } from '../data/ChanceContext';
+import { mockHosts } from '../data/mockOutings';
 import { RootStackParamList } from '../navigation/types';
-import { colors, fonts, spacing, typography } from '../theme';
+import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatCountdown } from '../utils/format';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 import { isStartsAtPast } from '../utils/parisTime';
 import { isUrgentOnSite } from '../utils/outingActive';
 
@@ -22,6 +25,7 @@ function remainingMs(deadlineIso: string | undefined, nowMs: number): number {
 export function ConfirmSlotScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
+  const openProfile = useOpenUserProfile();
   const {
     getRequestById,
     getOutingById,
@@ -29,6 +33,7 @@ export function ConfirmSlotScreen() {
     expireRequestIfNeeded,
     showToast,
     canConfirmOuting,
+    state,
   } = useChance();
   const request = getRequestById(route.params.requestId);
   const outing = request ? getOutingById(request.outingId) : undefined;
@@ -199,10 +204,32 @@ export function ConfirmSlotScreen() {
   };
 
   // Minimal paywall path when gate not ok
+  const hostPhotoUri =
+    state.currentUser?.id === outing.hostId
+      ? state.currentUser.photoUri
+      : mockHosts.find((h) => h.id === outing.hostId)?.photoUri;
+
   if (!gate.ok) {
     return (
       <SafeAreaView style={styles.wrap}>
         <View style={styles.centerBlock}>
+          <Pressable
+            style={styles.hostRow}
+            onPress={() => openProfile(outing.hostId)}
+            accessibilityRole="button"
+            accessibilityLabel={`Profil de ${outing.hostName}`}
+          >
+            <Avatar
+              name={outing.hostName}
+              photoUri={hostPhotoUri}
+              seed={outing.hostId}
+              size={56}
+            />
+            <View style={styles.hostText}>
+              <Text style={styles.hostName}>{outing.hostName}</Text>
+              <Text style={styles.hostMeta}>{outing.title}</Text>
+            </View>
+          </Pressable>
           <Text
             style={[
               styles.countdown,
@@ -230,6 +257,23 @@ export function ConfirmSlotScreen() {
   return (
     <SafeAreaView style={styles.wrap}>
       <View style={styles.centerBlock}>
+        <Pressable
+          style={styles.hostRow}
+          onPress={() => openProfile(outing.hostId)}
+          accessibilityRole="button"
+          accessibilityLabel={`Profil de ${outing.hostName}`}
+        >
+          <Avatar
+            name={outing.hostName}
+            photoUri={hostPhotoUri}
+            seed={outing.hostId}
+            size={56}
+          />
+          <View style={styles.hostText}>
+            <Text style={styles.hostName}>{outing.hostName}</Text>
+            <Text style={styles.hostMeta}>{outing.title}</Text>
+          </View>
+        </Pressable>
         <Text
           style={[styles.countdown, underOneMinute && styles.countdownDanger]}
           accessibilityRole="timer"
@@ -300,5 +344,29 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.xl,
+  },
+  hostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    alignSelf: 'stretch',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    minHeight: 44,
+  },
+  hostText: { flex: 1 },
+  hostName: {
+    ...typography.subtitle,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+  },
+  hostMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

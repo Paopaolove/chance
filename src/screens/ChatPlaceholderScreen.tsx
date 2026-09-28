@@ -29,6 +29,9 @@ import {
   lateLabel,
 } from '../utils/chat';
 import { formatOutingWhen } from '../utils/format';
+import { useOpenUserProfile } from '../utils/openUserProfile';
+import { Avatar } from '../components/Avatar';
+import { mockHosts } from '../data/mockOutings';
 
 type R = RouteProp<RootStackParamList, 'ChatPlaceholder'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -36,6 +39,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function ChatPlaceholderScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
+  const openProfile = useOpenUserProfile();
   const {
     getOutingById,
     getRequestById,
@@ -93,10 +97,42 @@ export function ChatPlaceholderScreen() {
     );
   }
 
-  const otherName =
-    outing.hostId === state.currentUser?.id
-      ? request?.userName ?? 'l’autre personne'
-      : outing.hostName;
+  const isHostViewer = outing.hostId === state.currentUser?.id;
+  const otherName = isHostViewer
+    ? request?.userName ?? 'l’autre personne'
+    : outing.hostName;
+  const otherUserId = isHostViewer
+    ? request?.userId
+    : outing.hostId;
+  const otherPhotoUri = otherUserId
+    ? state.currentUser?.id === otherUserId
+      ? state.currentUser.photoUri
+      : mockHosts.find((h) => h.id === otherUserId)?.photoUri
+    : undefined;
+
+  const profileHeader =
+    otherUserId ? (
+      <Pressable
+        style={styles.profileHeader}
+        onPress={() => openProfile(otherUserId)}
+        accessibilityRole="button"
+        accessibilityLabel={`Profil de ${otherName}`}
+      >
+        <Avatar
+          name={otherName}
+          photoUri={otherPhotoUri}
+          seed={otherUserId}
+          size={40}
+        />
+        <Text style={styles.sub}>
+          avec {otherName} · {outing.title}
+        </Text>
+      </Pressable>
+    ) : (
+      <Text style={styles.sub}>
+        avec {otherName} · {outing.title}
+      </Text>
+    );
 
   const confirmed =
     request?.status === 'confirmed' ||
@@ -114,9 +150,7 @@ export function ChatPlaceholderScreen() {
     return (
       <View style={styles.wrap}>
         <Text style={styles.title}>Chat verrouillé</Text>
-        <Text style={styles.sub}>
-          avec {otherName} · {outing.title}
-        </Text>
+        {profileHeader}
 
         <View style={styles.lockCard}>
           <Text style={styles.lockEmoji}>🔒</Text>
@@ -184,9 +218,7 @@ export function ChatPlaceholderScreen() {
     return (
       <View style={styles.wrap}>
         <Text style={styles.title}>Chat indisponible</Text>
-        <Text style={styles.sub}>
-          avec {otherName} · {outing.title}
-        </Text>
+        {profileHeader}
         <View style={styles.lockCard}>
           <Text style={styles.lockEmoji}>🔒</Text>
           <Text style={styles.lockTitle}>Confirmation requise</Text>
@@ -244,19 +276,24 @@ export function ChatPlaceholderScreen() {
     >
       <View style={styles.wrapTight}>
         <Text style={styles.title}>Chat</Text>
-        <Text style={styles.sub}>
-          avec {otherName} · {outing.title}
-        </Text>
+        {profileHeader}
         <Text style={styles.openBadge}>Ouvert · H−1</Text>
 
         {lateFromOthers.length ? (
           <View style={styles.lateBanner}>
             {lateFromOthers.map((r) => (
-              <Text key={r.id} style={styles.lateBannerText}>
-                ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, {
-                  orMore: r.orMore,
-                })})
-              </Text>
+              <Pressable
+                key={r.id}
+                onPress={() => openProfile(r.reporterId)}
+                accessibilityRole="button"
+                accessibilityLabel={`Profil de ${r.reporterName}`}
+              >
+                <Text style={styles.lateBannerText}>
+                  ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, {
+                    orMore: r.orMore,
+                  })})
+                </Text>
+              </Pressable>
             ))}
           </View>
         ) : null}
@@ -284,7 +321,17 @@ export function ChatPlaceholderScreen() {
                 ]}
               >
                 {!mine && m.senderName ? (
-                  <Text style={styles.senderName}>{m.senderName}</Text>
+                  m.senderId ? (
+                    <Pressable
+                      onPress={() => openProfile(m.senderId!)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Profil de ${m.senderName}`}
+                    >
+                      <Text style={styles.senderName}>{m.senderName}</Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={styles.senderName}>{m.senderName}</Text>
+                  )
                 ) : null}
                 <Text
                   style={[styles.bubbleText, mine && styles.bubbleTextMe]}
@@ -403,6 +450,14 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
+    flex: 1,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    minHeight: 44,
   },
   openBadge: {
     ...typography.small,

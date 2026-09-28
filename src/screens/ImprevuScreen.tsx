@@ -10,8 +10,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useChance } from '../data/ChanceContext';
+import { mockHosts } from '../data/mockOutings';
 import { ImprevuMotive } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
@@ -22,6 +24,7 @@ import {
   imprevuMotiveLabel,
   normalizeImprevuReason,
 } from '../utils/imprevu';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Imprevu'>;
 type R = RouteProp<RootStackParamList, 'Imprevu'>;
@@ -29,13 +32,69 @@ type R = RouteProp<RootStackParamList, 'Imprevu'>;
 export function ImprevuScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
-  const { reportImprevu, getMyImprevu, hasJokerAvailable, useJokerOnImprevu } =
-    useChance();
+  const openProfile = useOpenUserProfile();
+  const {
+    reportImprevu,
+    getMyImprevu,
+    hasJokerAvailable,
+    useJokerOnImprevu,
+    getOutingById,
+    getRequestById,
+    state,
+  } = useChance();
   const { outingId, requestId } = route.params;
 
   const existing = getMyImprevu(outingId);
+  const outing = getOutingById(outingId);
+  const request = requestId ? getRequestById(requestId) : undefined;
+  const me = state.currentUser;
+  const isHost = !!outing && me?.id === outing.hostId;
+  const otherUserId = outing
+    ? isHost
+      ? request?.userId ??
+        state.requests.find(
+          (r) => r.outingId === outingId && r.status === 'confirmed',
+        )?.userId
+      : outing.hostId
+    : undefined;
+  const otherName = otherUserId
+    ? isHost
+      ? request?.userName ??
+        state.requests.find((r) => r.userId === otherUserId)?.userName ??
+        'l’autre personne'
+      : outing!.hostName
+    : undefined;
+  const otherPhoto =
+    otherUserId && me?.id === otherUserId
+      ? me.photoUri
+      : otherUserId
+        ? mockHosts.find((h) => h.id === otherUserId)?.photoUri
+        : undefined;
   const [motive, setMotive] = useState<ImprevuMotive | null>(null);
   const [reason, setReason] = useState('');
+
+  const otherHeader =
+    otherUserId && otherName ? (
+      <Pressable
+        style={styles.otherRow}
+        onPress={() => openProfile(otherUserId)}
+        accessibilityRole="button"
+        accessibilityLabel={`Profil de ${otherName}`}
+      >
+        <Avatar
+          name={otherName}
+          photoUri={otherPhoto}
+          seed={otherUserId}
+          size={48}
+        />
+        <View style={styles.otherText}>
+          <Text style={styles.otherName}>{otherName}</Text>
+          <Text style={styles.otherMeta}>
+            {outing?.title ?? 'Sortie'}
+          </Text>
+        </View>
+      </Pressable>
+    ) : null;
 
   const onSend = () => {
     if (!motive) {
@@ -79,6 +138,7 @@ export function ImprevuScreen() {
               : 'Refusé — caution encore bloquée · au moins 3 heures pour annuler sans perdre';
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {otherHeader}
         <Text style={styles.title}>Imprévu déjà signalé</Text>
         <Text style={styles.body}>Une seule fois par personne et par sortie.</Text>
         <View style={styles.card}>
@@ -130,6 +190,7 @@ export function ImprevuScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      {otherHeader}
       <Text style={styles.title}>Signaler un imprévu</Text>
       <Text style={styles.body}>
         Une fois par personne et par sortie. Motif + raison écrite ; l’autre
@@ -245,5 +306,28 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     marginVertical: spacing.lg,
+  },
+  otherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    minHeight: 44,
+  },
+  otherText: { flex: 1 },
+  otherName: {
+    ...typography.subtitle,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+  },
+  otherMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

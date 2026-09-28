@@ -15,6 +15,7 @@ import { useChance } from '../data/ChanceContext';
 import { LowStarReasonKind } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'LeaveReview'>;
@@ -28,6 +29,7 @@ const LOW_STAR_MOTIVES: { kind: LowStarReasonKind; label: string }[] = [
 export function LeaveReviewScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
+  const openProfile = useOpenUserProfile();
   const { addReview, canLeaveReview } = useChance();
   const { outingId, toUserId, toUserName } = route.params;
   const eligibility = canLeaveReview(outingId, toUserId);
@@ -167,9 +169,18 @@ export function LeaveReviewScreen() {
 
       <View style={styles.personBlock}>
         <Text style={styles.blockTitle}>Rencontre</Text>
-        <Text style={styles.personHint}>
-          À propos de {toUserName} — respect et déroulé, pas le feeling.
-        </Text>
+        <Pressable
+          onPress={() => openProfile(toUserId)}
+          accessibilityRole="button"
+          accessibilityLabel={`Profil de ${toUserName}`}
+          hitSlop={8}
+        >
+          <Text style={styles.personHint}>
+            À propos de{' '}
+            <Text style={styles.personLink}>{toUserName}</Text>
+            {' '}— respect et déroulé, pas le feeling.
+          </Text>
+        </Pressable>
 
         <Text style={styles.label}>
           La sortie s’est-elle bien passée ? (ponctualité, respect)
@@ -391,6 +402,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fonts.semiBold,
     marginBottom: spacing.sm,
+  },
+  personLink: {
+    color: colors.primaryDark,
+    fontFamily: fonts.semiBold,
+    textDecorationLine: 'underline',
   },
   personHint: {
     ...typography.caption,

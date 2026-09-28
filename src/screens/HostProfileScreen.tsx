@@ -3,6 +3,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useLayoutEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import { colors, fonts, radius, spacing, typography } from '../theme';
 import { dispoSlotCreatePrefill } from '../utils/dispo';
 import { outingOccupiesActiveSlot } from '../utils/outingActive';
 import { formatRatingAverage } from '../utils/format';
+import { navigateToUserProfile } from '../utils/openUserProfile';
 import { hostPhotoSize } from '../utils/subscription';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -83,6 +85,13 @@ export function HostProfileScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({ title: firstName || 'Profil' });
   }, [navigation, firstName]);
+
+  // Own profile → private Profil tab, not public HostProfile
+  useLayoutEffect(() => {
+    if (state.currentUser?.id === userId) {
+      navigation.replace('MainTabs', { screen: 'Profile' });
+    }
+  }, [navigation, state.currentUser?.id, userId]);
 
   return (
     <ScrollView
@@ -282,14 +291,27 @@ export function HostProfileScreen() {
           return (
             <View key={review.id} style={styles.card}>
               <Text style={styles.stars}>{stars(review.rating)}</Text>
-              <Text style={styles.meta}>
-                {fromName} ·{' '}
-                {new Date(review.createdAt).toLocaleDateString('fr-FR', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </Text>
+              <Pressable
+                onPress={() =>
+                  navigateToUserProfile(
+                    navigation,
+                    review.fromUserId,
+                    state.currentUser?.id,
+                  )
+                }
+                accessibilityRole="button"
+                accessibilityLabel={`Profil de ${fromName}`}
+                hitSlop={8}
+              >
+                <Text style={styles.meta}>
+                  {fromName} ·{' '}
+                  {new Date(review.createdAt).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </Text>
+              </Pressable>
               {review.textHidden ? (
                 <Text style={styles.hidden}>
                   Texte masqué d’un commun accord. La note est conservée.

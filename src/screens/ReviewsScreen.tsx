@@ -16,6 +16,7 @@ import { Review } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatRatingAverage } from '../utils/format';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'Reviews'>;
@@ -27,6 +28,7 @@ function stars(n: number): string {
 export function ReviewsScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
+  const openProfile = useOpenUserProfile();
   const {
     state,
     getReviewsForUser,
@@ -130,14 +132,21 @@ export function ReviewsScreen() {
           return (
             <View key={review.id} style={styles.card}>
               <Text style={styles.stars}>{stars(review.rating)}</Text>
-              <Text style={styles.meta}>
-                {fromName} ·{' '}
-                {new Date(review.createdAt).toLocaleDateString('fr-FR', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
-              </Text>
+              <Pressable
+                onPress={() => openProfile(review.fromUserId)}
+                accessibilityRole="button"
+                accessibilityLabel={`Profil de ${fromName}`}
+                hitSlop={8}
+              >
+                <Text style={styles.meta}>
+                  {fromName} ·{' '}
+                  {new Date(review.createdAt).toLocaleDateString('fr-FR', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </Text>
+              </Pressable>
 
               {review.textHidden ? (
                 <Text style={styles.hidden}>

@@ -34,6 +34,7 @@ import {
   isUrgentOnSite,
 } from '../utils/outingActive';
 import { makeVenueKey } from '../utils/venue';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -45,6 +46,7 @@ const RECOMMENDED_INTRO =
 export function OutingDetailScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
+  const openProfile = useOpenUserProfile();
   const {
     getOutingById,
     joinOuting,
@@ -166,9 +168,16 @@ export function OutingDetailScreen() {
       {lateFromOthers.length ? (
         <View style={styles.lateBanner}>
           {lateFromOthers.map((r) => (
-            <Text key={r.id} style={styles.lateBannerText}>
-              ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, { orMore: r.orMore })})
-            </Text>
+            <Pressable
+              key={r.id}
+              onPress={() => openProfile(r.reporterId)}
+              accessibilityRole="button"
+              accessibilityLabel={`Profil de ${r.reporterName}`}
+            >
+              <Text style={styles.lateBannerText}>
+                ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, { orMore: r.orMore })})
+              </Text>
+            </Pressable>
           ))}
         </View>
       ) : null}
@@ -178,9 +187,15 @@ export function OutingDetailScreen() {
         if (!pending) return null;
         return (
           <View style={styles.imprevuCard}>
-            <Text style={styles.imprevuTitle}>
-              {pending.reporterName} signale un imprévu.
-            </Text>
+            <Pressable
+              onPress={() => openProfile(pending.reporterId)}
+              accessibilityRole="button"
+              accessibilityLabel={`Profil de ${pending.reporterName}`}
+            >
+              <Text style={styles.imprevuTitle}>
+                {pending.reporterName} signale un imprévu.
+              </Text>
+            </Pressable>
             <Text style={styles.imprevuBody}>
               {imprevuMotiveLabel(pending.motive)}
             </Text>
@@ -298,9 +313,7 @@ export function OutingDetailScreen() {
       {/* Visible before accept: listing, 1 photo, place, budget */}
       <Pressable
         style={styles.hostBlock}
-        onPress={() =>
-          navigation.navigate('HostProfile', { userId: outing.hostId })
-        }
+        onPress={() => openProfile(outing.hostId)}
         accessibilityRole="button"
         accessibilityLabel={`Profil de ${outing.hostName}`}
       >
@@ -317,6 +330,7 @@ export function OutingDetailScreen() {
           <RatingLine
             userId={outing.hostId}
             firstName={outing.hostName}
+            onPress={() => openProfile(outing.hostId)}
           />
           <Text style={styles.hostMeta}>
             {outing.neighborhood}
@@ -334,12 +348,18 @@ export function OutingDetailScreen() {
         </View>
       </Pressable>
 
-      <Text style={styles.inviteLine}>
-        {outing.hostName} t'invite
-        {outing.budgetMaxEuros <= 0
-          ? ' · Gratuit'
-          : ` · jusqu'à ${outing.budgetMaxEuros} €`}
-      </Text>
+      <Pressable
+        onPress={() => openProfile(outing.hostId)}
+        accessibilityRole="button"
+        accessibilityLabel={`Profil de ${outing.hostName}`}
+      >
+        <Text style={styles.inviteLine}>
+          {outing.hostName} t'invite
+          {outing.budgetMaxEuros <= 0
+            ? ' · Gratuit'
+            : ` · jusqu'à ${outing.budgetMaxEuros} €`}
+        </Text>
+      </Pressable>
       <View style={styles.chips}>
         <View style={styles.chip}>
           <Text style={styles.chipText}>{formatOutingCategoryLabel(outing.category, outing.categoryDetail)}</Text>
@@ -442,6 +462,57 @@ export function OutingDetailScreen() {
           {outing.capacity}
         </Text>
       </View>
+
+      {(() => {
+        // Host: pending/accepted/confirmed. Autres: confirmés seulement (pas les demandes).
+        const guests = (isHost ? incomingRequests : state.requests).filter(
+          (r) =>
+            r.outingId === outing.id &&
+            (isHost
+              ? r.status === 'pending' ||
+                r.status === 'accepted' ||
+                r.status === 'confirmed'
+              : r.status === 'confirmed' &&
+                r.userId !== state.currentUser?.id),
+        );
+        if (!guests.length) return null;
+        return (
+          <View style={styles.card}>
+            <Text style={styles.section}>
+              {isHost ? 'Demandes & invités' : 'Autres participants'}
+            </Text>
+            {guests.map((r) => (
+              <Pressable
+                key={r.id}
+                style={styles.guestRow}
+                onPress={() => openProfile(r.userId)}
+                accessibilityRole="button"
+                accessibilityLabel={`Profil de ${r.userName}`}
+              >
+                <Avatar
+                  name={r.userName}
+                  seed={r.userId}
+                  size={40}
+                />
+                <View style={styles.guestText}>
+                  <Text style={styles.guestName}>
+                    {r.userName}, {r.userAge}
+                  </Text>
+                  <Text style={styles.guestMeta}>
+                    {r.status === 'pending'
+                      ? 'Demande en attente'
+                      : r.status === 'accepted'
+                        ? 'Accepté — à confirmer'
+                        : r.status === 'confirmed'
+                          ? 'Confirmé'
+                          : r.status}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        );
+      })()}
 
       {isHost ? (
         <View style={styles.actions}>
@@ -1053,5 +1124,23 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     marginTop: spacing.xs,
+  },
+  guestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 44,
+  },
+  guestText: { flex: 1 },
+  guestName: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    fontFamily: fonts.semiBold,
+  },
+  guestMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
 });

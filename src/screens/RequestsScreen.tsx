@@ -17,10 +17,12 @@ import { Outing, Request } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatCountdown } from '../utils/format';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 import {
   isOutingAcceptingRequests,
   isUrgentOnSite,
 } from '../utils/outingActive';
+import { Avatar } from '../components/Avatar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -97,6 +99,7 @@ function classifyRequest(
 
 export function RequestsScreen() {
   const navigation = useNavigation<Nav>();
+  const openProfile = useOpenUserProfile();
   const {
     incomingRequests,
     outgoingRequests,
@@ -157,16 +160,34 @@ export function RequestsScreen() {
     return (
       <View key={`in-${r.id}`} style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>
-            {r.userName}, {r.userAge}
-          </Text>
+          <Pressable
+            style={styles.profileHit}
+            onPress={() => openProfile(r.userId)}
+            accessibilityRole="button"
+            accessibilityLabel={`Profil de ${r.userName}`}
+            hitSlop={8}
+          >
+            <Avatar name={r.userName} seed={r.userId} size={36} />
+            <Text style={styles.cardTitle}>
+              {r.userName}, {r.userAge}
+            </Text>
+          </Pressable>
           <View style={styles.rolePill}>
             <Text style={styles.rolePillText}>Reçue</Text>
           </View>
         </View>
-        <Text style={styles.cardMeta}>
-          pour « {outing?.title ?? 'sortie'} » · {statusLabels[r.status]}
-        </Text>
+        <Pressable
+          onPress={() =>
+            outing &&
+            navigation.navigate('OutingDetail', { outingId: outing.id })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Sortie ${outing?.title ?? ''}`}
+        >
+          <Text style={styles.cardMeta}>
+            pour « {outing?.title ?? 'sortie'} » · {statusLabels[r.status]}
+          </Text>
+        </Pressable>
         {outing && isUrgentOnSite(outing) ? (
           <View style={styles.urgentPill}>
             <Text style={styles.urgentPillText}>
@@ -279,9 +300,22 @@ export function RequestsScreen() {
             <Text style={styles.rolePillText}>Envoyée</Text>
           </View>
         </View>
-        <Text style={styles.cardMeta}>
-          chez {outing?.hostName} · {statusLabels[r.status]}
-        </Text>
+        {outing ? (
+          <Pressable
+            style={styles.profileHit}
+            onPress={() => openProfile(outing.hostId)}
+            accessibilityRole="button"
+            accessibilityLabel={`Profil de ${outing.hostName}`}
+            hitSlop={8}
+          >
+            <Avatar name={outing.hostName} seed={outing.hostId} size={36} />
+            <Text style={styles.cardMetaInline}>
+              chez {outing.hostName} · {statusLabels[r.status]}
+            </Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.cardMeta}>{statusLabels[r.status]}</Text>
+        )}
         {outing && isUrgentOnSite(outing) ? (
           <View style={styles.urgentPill}>
             <Text style={styles.urgentPillText}>
@@ -470,9 +504,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  profileHit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+    minHeight: 44,
+  },
   cardTitle: {
     ...typography.bodyStrong,
     color: colors.text,
+    flex: 1,
+  },
+  cardMetaInline: {
+    ...typography.caption,
+    color: colors.textSecondary,
     flex: 1,
   },
   rolePill: {

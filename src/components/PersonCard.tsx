@@ -4,9 +4,7 @@ import { categoryLabels } from '../data/mockOutings';
 import { User } from '../data/types';
 import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import { dispoSlotLabel } from '../utils/dispo';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/types';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hostPhotoSize } from '../utils/subscription';
 import { useChance } from '../data/ChanceContext';
 import { Avatar } from './Avatar';
@@ -20,8 +18,7 @@ interface Props {
 }
 
 export function PersonCard({ person, onPropose }: Props) {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const openProfile = useOpenUserProfile();
   const { state } = useChance();
   const viewer = state.currentUser;
   // Own card stays readable; others follow subscription photo size.
@@ -30,15 +27,13 @@ export function PersonCard({ person, onPropose }: Props) {
   const quartier = person.dispoNeighborhood ?? person.neighborhood;
   const slot = dispoSlotLabel(person.dispoSlot);
 
-  const openHostProfile = () => {
-    navigation.navigate('HostProfile', { userId: person.id });
-  };
+  const openPerson = () => openProfile(person.id);
 
   return (
     <View style={styles.card}>
       <View style={styles.mainRow}>
         <Pressable
-          onPress={openHostProfile}
+          onPress={openPerson}
           accessibilityRole="button"
           accessibilityLabel={`Profil de ${person.firstName}`}
           hitSlop={12}
@@ -53,14 +48,14 @@ export function PersonCard({ person, onPropose }: Props) {
           <RatingLine
             userId={person.id}
             firstName={person.firstName}
-            onPress={openHostProfile}
+            onPress={openPerson}
             variant="underPhoto"
           />
         </Pressable>
 
         <View style={styles.mainText}>
           <Pressable
-            onPress={openHostProfile}
+            onPress={openPerson}
             accessibilityRole="button"
             accessibilityLabel={`Profil de ${person.firstName}`}
             style={({ pressed }) => pressed && styles.pressed}
