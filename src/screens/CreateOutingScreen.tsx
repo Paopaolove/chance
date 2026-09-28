@@ -41,19 +41,21 @@ const categories: { id: OutingCategory; label: string }[] = [
   { id: 'autre', label: 'Autre' },
 ];
 
-const BUDGET_PRESETS = [15, 25, 40] as const;
+const BUDGET_PRESETS = [10, 20, 30, 40] as const;
+/** Default invite cap for restaurant / bar. */
+const BUDGET_DEFAULT_EUROS = 20;
 
 /** Prefill exact — urgent « déjà sur place » (≠ no-show / lapin Chance). */
 const URGENT_ON_SITE_MESSAGE =
   'Une place est libre, mon ami ne vient plus.';
+
 function clampCreateBudget(n: number): number {
   return clampInt(n, BUDGET_MIN_EUROS, BUDGET_MAX_EUROS);
 }
 
-/** Preset chips / initial default — OK to auto-switch to Gratuit on Autre. */
-function isPresetDefaultBudget(euros: number): boolean {
-  const n = Math.round(euros);
-  return (BUDGET_PRESETS as readonly number[]).includes(n);
+/** Restaurant / bar: chips + free amount. Culture / autre: no € cap. */
+function isPaidInviteCategory(category: OutingCategory): boolean {
+  return category === 'restaurant' || category === 'bar';
 }
 
 /** Core seats 1–3 (brief). */
@@ -196,10 +198,15 @@ export function CreateOutingScreen() {
   const [dateStr, setDateStr] = useState(initial.dateStr);
   const [timeStr, setTimeStr] = useState(initial.timeStr);
   const [capacity, setCapacity] = useState<1 | 2 | 3>(1);
-  const [budgetMaxEuros, setBudgetMaxEuros] = useState(
+  const [budgetMaxEuros, setBudgetMaxEuros] = useState(() => {
     // Host invitation ceiling — never from guest Dispo budget.
-    prefill?.budgetMaxEuros ?? 25,
-  );
+    const cat = prefill?.category ?? 'restaurant';
+    if (!isPaidInviteCategory(cat)) return 0;
+    if (prefill?.budgetMaxEuros != null && prefill.budgetMaxEuros > 0) {
+      return prefill.budgetMaxEuros;
+    }
+    return BUDGET_DEFAULT_EUROS;
+  });
   const [message, setMessage] = useState('');
   const [topic, setTopic] = useState(prefill?.topic ?? '');
   const [excludedTopics, setExcludedTopics] = useState(
@@ -219,15 +226,26 @@ export function CreateOutingScreen() {
       setUrgentMode(true);
       setMessage((prev) => (prev.trim() ? prev : URGENT_ON_SITE_MESSAGE));
       setCapacity(1);
-      // Autre allows Gratuit chip — venue-agnostic short form.
+      // Urgent short form → autre = invitation sans montant €.
       setCategory((c) => (c === 'restaurant' || c === 'bar' || c === 'culture' || c === 'autre' ? 'autre' : c));
       setCategoryDetail((d) => d.trim() || 'Sur place');
+      setBudgetMaxEuros(0);
     }
   }, [prefill?.urgentOnSite]);
 
   useEffect(() => {
     if (!prefill?.fromDispo) return;
-    if (prefill.category) setCategory(prefill.category);
+    if (prefill.category) {
+      setCategory(prefill.category);
+      // Culture / autre: no € chips — force 0. Never copy Dispo guest budget.
+      if (!isPaidInviteCategory(prefill.category)) {
+        setBudgetMaxEuros(0);
+      } else {
+        setBudgetMaxEuros((prev) =>
+          prev <= 0 ? BUDGET_DEFAULT_EUROS : prev,
+        );
+      }
+    }
     if (prefill.categoryDetail != null) setCategoryDetail(prefill.categoryDetail);
     if (prefill.neighborhood) setNeighborhood(prefill.neighborhood);
     // Do not prefill J'invite jusqu'à from Dispo guest budget.
@@ -278,6 +296,7 @@ export function CreateOutingScreen() {
     setCapacity(1);
     setCategory('autre');
     setCategoryDetail('Sur place');
+    setBudgetMaxEuros(0);
   };
 
   const exitUrgentMode = () => {
@@ -307,7 +326,7 @@ export function CreateOutingScreen() {
       startsAt: new Date().toISOString(),
       capacity: 1,
       womenOnly: womenOnly && canWomenOnly,
-      budgetMaxEuros: Math.round(budgetMaxEuros),
+      budgetMaxEuros: 0,
       urgentOnSite: true,
     });
     if (!result.ok) {
@@ -328,7 +347,7 @@ export function CreateOutingScreen() {
     setVenueName('');
     setExactAddress('');
     setMessage(URGENT_ON_SITE_MESSAGE);
-    setBudgetMaxEuros(25);
+    setBudgetMaxEuros(BUDGET_DEFAULT_EUROS);
     setUrgentMode(false);
     navigation.navigate('OutingDetail', { outingId: result.outingId });
   };
@@ -347,13 +366,10 @@ export function CreateOutingScreen() {
       return;
     }
 
-    if (
-      (category === 'restaurant' || category === 'bar') &&
-      budgetMaxEuros === 0
-    ) {
+    if (isPaidInviteCategory(category) && Math.round(budgetMaxEuros) <= 0) {
       Alert.alert(
         'Budget',
-        'Pour un bar ou un restaurant, indique un montant (pas Gratuit).',
+        'Pour un bar ou un restaurant, indique un montant (pastilles ou montant libre).',
       );
       return;
     }
@@ -415,7 +431,9 @@ export function CreateOutingScreen() {
       startsAt: when.toISOString(),
       capacity,
       womenOnly: womenOnly && canWomenOnly,
-      budgetMaxEuros: Math.round(budgetMaxEuros),
+      budgetMaxEuros: isPaidInviteCategory(category)
+        ? Math.round(budgetMaxEuros)
+        : 0,
       topic: topic.trim() || undefined,
       excludedTopics: excludedTopics
         .split(',')
@@ -462,7 +480,7 @@ export function CreateOutingScreen() {
     setInviteeName(undefined);
     setFromDispoBanner(false);
     setCapacity(1);
-    setBudgetMaxEuros(25);
+    setBudgetMaxEuros(BUDGET_DEFAULT_EUROS);
     setCategoryDetail('');
     const next = defaultDateTime(false);
     setDateStr(next.dateStr);
@@ -602,71 +620,11 @@ export function CreateOutingScreen() {
           <Text style={styles.label}>Places</Text>
           <Text style={styles.privacyHint}>1 place (fixe)</Text>
 
-          <Text style={styles.label}>J'invite jusqu'à *</Text>
-          <Text style={styles.inviteHint}>
-            Plafond par invité, réglé sur place au lieu (pas via l'app).
-          </Text>
-          <View style={styles.row}>
-            <Button
-              title="Gratuit"
-              variant={budgetMaxEuros === 0 ? 'primary' : 'ghost'}
-              onPress={() => setBudgetMaxEuros(0)}
-              style={styles.chip}
-            />
-            {BUDGET_PRESETS.map((b) => (
-              <Button
-                key={b}
-                title={`${b} €`}
-                variant={Math.round(budgetMaxEuros) === b ? 'primary' : 'ghost'}
-                onPress={() => setBudgetMaxEuros(b)}
-                style={styles.chip}
-              />
-            ))}
-          </View>
-          <View
-            style={[
-              styles.budgetCard,
-              budgetMaxEuros === 0 && styles.budgetCardDisabled,
-            ]}
-            pointerEvents={budgetMaxEuros === 0 ? 'none' : 'auto'}
-          >
-            {budgetMaxEuros === 0 ? (
-              <Text style={styles.budgetFreeHint}>
-                Sortie gratuite — invitation sans plafond €
-              </Text>
-            ) : (
-              <>
-                <View style={styles.budgetMontantRow}>
-                  <Text style={styles.budgetMontantLabel}>Montant libre</Text>
-                  <TextInput
-                    style={styles.budgetMontantInput}
-                    value={String(Math.round(budgetMaxEuros))}
-                    onChangeText={(t) => {
-                      if (t.trim() === '') return;
-                      const n = parseLooseInt(t);
-                      if (n != null) {
-                        setBudgetMaxEuros(clampCreateBudget(n));
-                      }
-                    }}
-                    keyboardType="decimal-pad"
-                    maxLength={5}
-                    selectTextOnFocus
-                  />
-                  <Text style={styles.budgetMontantSuffix}>€</Text>
-                </View>
-                <Slider
-                  style={styles.slider}
-                  minimumValue={BUDGET_MIN_EUROS}
-                  maximumValue={BUDGET_MAX_EUROS}
-                  step={1}
-                  value={Math.max(BUDGET_MIN_EUROS, budgetMaxEuros)}
-                  onValueChange={(v) => setBudgetMaxEuros(clampCreateBudget(v))}
-                  minimumTrackTintColor={colors.primary}
-                  maximumTrackTintColor={colors.border}
-                  thumbTintColor={colors.primary}
-                />
-              </>
-            )}
+          <Text style={styles.label}>Invitation</Text>
+          <View style={styles.budgetCard}>
+            <Text style={styles.budgetFreeHint}>
+              Sortie sans addition. La caution 20 € reste, pour la venue.
+            </Text>
           </View>
 
           <Text style={styles.label}>Message *</Text>
@@ -736,13 +694,10 @@ export function CreateOutingScreen() {
               variant={category === c.id ? 'primary' : 'ghost'}
               onPress={() => {
                 setCategory(c.id);
-                if (c.id === 'autre' && isPresetDefaultBudget(budgetMaxEuros)) {
+                if (!isPaidInviteCategory(c.id)) {
                   setBudgetMaxEuros(0);
-                } else if (
-                  (c.id === 'restaurant' || c.id === 'bar') &&
-                  budgetMaxEuros === 0
-                ) {
-                  setBudgetMaxEuros(BUDGET_PRESETS[1]);
+                } else if (budgetMaxEuros <= 0) {
+                  setBudgetMaxEuros(BUDGET_DEFAULT_EUROS);
                 }
               }}
               style={styles.chip}
@@ -902,43 +857,26 @@ export function CreateOutingScreen() {
           ))}
         </View>
 
-        <Text style={styles.label}>J'invite jusqu'à *</Text>
-        <Text style={styles.inviteHint}>
-          Plafond par invité, réglé sur place au lieu (pas via l'app). Au-delà =
-          hors invitation. Pas de transfert entre personnes.
-        </Text>
-        <View style={styles.row}>
-          {category === 'autre' || category === 'culture' ? (
-            <Button
-              title="Gratuit"
-              variant={budgetMaxEuros === 0 ? 'primary' : 'ghost'}
-              onPress={() => setBudgetMaxEuros(0)}
-              style={styles.chip}
-            />
-          ) : null}
-          {BUDGET_PRESETS.map((b) => (
-            <Button
-              key={b}
-              title={`${b} €`}
-              variant={Math.round(budgetMaxEuros) === b ? 'primary' : 'ghost'}
-              onPress={() => setBudgetMaxEuros(b)}
-              style={styles.chip}
-            />
-          ))}
-        </View>
-        <View
-          style={[
-            styles.budgetCard,
-            budgetMaxEuros === 0 && styles.budgetCardDisabled,
-          ]}
-          pointerEvents={budgetMaxEuros === 0 ? 'none' : 'auto'}
-        >
-          {budgetMaxEuros === 0 ? (
-            <Text style={styles.budgetFreeHint}>
-              Sortie gratuite — invitation sans plafond €
+        {isPaidInviteCategory(category) ? (
+          <>
+            <Text style={styles.label}>J'invite jusqu'à *</Text>
+            <Text style={styles.inviteHint}>
+              J'invite jusqu'à ce montant, réglé sur place.
             </Text>
-          ) : (
-            <>
+            <View style={styles.row}>
+              {BUDGET_PRESETS.map((b) => (
+                <Button
+                  key={b}
+                  title={`${b} €`}
+                  variant={
+                    Math.round(budgetMaxEuros) === b ? 'primary' : 'ghost'
+                  }
+                  onPress={() => setBudgetMaxEuros(b)}
+                  style={styles.chip}
+                />
+              ))}
+            </View>
+            <View style={styles.budgetCard}>
               <View style={styles.budgetMontantRow}>
                 <Text style={styles.budgetMontantLabel}>Montant libre</Text>
                 <TextInput
@@ -973,9 +911,18 @@ export function CreateOutingScreen() {
                 <Text style={styles.budgetHintEnd}>5 € · verre</Text>
                 <Text style={styles.budgetHintEnd}>50 € · repas</Text>
               </View>
-            </>
-          )}
-        </View>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.label}>Invitation</Text>
+            <View style={styles.budgetCard}>
+              <Text style={styles.budgetFreeHint}>
+                Sortie sans addition. La caution 20 € reste, pour la venue.
+              </Text>
+            </View>
+          </>
+        )}
 
         <Text style={styles.label}>Ce que j'offre (optionnel)</Text>
         <TextInput
@@ -1208,10 +1155,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     padding: spacing.lg,
-  },
-  budgetCardDisabled: {
-    opacity: 0.55,
-    backgroundColor: colors.surfaceMuted,
   },
   budgetFreeHint: {
     ...typography.bodyStrong,

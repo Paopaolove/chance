@@ -161,7 +161,8 @@ export interface Outing {
   womenOnly: boolean;
   /**
    * Invitation cap per guest in EUR, covered by the host at the venue (not via the app).
-   * 0 = free outing (Gratuit). Beyond the cap is outside the invitation.
+   * Restaurant / bar: positive amount (chips 10–40 or free amount).
+   * Culture / autre: 0 = no € cap (sortie sans addition). Beyond a positive cap is outside the invitation.
    * Not a split bill, not peer transfer, not an unlimited free meal.
    */
   budgetMaxEuros: number;
