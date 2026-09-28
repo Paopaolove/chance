@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChance } from '../data/ChanceContext';
 import { describeDepositForfeitMoment } from '../data/pricing';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import { navigationRef } from '../navigation/navigationRef';
 import { Button } from './Button';
 
 type Props = {
@@ -39,7 +40,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     simulateOtherImprevu,
     reportVenueClosed,
     completeOuting,
-    markGuestPresent,
+    demoMarkConfirmedPresent,
     setDispoProfile,
     simulateLocalNotifications,
     showToast,
@@ -153,25 +154,33 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   return;
                 }
                 const outingId = firstConfirmedOuting.id;
+                // terminée ≠ présent (lot 6) — la simu marque present explicitement.
                 completeOuting(outingId);
-                // Présence = acte explicite (≠ side-effect de terminée).
-                const confirmed = [
-                  ...incomingRequests,
-                  ...outgoingRequests,
-                ].filter(
-                  (r) =>
-                    r.outingId === outingId &&
-                    r.status === 'confirmed' &&
-                    !r.attendance,
-                );
-                for (const r of confirmed) {
-                  markGuestPresent(r.id);
-                }
+                const marked = demoMarkConfirmedPresent(outingId);
+                onClose();
+                // State updates flush before next paint; navigate after tick.
+                setTimeout(() => {
+                  if (!navigationRef.isReady()) return;
+                  if (marked.ok && marked.rateTarget) {
+                    navigationRef.navigate('LeaveReview', {
+                      outingId: marked.rateTarget.outingId,
+                      toUserId: marked.rateTarget.toUserId,
+                      toUserName: marked.rateTarget.toUserName,
+                    });
+                    return;
+                  }
+                  navigationRef.navigate('MainTabs', {
+                    screen: 'Profile',
+                    params: { focusSection: 'rate' },
+                  });
+                }, 0);
                 Alert.alert(
                   'Noter la sortie',
-                  confirmed.length
-                    ? 'Sortie terminée + présents marqués (démo). Tu peux noter depuis Profil.'
-                    : 'Sortie terminée. Marque les présents pour débloquer les avis.',
+                  marked.ok && marked.rateTarget
+                    ? 'Sortie terminée + présents marqués (démo).'
+                    : marked.ok
+                      ? 'Sortie terminée. Pas de cible à noter.'
+                      : `Sortie terminée. Présence non marquée (${marked.reason}) — vois Profil.`,
                 );
               })
             }

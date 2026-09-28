@@ -1597,6 +1597,28 @@ interface ChanceContextValue {
   markGuestPresent: (
     requestId: string,
   ) => { ok: true } | { ok: false; reason: string };
+  /**
+   * Demo QA only — marks confirmed guests present without the host-only gate
+   * (prod markGuestPresent stays host-only / lot 6).
+   * Host: all confirmed on outing. Guest: own confirmed request only.
+   * Returns a LeaveReview target when someone was (or already is) present.
+   */
+  demoMarkConfirmedPresent: (outingId: string) =>
+    | {
+        ok: true;
+        markedIds: string[];
+        rateTarget: {
+          outingId: string;
+          toUserId: string;
+          toUserName: string;
+        } | null;
+      }
+    | { ok: false; reason: string };
+  /** Completed outings where user took part but nobody present → nothing to rate (démo recovery). */
+  getCompletedOutingsMissingPresent: () => {
+    outing: Outing;
+    rateTarget: { toUserId: string; toUserName: string };
+  }[];
   addReview: (input: {
     outingId: string;
     toUserId: string;
@@ -3641,6 +3663,109 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.requests, state.outings],
   );
 
+  /**
+   * Demo QA: force presence so getOutingsToRate / LeaveReview unlock.
+   * Does not weaken prod markGuestPresent (host-only).
+   */
+  const demoMarkConfirmedPresent = useCallback(
+    (outingId: string) => {
+      const user = state.currentUser;
+      if (!user) return { ok: false as const, reason: 'no_user' };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false as const, reason: 'outing_not_found' };
+      if (outing.status === 'cancelled') {
+        return { ok: false as const, reason: 'outing_cancelled' };
+      }
+      const confirmed = state.requests.filter(
+        (r) => r.outingId === outingId && r.status === 'confirmed',
+      );
+      if (!confirmed.length) {
+        return { ok: false as const, reason: 'no_confirmed' };
+      }
+      const isHost = outing.hostId === user.id;
+      const mine = confirmed.find((r) => r.userId === user.id);
+      if (!isHost && !mine) {
+        return { ok: false as const, reason: 'not_participant' };
+      }
+      const toMark = isHost
+        ? confirmed.filter(
+            (r) => r.attendance !== 'present' && r.attendance !== 'absent',
+          )
+        : mine &&
+            mine.attendance !== 'present' &&
+            mine.attendance !== 'absent'
+          ? [mine]
+          : [];
+      const markedIds: string[] = [];
+      for (const r of toMark) {
+        dispatch({ type: 'MARK_GUEST_PRESENT', payload: { requestId: r.id } });
+        markedIds.push(r.id);
+      }
+      let rateTarget: {
+        outingId: string;
+        toUserId: string;
+        toUserName: string;
+      } | null = null;
+      if (isHost) {
+        const guest =
+          confirmed.find((r) => r.attendance === 'present') ??
+          toMark[0] ??
+          confirmed.find((r) => r.attendance !== 'absent');
+        if (guest) {
+          rateTarget = {
+            outingId,
+            toUserId: guest.userId,
+            toUserName: guest.userName,
+          };
+        }
+      } else {
+        rateTarget = {
+          outingId,
+          toUserId: outing.hostId,
+          toUserName: outing.hostName,
+        };
+      }
+      return { ok: true as const, markedIds, rateTarget };
+    },
+    [state.currentUser, state.outings, state.requests],
+  );
+
+  const getCompletedOutingsMissingPresent = useCallback(() => {
+    const user = state.currentUser;
+    if (!user) return [];
+    const items: {
+      outing: Outing;
+      rateTarget: { toUserId: string; toUserName: string };
+    }[] = [];
+    for (const outing of state.outings) {
+      if (outing.status !== 'completed') continue;
+      const confirmed = state.requests.filter(
+        (r) => r.outingId === outing.id && r.status === 'confirmed',
+      );
+      if (!confirmed.length) continue;
+      const isHost = outing.hostId === user.id;
+      const mine = confirmed.find((r) => r.userId === user.id);
+      if (!isHost && !mine) continue;
+      if (isHost) {
+        const anyPresent = confirmed.some((r) => r.attendance === 'present');
+        if (anyPresent) continue;
+        const guest = confirmed[0];
+        items.push({
+          outing,
+          rateTarget: { toUserId: guest.userId, toUserName: guest.userName },
+        });
+      } else if (mine && mine.attendance !== 'present') {
+        items.push({
+          outing,
+          rateTarget: {
+            toUserId: outing.hostId,
+            toUserName: outing.hostName,
+          },
+        });
+      }
+    }
+    return items;
+  }, [state.currentUser, state.outings, state.requests]);
 
   const addReview = useCallback(
     (input: {
@@ -4600,6 +4725,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOutingInMinutes,
       completeOuting,
       markGuestPresent,
+      demoMarkConfirmedPresent,
+      getCompletedOutingsMissingPresent,
       addReview,
       replyToReview,
       requestHideReviewText,
@@ -4676,6 +4803,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOutingInMinutes,
       completeOuting,
       markGuestPresent,
+      demoMarkConfirmedPresent,
+      getCompletedOutingsMissingPresent,
       addReview,
       replyToReview,
       requestHideReviewText,

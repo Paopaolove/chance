@@ -46,6 +46,8 @@ export function ProfileScreen() {
     setPermissions,
     updateProfile,
     getOutingsToRate,
+    getCompletedOutingsMissingPresent,
+    demoMarkConfirmedPresent,
     hasJokerAvailable,
   } = useChance();
   const user = state.currentUser;
@@ -485,7 +487,8 @@ export function ProfileScreen() {
           </Text>
           {(() => {
             const toRate = getOutingsToRate();
-            if (!toRate.length) {
+            const missingPresent = getCompletedOutingsMissingPresent();
+            if (!toRate.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
                   Aucune sortie à noter pour l’instant.
@@ -508,6 +511,41 @@ export function ProfileScreen() {
                           toUserName: item.toUserName,
                         })
                       }
+                      style={{ marginTop: spacing.sm }}
+                    />
+                  </View>
+                ))}
+                {missingPresent.map((item) => (
+                  <View
+                    key={`missing-${item.outing.id}`}
+                    style={{ marginTop: spacing.md }}
+                  >
+                    <Text style={styles.cardValue}>{item.outing.title}</Text>
+                    <Text style={styles.cardHint}>
+                      Sortie terminée — personne n’est marquée présente (démo).
+                    </Text>
+                    <Button
+                      title="Marquer présent et noter"
+                      variant="secondary"
+                      onPress={() => {
+                        const marked = demoMarkConfirmedPresent(item.outing.id);
+                        const toUserId =
+                          marked.ok && marked.rateTarget
+                            ? marked.rateTarget.toUserId
+                            : item.rateTarget.toUserId;
+                        const toUserName =
+                          marked.ok && marked.rateTarget
+                            ? marked.rateTarget.toUserName
+                            : item.rateTarget.toUserName;
+                        // Defer so MARK_GUEST_PRESENT is committed before LeaveReview gates.
+                        setTimeout(() => {
+                          navigation.navigate('LeaveReview', {
+                            outingId: item.outing.id,
+                            toUserId,
+                            toUserName,
+                          });
+                        }, 0);
+                      }}
                       style={{ marginTop: spacing.sm }}
                     />
                   </View>
