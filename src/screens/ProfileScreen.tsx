@@ -21,7 +21,7 @@ import {
   dispoSlotCreatePrefill,
   dispoSlotLabel,
 } from '../utils/dispo';
-import { planLabel } from '../utils/format';
+import { formatOutingWhen, planLabel } from '../utils/format';
 import {
   hasFullPhotoAccess,
   isTrialActive,
@@ -482,10 +482,11 @@ export function ProfileScreen() {
             rateSectionY.current = e.nativeEvent.layout.y;
           }}
         >
-          <Text style={styles.cardLabel}>Mes sorties à noter</Text>
+          <Text style={styles.cardLabel}>Mes sorties</Text>
           <Text style={styles.cardHint}>
             Après une sortie terminée, note la personne et le lieu
-            séparément (commentaires optionnels).
+            séparément (commentaires optionnels). Une fois notée, elle
+            passe dans Passées.
           </Text>
           {(() => {
             const toRate = getOutingsToRate();
@@ -494,83 +495,104 @@ export function ProfileScreen() {
             if (!toRate.length && !rated.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
-                  Aucune sortie à noter pour l’instant.
+                  Aucune sortie pour l’instant.
                 </Text>
               );
             }
             return (
               <>
-                {toRate.map((item) => (
-                  <View key={`${item.outing.id}-${item.toUserId}`} style={{ marginTop: spacing.md }}>
-                    <Text style={styles.cardValue}>{item.outing.title}</Text>
-                    <Text style={styles.cardHint}>Noter {item.toUserName}</Text>
-                    <Button
-                      title="Noter la sortie"
-                      variant="secondary"
-                      onPress={() =>
-                        navigation.navigate('LeaveReview', {
-                          outingId: item.outing.id,
-                          toUserId: item.toUserId,
-                          toUserName: item.toUserName,
-                        })
-                      }
-                      style={{ marginTop: spacing.sm }}
-                    />
-                  </View>
-                ))}
-                {rated.map((item) => (
-                  <View
-                    key={`rated-${item.outing.id}-${item.toUserId}`}
-                    style={{ marginTop: spacing.md }}
-                  >
-                    <Text style={styles.cardValue}>{item.outing.title}</Text>
-                    <Text style={styles.cardHint}>{item.toUserName}</Text>
-                    <GivenReviewSummary
-                      review={item.review}
-                      onPressVoirAvis={() =>
-                        navigation.navigate('Reviews', {
-                          userId: item.toUserId,
-                          userName: item.toUserName,
-                        })
-                      }
-                    />
-                  </View>
-                ))}
-                {missingPresent.map((item) => (
-                  <View
-                    key={`missing-${item.outing.id}`}
-                    style={{ marginTop: spacing.md }}
-                  >
-                    <Text style={styles.cardValue}>{item.outing.title}</Text>
-                    <Text style={styles.cardHint}>
-                      Sortie terminée — personne n’est marquée présente (démo).
-                    </Text>
-                    <Button
-                      title="Marquer présent et noter"
-                      variant="secondary"
-                      onPress={() => {
-                        const marked = demoMarkConfirmedPresent(item.outing.id);
-                        const toUserId =
-                          marked.ok && marked.rateTarget
-                            ? marked.rateTarget.toUserId
-                            : item.rateTarget.toUserId;
-                        const toUserName =
-                          marked.ok && marked.rateTarget
-                            ? marked.rateTarget.toUserName
-                            : item.rateTarget.toUserName;
-                        // Defer so MARK_GUEST_PRESENT is committed before LeaveReview gates.
-                        setTimeout(() => {
-                          navigation.navigate('LeaveReview', {
-                            outingId: item.outing.id,
-                            toUserId,
-                            toUserName,
-                          });
-                        }, 0);
-                      }}
-                      style={{ marginTop: spacing.sm }}
-                    />
-                  </View>
-                ))}
+                {toRate.length || missingPresent.length ? (
+                  <>
+                    <Text style={styles.sortieSection}>À noter</Text>
+                    {toRate.map((item) => (
+                      <View
+                        key={`${item.outing.id}-${item.toUserId}`}
+                        style={{ marginTop: spacing.md }}
+                      >
+                        <Text style={styles.cardValue}>{item.outing.title}</Text>
+                        <Text style={styles.cardHint}>
+                          Noter {item.toUserName}
+                        </Text>
+                        <Button
+                          title="Noter la sortie"
+                          variant="secondary"
+                          onPress={() =>
+                            navigation.navigate('LeaveReview', {
+                              outingId: item.outing.id,
+                              toUserId: item.toUserId,
+                              toUserName: item.toUserName,
+                            })
+                          }
+                          style={{ marginTop: spacing.sm }}
+                        />
+                      </View>
+                    ))}
+                    {missingPresent.map((item) => (
+                      <View
+                        key={`missing-${item.outing.id}`}
+                        style={{ marginTop: spacing.md }}
+                      >
+                        <Text style={styles.cardValue}>{item.outing.title}</Text>
+                        <Text style={styles.cardHint}>
+                          Sortie terminée — personne n’est marquée présente
+                          (démo).
+                        </Text>
+                        <Button
+                          title="Marquer présent et noter"
+                          variant="secondary"
+                          onPress={() => {
+                            const marked = demoMarkConfirmedPresent(
+                              item.outing.id,
+                            );
+                            const toUserId =
+                              marked.ok && marked.rateTarget
+                                ? marked.rateTarget.toUserId
+                                : item.rateTarget.toUserId;
+                            const toUserName =
+                              marked.ok && marked.rateTarget
+                                ? marked.rateTarget.toUserName
+                                : item.rateTarget.toUserName;
+                            // Defer so MARK_GUEST_PRESENT is committed before LeaveReview gates.
+                            setTimeout(() => {
+                              navigation.navigate('LeaveReview', {
+                                outingId: item.outing.id,
+                                toUserId,
+                                toUserName,
+                              });
+                            }, 0);
+                          }}
+                          style={{ marginTop: spacing.sm }}
+                        />
+                      </View>
+                    ))}
+                  </>
+                ) : null}
+                {rated.length ? (
+                  <>
+                    <Text style={styles.sortieSection}>Passées</Text>
+                    {rated.map((item) => (
+                      <View
+                        key={`rated-${item.outing.id}-${item.toUserId}`}
+                        style={{ marginTop: spacing.md }}
+                      >
+                        <Text style={styles.cardValue}>{item.outing.title}</Text>
+                        <Text style={styles.cardHint}>
+                          {formatOutingWhen(item.outing.startsAt)} ·{' '}
+                          {item.outing.venueName || item.outing.neighborhood}
+                        </Text>
+                        <GivenReviewSummary
+                          review={item.review}
+                          onPressVoirAvis={() =>
+                            navigation.navigate('Reviews', {
+                              userId: item.toUserId,
+                              userName: item.toUserName,
+                            })
+                          }
+                        />
+                      </View>
+                    ))}
+                  </>
+                ) : null}
               </>
             );
           })()}
@@ -707,6 +729,12 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 4,
+  },
+  sortieSection: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    fontFamily: fonts.semiBold,
+    marginTop: spacing.lg,
   },
   bio: {
     ...typography.body,

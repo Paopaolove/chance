@@ -12,7 +12,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { GivenReviewSummary } from '../components/GivenReviewSummary';
 import { useChance } from '../data/ChanceContext';
 import { Outing, Request } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
@@ -27,20 +26,14 @@ import { Avatar } from '../components/Avatar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-type SectionKey = 'urgent' | 'confirm' | 'pending' | 'history';
+type SectionKey = 'urgent' | 'confirm' | 'pending';
 
-const SECTION_ORDER: SectionKey[] = [
-  'urgent',
-  'confirm',
-  'pending',
-  'history',
-];
+const SECTION_ORDER: SectionKey[] = ['urgent', 'confirm', 'pending'];
 
 const SECTION_TITLES: Record<SectionKey, string> = {
   urgent: 'Urgentes',
   confirm: 'À confirmer',
   pending: 'En attente',
-  history: 'Historique',
 };
 
 const statusLabels: Record<string, string> = {
@@ -57,18 +50,28 @@ function remainingMs(deadlineIso: string | undefined, nowMs: number): number {
   return Math.max(0, new Date(deadlineIso).getTime() - nowMs);
 }
 
+/** Actifs only — terminées / notées / expirées → Profil (pas Historique). */
 function classifyRequest(
   r: Request,
   outing: Outing | undefined,
   nowMs: number,
-): SectionKey {
+): SectionKey | null {
   if (
     r.status === 'expired' ||
     r.status === 'declined' ||
-    r.status === 'cancelled' ||
-    r.status === 'confirmed'
+    r.status === 'cancelled'
   ) {
-    return 'history';
+    return null;
+  }
+
+  if (r.status === 'confirmed') {
+    const outingFinished =
+      !!outing &&
+      (outing.status === 'completed' || outing.status === 'cancelled');
+    if (outingFinished) return null;
+    if (outing && isUrgentOnSite(outing)) return 'urgent';
+    // À venir / chat / imprévu
+    return 'pending';
   }
 
   if (r.status === 'accepted') {
@@ -78,7 +81,7 @@ function classifyRequest(
       (outing.status === 'completed' ||
         outing.status === 'cancelled' ||
         outing.status === 'closed');
-    if (left <= 0 || outingDead) return 'history';
+    if (left <= 0 || outingDead) return null;
     if (outing && isUrgentOnSite(outing)) return 'urgent';
     return 'confirm';
   }
@@ -93,7 +96,7 @@ function classifyRequest(
       outing.status === 'cancelled' ||
       !isOutingAcceptingRequests(outing, nowMs))
   ) {
-    return 'history';
+    return null;
   }
   return 'pending';
 }
@@ -109,7 +112,6 @@ export function RequestsScreen() {
     declineRequest,
     cancelRequest,
     expireRequestIfNeeded,
-    getMyReviewFor,
     state,
   } = useChance();
 
@@ -138,12 +140,12 @@ export function RequestsScreen() {
       urgent: [],
       confirm: [],
       pending: [],
-      history: [],
     };
 
     const push = (kind: 'in' | 'out', r: Request) => {
       const outing = getOutingById(r.outingId);
       const key = classifyRequest(r, outing, now);
+      if (!key) return;
       buckets[key].push({ kind, request: r });
     };
 
@@ -254,51 +256,17 @@ export function RequestsScreen() {
           )
         ) : null}
         {r.status === 'confirmed' && outing ? (
-          <>
-            <Button
-              title="Ouvrir le chat"
-              variant="secondary"
-              onPress={() =>
-                navigation.navigate('ChatPlaceholder', {
-                  outingId: outing.id,
-                  requestId: r.id,
-                })
-              }
-              style={{ marginTop: spacing.md }}
-            />
-            {outing.status === 'completed' && r.attendance === 'present' ? (
-              (() => {
-                const given = getMyReviewFor(outing.id, r.userId);
-                if (given) {
-                  return (
-                    <GivenReviewSummary
-                      review={given}
-                      onPressVoirAvis={() =>
-                        navigation.navigate('Reviews', {
-                          userId: r.userId,
-                          userName: r.userName,
-                        })
-                      }
-                    />
-                  );
-                }
-                return (
-                  <Button
-                    title={`Noter ${r.userName}`}
-                    variant="secondary"
-                    onPress={() =>
-                      navigation.navigate('LeaveReview', {
-                        outingId: outing.id,
-                        toUserId: r.userId,
-                        toUserName: r.userName,
-                      })
-                    }
-                    style={{ marginTop: spacing.sm }}
-                  />
-                );
-              })()
-            ) : null}
-          </>
+          <Button
+            title="Ouvrir le chat"
+            variant="secondary"
+            onPress={() =>
+              navigation.navigate('ChatPlaceholder', {
+                outingId: outing.id,
+                requestId: r.id,
+              })
+            }
+            style={{ marginTop: spacing.md }}
+          />
         ) : null}
       </View>
     );
@@ -400,43 +368,9 @@ export function RequestsScreen() {
           )
         ) : null}
         {r.status === 'confirmed' && outing ? (
-          <>
-            <Text style={styles.actionHint}>
-              Touche pour le chat (ouvert 1 h avant)
-            </Text>
-            {outing.status === 'completed' && r.attendance === 'present' ? (
-              (() => {
-                const given = getMyReviewFor(outing.id, outing.hostId);
-                if (given) {
-                  return (
-                    <GivenReviewSummary
-                      review={given}
-                      onPressVoirAvis={() =>
-                        navigation.navigate('Reviews', {
-                          userId: outing.hostId,
-                          userName: outing.hostName,
-                        })
-                      }
-                    />
-                  );
-                }
-                return (
-                  <Button
-                    title="Noter la sortie"
-                    variant="secondary"
-                    onPress={() =>
-                      navigation.navigate('LeaveReview', {
-                        outingId: outing.id,
-                        toUserId: outing.hostId,
-                        toUserName: outing.hostName,
-                      })
-                    }
-                    style={{ marginTop: spacing.sm }}
-                  />
-                );
-              })()
-            ) : null}
-          </>
+          <Text style={styles.actionHint}>
+            Touche pour le chat (ouvert 1 h avant)
+          </Text>
         ) : null}
       </>
     );
@@ -470,8 +404,7 @@ export function RequestsScreen() {
     );
   };
 
-  const empty =
-    incomingRequests.length === 0 && outgoingRequests.length === 0;
+  const empty = sections.length === 0;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
