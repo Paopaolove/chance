@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { GivenReviewSummary } from '../components/GivenReviewSummary';
 import { useChance } from '../data/ChanceContext';
 import { Outing, Request } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
@@ -108,6 +109,7 @@ export function RequestsScreen() {
     declineRequest,
     cancelRequest,
     expireRequestIfNeeded,
+    getMyReviewFor,
     state,
   } = useChance();
 
@@ -265,18 +267,36 @@ export function RequestsScreen() {
               style={{ marginTop: spacing.md }}
             />
             {outing.status === 'completed' && r.attendance === 'present' ? (
-              <Button
-                title={`Noter ${r.userName}`}
-                variant="secondary"
-                onPress={() =>
-                  navigation.navigate('LeaveReview', {
-                    outingId: outing.id,
-                    toUserId: r.userId,
-                    toUserName: r.userName,
-                  })
+              (() => {
+                const given = getMyReviewFor(outing.id, r.userId);
+                if (given) {
+                  return (
+                    <GivenReviewSummary
+                      review={given}
+                      onPressVoirAvis={() =>
+                        navigation.navigate('Reviews', {
+                          userId: r.userId,
+                          userName: r.userName,
+                        })
+                      }
+                    />
+                  );
                 }
-                style={{ marginTop: spacing.sm }}
-              />
+                return (
+                  <Button
+                    title={`Noter ${r.userName}`}
+                    variant="secondary"
+                    onPress={() =>
+                      navigation.navigate('LeaveReview', {
+                        outingId: outing.id,
+                        toUserId: r.userId,
+                        toUserName: r.userName,
+                      })
+                    }
+                    style={{ marginTop: spacing.sm }}
+                  />
+                );
+              })()
             ) : null}
           </>
         ) : null}
@@ -385,18 +405,36 @@ export function RequestsScreen() {
               Touche pour le chat (ouvert 1 h avant)
             </Text>
             {outing.status === 'completed' && r.attendance === 'present' ? (
-              <Button
-                title="Noter la sortie"
-                variant="secondary"
-                onPress={() =>
-                  navigation.navigate('LeaveReview', {
-                    outingId: outing.id,
-                    toUserId: outing.hostId,
-                    toUserName: outing.hostName,
-                  })
+              (() => {
+                const given = getMyReviewFor(outing.id, outing.hostId);
+                if (given) {
+                  return (
+                    <GivenReviewSummary
+                      review={given}
+                      onPressVoirAvis={() =>
+                        navigation.navigate('Reviews', {
+                          userId: outing.hostId,
+                          userName: outing.hostName,
+                        })
+                      }
+                    />
+                  );
                 }
-                style={{ marginTop: spacing.sm }}
-              />
+                return (
+                  <Button
+                    title="Noter la sortie"
+                    variant="secondary"
+                    onPress={() =>
+                      navigation.navigate('LeaveReview', {
+                        outingId: outing.id,
+                        toUserId: outing.hostId,
+                        toUserName: outing.hostName,
+                      })
+                    }
+                    style={{ marginTop: spacing.sm }}
+                  />
+                );
+              })()
             ) : null}
           </>
         ) : null}

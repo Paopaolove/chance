@@ -1674,6 +1674,21 @@ interface ChanceContextValue {
     toUserName: string;
     requestId?: string;
   }[];
+  /**
+   * Avis déjà envoyé par le currentUser pour ce couple sortie + personne
+   * (fromUserId + toUserId). Non modifiable.
+   */
+  getMyReviewFor: (
+    outingId: string,
+    toUserId: string,
+  ) => Review | undefined;
+  /** Sorties terminées déjà notées par le currentUser (UI après Noter). */
+  getMyRatedOutingPairs: () => {
+    outing: Outing;
+    toUserId: string;
+    toUserName: string;
+    review: Review;
+  }[];
   getDisplayName: (userId: string) => string;
   showToast: (
     title: string,
@@ -4040,6 +4055,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           (r) => r.outingId === outing.id && wasPresent(r),
         );
         for (const g of guests) {
+          // Filtre couple fromUserId + toUserId : déjà noté → hors liste.
           const already = state.reviews.some(
             (rev) =>
               rev.outingId === outing.id &&
@@ -4082,6 +4098,56 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     return items;
   }, [state.currentUser, state.outings, state.requests, state.reviews]);
 
+  const getMyReviewFor = useCallback(
+    (outingId: string, toUserId: string): Review | undefined => {
+      const user = state.currentUser;
+      if (!user) return undefined;
+      return state.reviews.find(
+        (r) =>
+          r.outingId === outingId &&
+          r.fromUserId === user.id &&
+          r.toUserId === toUserId,
+      );
+    },
+    [state.currentUser, state.reviews],
+  );
+
+  const getMyRatedOutingPairs = useCallback(() => {
+    const user = state.currentUser;
+    if (!user) return [];
+    const items: {
+      outing: Outing;
+      toUserId: string;
+      toUserName: string;
+      review: Review;
+    }[] = [];
+    for (const rev of state.reviews) {
+      if (rev.fromUserId !== user.id) continue;
+      const outing = state.outings.find((o) => o.id === rev.outingId);
+      if (!outing || outing.status !== 'completed') continue;
+      let toUserName: string;
+      if (outing.hostId === rev.toUserId) {
+        toUserName = outing.hostName;
+      } else {
+        const guest = state.requests.find(
+          (r) => r.outingId === outing.id && r.userId === rev.toUserId,
+        );
+        toUserName = guest?.userName ?? 'Quelqu’un';
+      }
+      items.push({
+        outing,
+        toUserId: rev.toUserId,
+        toUserName,
+        review: rev,
+      });
+    }
+    items.sort(
+      (a, b) =>
+        new Date(b.review.createdAt).getTime() -
+        new Date(a.review.createdAt).getTime(),
+    );
+    return items;
+  }, [state.currentUser, state.outings, state.requests, state.reviews]);
 
   const getOutingById = useCallback(
     (id: string) => state.outings.find((o) => o.id === id),
@@ -4741,6 +4807,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       getVenueReviews,
       getVenueRatingStats,
       getOutingsToRate,
+      getMyReviewFor,
+      getMyRatedOutingPairs,
       getDisplayName,
       showToast,
       notifyPriority,
@@ -4819,6 +4887,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       getVenueReviews,
       getVenueRatingStats,
       getOutingsToRate,
+      getMyReviewFor,
+      getMyRatedOutingPairs,
       getDisplayName,
       showToast,
       notifyPriority,

@@ -65,3 +65,13 @@ export function formatRatingLine(
   const sorties = outingCount === 1 ? '1 sortie' : `${outingCount} sorties`;
   return `${formatRatingAverage(average)} · ${sorties}`;
 }
+
+/** Résumé d’un avis déjà donné : « Rencontre 4/5 · Lieu 5/5 ». */
+export function formatGivenReviewScores(review: {
+  rating: number;
+  venueRating?: number;
+}): string {
+  const lieu =
+    review.venueRating != null ? `${review.venueRating}/5` : '—';
+  return `Rencontre ${review.rating}/5 · Lieu ${lieu}`;
+}

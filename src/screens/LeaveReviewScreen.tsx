@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { Button } from '../components/Button';
+import { GivenReviewSummary } from '../components/GivenReviewSummary';
 import { useChance } from '../data/ChanceContext';
 import { LowStarReasonKind } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
@@ -30,7 +31,7 @@ export function LeaveReviewScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
   const openProfile = useOpenUserProfile();
-  const { addReview, canLeaveReview } = useChance();
+  const { addReview, canLeaveReview, getMyReviewFor } = useChance();
   const { outingId, toUserId, toUserName } = route.params;
   const eligibility = canLeaveReview(outingId, toUserId);
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
@@ -129,6 +130,34 @@ export function LeaveReviewScreen() {
   };
 
   if (!eligibility.ok) {
+    const given =
+      eligibility.reason === 'already_reviewed'
+        ? getMyReviewFor(outingId, toUserId)
+        : undefined;
+    if (given) {
+      return (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+        >
+          <Text style={styles.hero}>Avis déjà envoyé</Text>
+          <Text style={styles.intro}>
+            Ton avis n’est plus modifiable. Voici ce que tu as publié.
+          </Text>
+          <GivenReviewSummary
+            review={given}
+            onPressVoirAvis={() =>
+              navigation.replace('Reviews', {
+                userId: toUserId,
+                userName: toUserName,
+              })
+            }
+            style={{ marginBottom: spacing.xl }}
+          />
+          <Button title="Retour" onPress={() => navigation.goBack()} />
+        </ScrollView>
+      );
+    }
     const copy: Record<string, string> = {
       not_completed:
         'Tu ne peux noter qu’après une sortie terminée (honorée).',

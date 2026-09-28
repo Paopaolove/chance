@@ -9,6 +9,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { GivenReviewSummary } from '../components/GivenReviewSummary';
 import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import { mergeProfileTags } from '../data/interests';
@@ -46,6 +47,7 @@ export function ProfileScreen() {
     setPermissions,
     updateProfile,
     getOutingsToRate,
+    getMyRatedOutingPairs,
     getCompletedOutingsMissingPresent,
     demoMarkConfirmedPresent,
     hasJokerAvailable,
@@ -487,8 +489,9 @@ export function ProfileScreen() {
           </Text>
           {(() => {
             const toRate = getOutingsToRate();
+            const rated = getMyRatedOutingPairs();
             const missingPresent = getCompletedOutingsMissingPresent();
-            if (!toRate.length && !missingPresent.length) {
+            if (!toRate.length && !rated.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
                   Aucune sortie à noter pour l’instant.
@@ -512,6 +515,24 @@ export function ProfileScreen() {
                         })
                       }
                       style={{ marginTop: spacing.sm }}
+                    />
+                  </View>
+                ))}
+                {rated.map((item) => (
+                  <View
+                    key={`rated-${item.outing.id}-${item.toUserId}`}
+                    style={{ marginTop: spacing.md }}
+                  >
+                    <Text style={styles.cardValue}>{item.outing.title}</Text>
+                    <Text style={styles.cardHint}>{item.toUserName}</Text>
+                    <GivenReviewSummary
+                      review={item.review}
+                      onPressVoirAvis={() =>
+                        navigation.navigate('Reviews', {
+                          userId: item.toUserId,
+                          userName: item.toUserName,
+                        })
+                      }
                     />
                   </View>
                 ))}
