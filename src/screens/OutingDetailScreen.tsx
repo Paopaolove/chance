@@ -25,7 +25,15 @@ import {
 } from '../data/travelTime';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
-import { isChatUnlocked, lateLabel } from '../utils/chat';
+import { chatUnlockOptsFor, isChatUnlocked, lateLabel } from '../utils/chat';
+import {
+  canGuestSelfArrivePartner,
+  canPartnerFlagDispute,
+  canPartnerMarkGuestAbsent,
+  isPartnerCultureListing,
+  isPartnerListing,
+  partnerListingChips,
+} from '../utils/partners';
 import { imprevuMotiveLabel } from '../utils/imprevu';
 import { formatOutingWhen } from '../utils/format';
 import { isStartsAtPast } from '../utils/parisTime';
@@ -67,6 +75,8 @@ export function OutingDetailScreen() {
     respondImprevu,
     hasJokerAvailable,
     useJokerOnImprevu,
+    guestArrivedPartner,
+    partnerMarkNoShow,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
@@ -103,6 +113,16 @@ export function OutingDetailScreen() {
   }
 
   const isHost = state.currentUser?.id === outing.hostId;
+  const partner = isPartnerListing(outing);
+  const partnerCulture = isPartnerCultureListing(outing);
+  const partnerChips = partner ? partnerListingChips(outing) : [];
+  const chatOpts = chatUnlockOptsFor(outing);
+  const myNoSpot =
+    partner && !myRequest
+      ? outgoingRequests.find(
+          (r) => r.outingId === outing.id && r.partnerNoSpot,
+        )
+      : undefined;
   const canSeeExact =
     isHost ||
     outgoingRequests.some(
@@ -137,6 +157,11 @@ export function OutingDetailScreen() {
       return;
     }
     setJoinedId(result.requestId);
+    if (partner) {
+      // Zéro clic côté lieu : direct à la confirmation (10 min + caution).
+      navigation.navigate('ConfirmSlot', { requestId: result.requestId });
+      return;
+    }
     const isGuest = !state.currentUser?.registered;
     if (isGuest) {
       Alert.alert(
@@ -324,9 +349,18 @@ export function OutingDetailScreen() {
           size={photoSize}
         />
         <View style={styles.hostText}>
-          <Text style={styles.hostName}>
-            {outing.hostName}, {outing.hostAge}
-          </Text>
+          {partner ? (
+            <View style={styles.partnerNameRow}>
+              <Text style={styles.hostName}>{outing.hostName}</Text>
+              <View style={styles.partnerBadge}>
+                <Text style={styles.partnerBadgeText}>Partenaire</Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.hostName}>
+              {outing.hostName}, {outing.hostAge}
+            </Text>
+          )}
           <RatingLine
             userId={outing.hostId}
             firstName={outing.hostName}
@@ -354,21 +388,34 @@ export function OutingDetailScreen() {
         accessibilityLabel={`Profil de ${outing.hostName}`}
       >
         <Text style={styles.inviteLine}>
-          {outing.hostName} t'invite
-          {outing.budgetMaxEuros <= 0
-            ? ' · Gratuit'
-            : ` · jusqu'à ${outing.budgetMaxEuros} €`}
+          {partner
+            ? `${outing.hostName} · Partenaire${partnerChips.length ? ` · ${partnerChips.join(' · ')}` : ''}`
+            : `${outing.hostName} t'invite${
+                outing.budgetMaxEuros <= 0
+                  ? ' · Gratuit'
+                  : ` · jusqu'à ${outing.budgetMaxEuros} €`
+              }`}
         </Text>
       </Pressable>
       <View style={styles.chips}>
         <View style={styles.chip}>
           <Text style={styles.chipText}>{formatOutingCategoryLabel(outing.category, outing.categoryDetail)}</Text>
         </View>
-        <View style={styles.chip}>
-          <Text style={styles.chipText}>
-            {budgetChipLabel(outing.budgetMaxEuros)}
-          </Text>
-        </View>
+        {partner ? (
+          partnerChips.map((c) => (
+            <View key={c} style={[styles.chip, styles.chipWomen]}>
+              <Text style={[styles.chipText, { color: colors.primaryDark }]}>
+                {c}
+              </Text>
+            </View>
+          ))
+        ) : (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>
+              {budgetChipLabel(outing.budgetMaxEuros)}
+            </Text>
+          </View>
+        )}
         {outing.womenOnly ? (
           <View style={[styles.chip, styles.chipWomen]}>
             <Text style={[styles.chipText, { color: colors.primaryDark }]}>
@@ -421,12 +468,25 @@ export function OutingDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.section}>Invitation</Text>
-        <Text style={styles.body}>
-          {outing.budgetMaxEuros <= 0
-            ? 'Sortie gratuite — réglée sur place, pas via l’app.'
-            : `J'invite jusqu'à ${outing.budgetMaxEuros} € par personne, réglé sur place au lieu (pas via l'app). Au-delà = hors invitation.`}
+        <Text style={styles.section}>
+          {partner ? 'Offre du lieu' : 'Invitation'}
         </Text>
+        <Text style={styles.body}>
+          {partnerCulture
+            ? `${outing.capacity} places offertes par le lieu (billets). Cette invitation a son propre chat.`
+            : partner
+              ? `${partnerChips.join(' + ') || 'Offre du lieu'} — chacun règle le reste de sa part sur place (pas via l’app).`
+              : outing.budgetMaxEuros <= 0
+                ? 'Sortie gratuite — réglée sur place, pas via l’app.'
+                : `J'invite jusqu'à ${outing.budgetMaxEuros} € par personne, réglé sur place au lieu (pas via l'app). Au-delà = hors invitation.`}
+        </Text>
+        {partner ? (
+          <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+            Pas d’acceptation à attendre : tu rejoins, tu confirmes en 10 min
+            (caution 20 €) et la place est à toi s’il en reste. Chat ouvert dès
+            la confirmation.
+          </Text>
+        ) : null}
         {outing.inviteIncludes ? (
           <Text style={[styles.hint, { marginTop: spacing.sm }]}>
             Inclus · {outing.inviteIncludes}
@@ -435,7 +495,7 @@ export function OutingDetailScreen() {
         {outing.inviteExtras ? (
           <Text style={styles.hint}>Hors invitation · {outing.inviteExtras}</Text>
         ) : null}
-        {outing.ticketsAlreadyBought ? (
+        {outing.ticketsAlreadyBought && !partner ? (
           <Text style={styles.hint}>Billets déjà achetés par l’hôte</Text>
         ) : null}
         <Text style={[styles.hint, { marginTop: spacing.sm }]}>
@@ -502,9 +562,15 @@ export function OutingDetailScreen() {
                     {r.status === 'pending'
                       ? 'Demande en attente'
                       : r.status === 'accepted'
-                        ? 'Accepté — à confirmer'
+                        ? r.partnerAutoSeat
+                          ? 'A rejoint — confirmation en cours (chaise non réservée)'
+                          : 'Accepté — à confirmer'
                         : r.status === 'confirmed'
-                          ? 'Confirmé'
+                          ? r.partnerDispute
+                            ? 'Litige présence'
+                            : r.guestArrivedAt
+                              ? 'Confirmé · arrivé'
+                              : 'Confirmé'
                           : r.status}
                   </Text>
                 </View>
@@ -551,9 +617,11 @@ export function OutingDetailScreen() {
                   );
                   Alert.alert(
                     'Annuler toute la sortie ?',
-                    hasConfirmed
-                      ? 'Les places confirmées seront annulées et les cautions rendues (mock).'
-                      : 'La sortie sera fermée et les demandes en cours annulées.',
+                    partner && hasConfirmed
+                      ? 'Toutes les cautions seront rendues. Ton lieu reçoit 1 avertissement — au 2e, le compte partenaire est fermé.'
+                      : hasConfirmed
+                        ? 'Les places confirmées seront annulées et les cautions rendues (mock).'
+                        : 'La sortie sera fermée et les demandes en cours annulées.',
                     [
                       { text: 'Retour', style: 'cancel' },
                       {
@@ -580,7 +648,16 @@ export function OutingDetailScreen() {
                 : outing.status === 'cancelled'
                   ? 'Sortie annulée.'
                   : outing.status === 'closed'
-                    ? 'Inscriptions closes — les confirmés gardent leur place.'
+                    ? partner && outing.partnerAutoClosedFull
+                      ? 'Complet — annonce clôturée automatiquement. Les confirmés gardent leur place.'
+                      : partnerCulture &&
+                          !incomingRequests.some(
+                            (r) =>
+                              r.outingId === outing.id &&
+                              r.status === 'confirmed',
+                          )
+                        ? 'Invitation tombée — personne n’a confirmé à l’heure.'
+                        : 'Inscriptions closes — les confirmés gardent leur place.'
                     : null}
             </Text>
           )}
@@ -614,7 +691,62 @@ export function OutingDetailScreen() {
                     })
                   }
                 />
-                {outing.status !== 'cancelled' && !r.attendance ? (
+                {partner ? (
+                  <View style={{ marginTop: spacing.sm }}>
+                    <Text style={styles.hint}>
+                      {r.partnerDispute
+                        ? `Litige · ${r.partnerDispute.note}`
+                        : r.attendance === 'present'
+                          ? `${r.userName} · arrivé · caution rendue`
+                          : r.attendance === 'absent'
+                            ? `${r.userName} · pas venu · caution perdue (6,90 € Chance / 13,10 € pour ton lieu)`
+                            : r.depositStatus === 'returned'
+                              ? `${r.userName} · caution rendue (silence le lendemain)`
+                              : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, le soir même.'}
+                    </Text>
+                    {canPartnerMarkGuestAbsent(outing, r, state.currentUser?.id ?? '') ? (
+                      <Button
+                        title={`Pas venu (${r.userName})`}
+                        variant="danger"
+                        onPress={() => {
+                          Alert.alert(
+                            'Chaise vide ?',
+                            `${r.userName} n’a pas signalé son arrivée. « Pas venu » = lapin : caution perdue (6,90 € Chance / 13,10 € pour ton lieu).`,
+                            [
+                              { text: 'Retour', style: 'cancel' },
+                              {
+                                text: 'Pas venu',
+                                style: 'destructive',
+                                onPress: () => {
+                                  const res = partnerMarkNoShow(r.id);
+                                  if (!res.ok) Alert.alert('Impossible', res.reason);
+                                },
+                              },
+                            ],
+                          );
+                        }}
+                        style={{ marginTop: spacing.sm }}
+                      />
+                    ) : null}
+                    {canPartnerFlagDispute(outing, r, state.currentUser?.id ?? '') ? (
+                      <Button
+                        title={`Pas venu (${r.userName} dit être arrivé)`}
+                        variant="ghost"
+                        onPress={() => {
+                          const res = partnerMarkNoShow(r.id);
+                          if (!res.ok) Alert.alert('Impossible', res.reason);
+                          else
+                            Alert.alert(
+                              'Litige ouvert',
+                              'Arrivé selon l’invité, pas venu selon toi : l’équipe Chance demandera une photo plus tard. Aucune sanction automatique.',
+                            );
+                        }}
+                        style={{ marginTop: spacing.sm }}
+                      />
+                    ) : null}
+                  </View>
+                ) : null}
+                {!partner && outing.status !== 'cancelled' && !r.attendance ? (
                   <Button
                     title={`Marquer ${r.userName} présent`}
                     variant="secondary"
@@ -632,17 +764,18 @@ export function OutingDetailScreen() {
                     style={{ marginTop: spacing.sm }}
                   />
                 ) : null}
-                {r.attendance === 'present' ? (
+                {!partner && r.attendance === 'present' ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
                     {r.userName} · présent · caution rendue
                   </Text>
                 ) : null}
-                {r.attendance === 'absent' ? (
+                {!partner && r.attendance === 'absent' ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
                     {r.userName} · absence · caution perdue
                   </Text>
                 ) : null}
-                {outing.status !== 'cancelled' &&
+                {!partner &&
+                outing.status !== 'cancelled' &&
                 !r.attendance &&
                 isStartsAtPast(outing.startsAt) ? (
                   <Button
@@ -744,14 +877,24 @@ export function OutingDetailScreen() {
                         : 'L’heure est passée — confirmation impossible.'}
                 </Text>
               ) : (
-                <Button
-                  title="Confirmer ma place"
-                  onPress={() =>
-                    navigation.navigate('ConfirmSlot', {
-                      requestId: 'id' in myRequest ? myRequest.id : joinedId!,
-                    })
-                  }
-                />
+                <>
+                  {partner ? (
+                    <Text style={styles.hint}>
+                      Confirme en 10 min (caution 20 €) : la place est prise à
+                      la confirmation s’il en reste — premier confirmé, premier
+                      servi.
+                    </Text>
+                  ) : null}
+                  <Button
+                    title={partner ? 'Confirmer ma venue' : 'Confirmer ma place'}
+                    onPress={() =>
+                      navigation.navigate('ConfirmSlot', {
+                        requestId: 'id' in myRequest ? myRequest.id : joinedId!,
+                      })
+                    }
+                    style={partner ? { marginTop: spacing.sm } : undefined}
+                  />
+                </>
               )}
               {'id' in myRequest ? (
                 <Button
@@ -770,6 +913,73 @@ export function OutingDetailScreen() {
           {myRequest.status === 'confirmed' && (
             <>
               <Text style={styles.statusOk}>Place confirmée.</Text>
+              {partner && 'id' in myRequest
+                ? (() => {
+                    const full = getRequestById(myRequest.id);
+                    if (!full) return null;
+                    if (full.partnerDispute) {
+                      return (
+                        <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                          Litige présence ouvert — l’équipe Chance te demandera
+                          une photo plus tard. Pas de sanction automatique.
+                        </Text>
+                      );
+                    }
+                    if (full.guestArrivedAt) {
+                      return (
+                        <Text style={styles.depositReturned}>
+                          Arrivée signalée — tu es présent, caution rendue.
+                        </Text>
+                      );
+                    }
+                    const canArrive = canGuestSelfArrivePartner(
+                      outing,
+                      full,
+                      state.currentUser?.id ?? '',
+                    );
+                    const doArrive = (withPhoto: boolean) => {
+                      const res = guestArrivedPartner(
+                        full.id,
+                        withPhoto ? { arrivalPhotoUri: 'stub://facade' } : undefined,
+                      );
+                      if (!res.ok) {
+                        Alert.alert('Pas encore', 'Disponible dès 15 min avant l’heure, le soir même.');
+                        return;
+                      }
+                      Alert.alert(
+                        res.dispute ? 'Litige ouvert' : 'Bien arrivé',
+                        res.dispute
+                          ? 'Le lieu avait signalé « Pas venu » — litige ouvert, pas de sanction automatique.'
+                          : 'Tu es présent : caution rendue. Le lieu n’a rien à faire.',
+                      );
+                    };
+                    return canArrive ? (
+                      <Button
+                        title="Je suis arrivé"
+                        onPress={() =>
+                          Alert.alert(
+                            'Je suis arrivé',
+                            'Photo de la façade facultative (démo : stub) — elle ne bloque rien et n’est pas une preuve à elle seule.',
+                            [
+                              { text: 'Retour', style: 'cancel' },
+                              {
+                                text: 'Avec photo (facultatif)',
+                                onPress: () => doArrive(true),
+                              },
+                              { text: 'Confirmer', onPress: () => doArrive(false) },
+                            ],
+                          )
+                        }
+                        style={{ marginTop: spacing.md }}
+                      />
+                    ) : (
+                      <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                        Sur place : bouton « Je suis arrivé » dès 15 min avant
+                        l’heure. Pas de scan obligatoire.
+                      </Text>
+                    );
+                  })()
+                : null}
               {getMyImprevu(outing.id) ? (
                 <Text style={[styles.hint, { marginTop: spacing.sm }]}>
                   Imprévu signalé ·{' '}
@@ -853,15 +1063,17 @@ export function OutingDetailScreen() {
               })()}
 
               <Text style={styles.hint}>
-                {isChatUnlocked(outing.startsAt, Date.now(), { urgentOnSite: outing.urgentOnSite })
-                  ? outing.urgentOnSite
-                    ? 'Le chat est ouvert (invitation urgente).'
-                    : 'Le chat est ouvert (H−1).'
+                {isChatUnlocked(outing.startsAt, Date.now(), chatOpts)
+                  ? partner
+                    ? 'Le chat est ouvert (invitation du lieu).'
+                    : outing.urgentOnSite
+                      ? 'Le chat est ouvert (invitation urgente).'
+                      : 'Le chat est ouvert (H−1).'
                   : 'Le chat s’ouvre 1 h avant la sortie.'}
               </Text>
               <Button
                 title={
-                  isChatUnlocked(outing.startsAt, Date.now(), { urgentOnSite: outing.urgentOnSite })
+                  isChatUnlocked(outing.startsAt, Date.now(), chatOpts)
                     ? 'Ouvrir le chat'
                     : 'Voir le chat (verrouillé)'
                 }
@@ -897,6 +1109,27 @@ export function OutingDetailScreen() {
             </>
           )}
         </View>
+      ) : myNoSpot &&
+        (outing.status !== 'open' || outing.spotsLeft < 1) ? (
+        <View style={styles.actions}>
+          <Text style={styles.statusOk}>Plus de place.</Text>
+          <Text style={styles.hint}>
+            Quelqu’un a confirmé juste avant toi — caution non bloquée (ou
+            rendue immédiatement).
+          </Text>
+        </View>
+      ) : partner &&
+        (outing.status === 'closed' || outing.spotsLeft < 1) &&
+        outing.status !== 'cancelled' &&
+        outing.status !== 'completed' ? (
+        <View style={styles.actions}>
+          <Text style={styles.statusOk}>Plus de place.</Text>
+          <Text style={styles.hint}>
+            {partnerCulture && !outing.partnerAutoClosedFull
+              ? 'Invitation close.'
+              : 'Toutes les places ont été prises — annonce clôturée.'}
+          </Text>
+        </View>
       ) : outing.status === 'completed' ||
         outing.status === 'cancelled' ||
         !isOutingAcceptingRequests(outing) ? (
@@ -910,6 +1143,15 @@ export function OutingDetailScreen() {
                   ? 'Fenêtre urgente terminée — plus de demandes.'
                   : 'L’heure est passée — cette annonce n’accepte plus de demandes.'}
           </Text>
+        </View>
+      ) : partner ? (
+        <View style={styles.actions}>
+          <Text style={styles.joinNote}>
+            Pas d’acceptation à attendre : rejoins, puis confirme ta venue en 10
+            min (caution 20 €, Stripe mock). La place est prise à la
+            confirmation s’il en reste ; sinon caution non bloquée.
+          </Text>
+          <Button title="Rejoindre" onPress={onJoin} />
         </View>
       ) : (
         <View style={styles.actions}>
@@ -1133,6 +1375,23 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   guestText: { flex: 1 },
+  partnerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  partnerBadge: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  partnerBadgeText: {
+    ...typography.small,
+    color: colors.primaryDark,
+    fontFamily: fonts.semiBold,
+  },
   guestName: {
     ...typography.bodyStrong,
     color: colors.text,

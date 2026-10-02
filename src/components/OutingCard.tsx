@@ -11,6 +11,7 @@ import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
 import { formatOutingWhen } from '../utils/format';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hostPhotoSize } from '../utils/subscription';
+import { isPartnerListing, partnerListingChips } from '../utils/partners';
 import { Avatar } from './Avatar';
 import { RatingLine } from './RatingLine';
 
@@ -31,6 +32,8 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
     (from ? getTravelMinutes(from, outing.neighborhood) : undefined);
   const photoSize = hostPhotoSize(viewer);
   const isFree = outing.budgetMaxEuros <= 0;
+  const partner = isPartnerListing(outing);
+  const partnerChips = partner ? partnerListingChips(outing) : [];
 
   const photoUri = useMemo(() => {
     if (state.currentUser?.id === outing.hostId) {
@@ -42,7 +45,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
   const openHost = () => openProfile(outing.hostId);
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, partner && styles.cardPartner]}>
       <View style={styles.mainRow}>
         <Pressable
           onPress={openHost}
@@ -72,9 +75,20 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
             accessibilityLabel={`Profil de ${outing.hostName}`}
             style={({ pressed }) => pressed && styles.pressed}
           >
-            <Text style={styles.title} numberOfLines={1}>
-              {outing.hostName} t'invite
-            </Text>
+            {partner ? (
+              <View style={styles.partnerTitleRow}>
+                <Text style={[styles.title, styles.partnerTitle]} numberOfLines={1}>
+                  {outing.hostName}
+                </Text>
+                <View style={styles.partnerBadge}>
+                  <Text style={styles.partnerBadgeText}>Partenaire</Text>
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.title} numberOfLines={1}>
+                {outing.hostName} t'invite
+              </Text>
+            )}
             {outing.description.trim() ? (
               <Text style={styles.message} numberOfLines={2}>
                 {outing.description.trim()}
@@ -89,7 +103,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
             style={({ pressed }) => pressed && styles.pressed}
           >
             <Text style={styles.venue} numberOfLines={1}>
-              {outing.venueName}
+              {partner ? outing.title : outing.venueName}
             </Text>
             <Text style={styles.meta}>
               {outing.urgentOnSite && !outing.urgentAutoH90
@@ -108,13 +122,24 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
                   </Text>
                 </View>
               ) : null}
-              <View style={[styles.chip, styles.chipOrange]}>
-                <Text style={[styles.chipText, styles.chipOrangeText]}>
-                  {isFree
-                    ? 'Gratuit'
-                    : `J'invite jusqu'à ${outing.budgetMaxEuros} €`}
-                </Text>
-              </View>
+              {partner ? (
+                // Partenaire : geste / remise / places offertes — jamais de €.
+                partnerChips.map((c) => (
+                  <View key={c} style={[styles.chip, styles.chipOrange]}>
+                    <Text style={[styles.chipText, styles.chipOrangeText]}>
+                      {c}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <View style={[styles.chip, styles.chipOrange]}>
+                  <Text style={[styles.chipText, styles.chipOrangeText]}>
+                    {isFree
+                      ? 'Gratuit'
+                      : `J'invite jusqu'à ${outing.budgetMaxEuros} €`}
+                  </Text>
+                </View>
+              )}
             </View>
           </Pressable>
         </View>
@@ -132,6 +157,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.card,
+  },
+  /** Liseré orange discret — pas une carte pub. */
+  cardPartner: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  partnerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: 2,
+  },
+  partnerTitle: { flexShrink: 1, marginBottom: 0 },
+  partnerBadge: {
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  partnerBadgeText: {
+    ...typography.small,
+    color: colors.primaryDark,
+    fontFamily: fonts.semiBold,
   },
   pressed: { opacity: 0.94 },
   mainRow: {

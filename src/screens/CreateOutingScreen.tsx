@@ -21,7 +21,7 @@ import {
   budgetChipLabel,
 } from '../data/mockOutings';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
-import { OutingCategory } from '../data/types';
+import { OutingCategory, PartnerGesture } from '../data/types';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import {
@@ -30,6 +30,20 @@ import {
   parisYmd,
 } from '../utils/parisTime';
 import { clampInt, parseLooseInt } from '../utils/parseLooseNumber';
+import {
+  countPartnerCultureSameEvening,
+  isPartnerClosed,
+  isPartnerCultureHost,
+  isPartnerUser,
+  PARTNER_CULTURE_CAPACITY,
+  PARTNER_CULTURE_MAX_SAME_EVENING,
+  PARTNER_DISCOUNT_MAX,
+  PARTNER_DISCOUNT_MIN,
+  PARTNER_DISCOUNT_PRESETS,
+  PARTNER_GESTURES,
+  PARTNER_KIND_LABELS,
+  partnerOfferChips,
+} from '../utils/partners';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type CreateRoute = RouteProp<MainTabParamList, 'Create'>;
@@ -490,6 +504,30 @@ export function CreateOutingScreen() {
         state.currentUser?.gender === 'femme',
     );
   };
+
+  const me = state.currentUser;
+  if (isPartnerClosed(me)) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Créer une annonce</Text>
+        </View>
+        <View style={styles.blocked}>
+          <Text style={styles.blockedTitle}>Compte partenaire fermé</Text>
+          <Text style={styles.activeMeta}>
+            2e avertissement (annulation ou invitation non honorée) — la
+            publication est bloquée. Statut visible dans Profil.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Culture partenaire : jusqu’à 5 invitations le même soir — pas de blocage
+  // « 1 annonce active » ici (plafond vérifié à la publication).
+  if (isPartnerUser(me) && (!active || isPartnerCultureHost(me))) {
+    return <PartnerCreateForm />;
+  }
 
   if (active) {
     return (
@@ -1017,7 +1055,416 @@ export function CreateOutingScreen() {
   );
 }
 
+/**
+ * Création depuis un compte lieu (resto / bar / culture).
+ * Resto/bar : geste (0/1) + remise (0/1), au moins un — jamais « J’invite
+ * jusqu’à X € », pas de pastilles 10/20/30/40, pas de « Gratuit ».
+ * Culture : places offertes, 2 places forcées, max 5 invitations le même soir.
+ */
+function PartnerCreateForm() {
+  const navigation = useNavigation<Nav>();
+  const { createOuting, state } = useChance();
+  const user = state.currentUser!;
+  const kind = user.partnerKind ?? 'resto';
+  const culture = kind === 'culture';
+  const venue = user.partnerVenueName?.trim() || user.firstName;
+  const neighborhood = user.partnerNeighborhood || user.neighborhood;
+
+  const initial = defaultDateTime(true);
+  const [dateStr, setDateStr] = useState(initial.dateStr);
+  const [timeStr, setTimeStr] = useState(initial.timeStr);
+  const [capacity, setCapacity] = useState<1 | 2 | 3>(2);
+  const [show, setShow] = useState('');
+  const [exactAddress, setExactAddress] = useState('');
+  const [message, setMessage] = useState(user.partnerPhrase ?? '');
+  const [gesture, setGesture] = useState<PartnerGesture | undefined>(
+    culture ? undefined : 'dessert',
+  );
+  const [gestureOther, setGestureOther] = useState('');
+  const [discountMode, setDiscountMode] = useState<
+    'none' | 'preset' | 'other'
+  >('none');
+  const [discountPreset, setDiscountPreset] = useState<number>(10);
+  const [discountOther, setDiscountOther] = useState('');
+
+  const startsAt = useMemo(
+    () => buildStartsAt(dateStr, timeStr),
+    [dateStr, timeStr],
+  );
+  const sameEvening = useMemo(
+    () =>
+      culture && startsAt
+        ? countPartnerCultureSameEvening(
+            user.id,
+            startsAt.toISOString(),
+            state.outings,
+            state.requests,
+          )
+        : 0,
+    [culture, startsAt, user.id, state.outings, state.requests],
+  );
+
+  const discountPct =
+    discountMode === 'preset'
+      ? discountPreset
+      : discountMode === 'other'
+        ? parseLooseInt(discountOther) ?? undefined
+        : undefined;
+  const offer = culture
+    ? undefined
+    : {
+        ...(gesture ? { gesture } : {}),
+        ...(gesture === 'autre' ? { gestureOther } : {}),
+        ...(discountPct != null ? { discountPct } : {}),
+      };
+  const preview = culture
+    ? [`${PARTNER_CULTURE_CAPACITY} places offertes`]
+    : partnerOfferChips(offer);
+
+  const applyShortcut = (offsetDays: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    d.setHours(20, 0, 0, 0);
+    setDateStr(formatDateInput(d));
+    setTimeStr('20:00');
+  };
+
+  const onPublish = () => {
+    if (!exactAddress.trim() || !message.trim()) {
+      Alert.alert('Manque un peu', 'Adresse exacte et message sont requis.');
+      return;
+    }
+    if (culture && !show.trim()) {
+      Alert.alert('Spectacle', 'Indique le spectacle / l’événement.');
+      return;
+    }
+    if (!startsAt) {
+      Alert.alert('Date / heure', 'Format JJ/MM/AAAA et HH:mm.');
+      return;
+    }
+    if (isStartsAtPast(startsAt.toISOString()) || isDateStrBeforeParisToday(dateStr)) {
+      Alert.alert('Date / heure passée', 'Choisis un créneau dans le futur (heure de Paris).');
+      return;
+    }
+    if (!culture) {
+      if (gesture === 'autre' && !gestureOther.trim()) {
+        Alert.alert('Geste', 'Précise le geste « Autre » (ex. une coupe de crémant).');
+        return;
+      }
+      if (
+        discountMode === 'other' &&
+        (discountPct == null ||
+          discountPct < PARTNER_DISCOUNT_MIN ||
+          discountPct > PARTNER_DISCOUNT_MAX)
+      ) {
+        Alert.alert(
+          'Remise',
+          `Indique un pourcentage entre ${PARTNER_DISCOUNT_MIN} et ${PARTNER_DISCOUNT_MAX}.`,
+        );
+        return;
+      }
+      if (!gesture && discountPct == null) {
+        Alert.alert(
+          'Offre',
+          'Choisis au moins un geste OU une remise (les deux sont cumulables).',
+        );
+        return;
+      }
+    }
+    const parsed = parseTimeInput(timeStr)!;
+    const heure = formatHeureLabel(parsed.h, parsed.m);
+    const title = culture
+      ? `${show.trim()} · ${heure}`
+      : `${venue} · table ${heure}`;
+    const result = createOuting({
+      title,
+      description: message.trim(),
+      category: culture ? 'culture' : kind === 'bar' ? 'bar' : 'restaurant',
+      neighborhood,
+      venueName: venue,
+      approxArea: neighborhood,
+      exactAddress: exactAddress.trim(),
+      startsAt: startsAt.toISOString(),
+      capacity: culture ? PARTNER_CULTURE_CAPACITY : capacity,
+      womenOnly: false,
+      budgetMaxEuros: 0,
+      ...(culture ? { ticketsAlreadyBought: true } : { partnerOffer: offer }),
+    });
+    if (!result.ok) {
+      const messages: Record<string, string> = {
+        already_active:
+          'Ton lieu a déjà une annonce active. Attends la fin ou clôture-la.',
+        culture_evening_full: `Déjà ${PARTNER_CULTURE_MAX_SAME_EVENING} invitations ce soir-là (max).`,
+        partner_closed: 'Compte partenaire fermé — publication bloquée.',
+        partner_offer_required: 'Choisis au moins un geste ou une remise.',
+        partner_offer_invalid: 'Offre invalide (texte « Autre » ou % à vérifier).',
+        banned: 'Compte suspendu (démo).',
+        starts_in_past: 'Ce créneau est déjà passé.',
+        no_user: 'Profil manquant.',
+      };
+      Alert.alert('Impossible', messages[result.reason] ?? result.reason);
+      return;
+    }
+    Alert.alert(
+      'Annonce partenaire publiée',
+      'Visible dans Annonces avec le badge « Partenaire ». Rien à faire de ton côté : la place est prise automatiquement quand un invité confirme (10 min + caution 20 €).',
+    );
+    setShow('');
+    navigation.navigate('OutingDetail', { outingId: result.outingId });
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.title}>Annonce partenaire</Text>
+        <Text style={styles.sub}>
+          {venue} · {PARTNER_KIND_LABELS[kind]} · {neighborhood}
+        </Text>
+        <View style={styles.partnerInfo}>
+          <Text style={styles.partnerInfoTitle}>Zéro clic côté lieu</Text>
+          <Text style={styles.partnerInfoBody}>
+            L’invité rejoint puis confirme (10 min + caution 20 €) : la place
+            est prise automatiquement s’il en reste. Chat ouvert dès la
+            confirmation. Plein → annonce clôturée. 0 % de commission.
+          </Text>
+        </View>
+
+        {culture ? (
+          <>
+            <Text style={styles.label}>Spectacle / événement *</Text>
+            <TextInput
+              style={styles.input}
+              value={show}
+              onChangeText={setShow}
+              placeholder="Ex. Première — Les Fourberies"
+              placeholderTextColor={colors.textMuted}
+            />
+          </>
+        ) : null}
+
+        <Text style={styles.label}>Date *</Text>
+        <TextInput
+          style={styles.input}
+          value={dateStr}
+          onChangeText={setDateStr}
+          placeholder="JJ/MM/AAAA"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numbers-and-punctuation"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Text style={styles.label}>Heure *</Text>
+        <TextInput
+          style={styles.input}
+          value={timeStr}
+          onChangeText={setTimeStr}
+          placeholder="HH:mm (ex. 20:00 ou 20h30)"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="numbers-and-punctuation"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <View style={[styles.row, { marginTop: spacing.sm }]}>
+          <Button title="Ce soir 20h" variant="ghost" onPress={() => applyShortcut(0)} style={styles.chip} />
+          <Button title="Demain 20h" variant="ghost" onPress={() => applyShortcut(1)} style={styles.chip} />
+        </View>
+        {!startsAt ? (
+          <Text style={styles.fieldError}>
+            Date ou heure invalide — format JJ/MM/AAAA et HH:mm.
+          </Text>
+        ) : null}
+
+        <Text style={styles.label}>Places *</Text>
+        {culture ? (
+          <Text style={styles.privacyHint}>
+            {PARTNER_CULTURE_CAPACITY} places par invitation (fixe) · {sameEvening}/
+            {PARTNER_CULTURE_MAX_SAME_EVENING} invitations ce soir-là · chacune a
+            son propre chat. 2 confirmés → clôturée ; 1 confirmé à l’heure → il
+            garde sa place ; 0 → l’invitation tombe.
+          </Text>
+        ) : (
+          <View style={styles.row}>
+            {capacities.map((n) => (
+              <Button
+                key={n}
+                title={String(n)}
+                variant={capacity === n ? 'primary' : 'ghost'}
+                onPress={() => setCapacity(n)}
+                style={styles.capChip}
+              />
+            ))}
+          </View>
+        )}
+
+        {culture ? (
+          <>
+            <Text style={styles.label}>Offre</Text>
+            <View style={styles.budgetCard}>
+              <Text style={styles.budgetFreeHint}>
+                Places offertes (billets au guichet). Pas de geste, pas de
+                remise, pas de montant. La caution 20 € reste, pour la venue.
+              </Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.label}>Geste offert (optionnel)</Text>
+            <View style={styles.row}>
+              {PARTNER_GESTURES.map((g) => (
+                <Button
+                  key={g.id}
+                  title={g.label}
+                  variant={gesture === g.id ? 'primary' : 'ghost'}
+                  onPress={() =>
+                    setGesture((cur) => (cur === g.id ? undefined : g.id))
+                  }
+                  style={styles.chip}
+                />
+              ))}
+            </View>
+            {gesture === 'autre' ? (
+              <TextInput
+                style={[styles.input, { marginTop: spacing.sm }]}
+                value={gestureOther}
+                onChangeText={setGestureOther}
+                placeholder="Ex. une coupe de crémant"
+                placeholderTextColor={colors.textMuted}
+                maxLength={60}
+              />
+            ) : null}
+
+            <Text style={styles.label}>Remise (optionnel)</Text>
+            <View style={styles.row}>
+              {PARTNER_DISCOUNT_PRESETS.map((pct) => {
+                const on = discountMode === 'preset' && discountPreset === pct;
+                return (
+                  <Button
+                    key={pct}
+                    title={`−${pct} %`}
+                    variant={on ? 'primary' : 'ghost'}
+                    onPress={() => {
+                      if (on) {
+                        setDiscountMode('none');
+                      } else {
+                        setDiscountMode('preset');
+                        setDiscountPreset(pct);
+                      }
+                    }}
+                    style={styles.chip}
+                  />
+                );
+              })}
+              <Button
+                title="Autre %"
+                variant={discountMode === 'other' ? 'primary' : 'ghost'}
+                onPress={() =>
+                  setDiscountMode((m) => (m === 'other' ? 'none' : 'other'))
+                }
+                style={styles.chip}
+              />
+            </View>
+            {discountMode === 'other' ? (
+              <View style={[styles.budgetMontantRow, { marginTop: spacing.sm }]}>
+                <Text style={styles.budgetMontantLabel}>Remise libre</Text>
+                <TextInput
+                  style={styles.budgetMontantInput}
+                  value={discountOther}
+                  onChangeText={setDiscountOther}
+                  keyboardType="number-pad"
+                  maxLength={2}
+                  placeholder="15"
+                  placeholderTextColor={colors.textMuted}
+                  accessibilityLabel="Remise en pourcentage"
+                />
+                <Text style={styles.budgetMontantSuffix}>%</Text>
+              </View>
+            ) : null}
+            <Text style={styles.privacyHint}>
+              Au moins un geste OU une remise — cumulables. Pas de montant
+              « J’invite jusqu’à » pour un lieu : chacun règle sa part sur place.
+            </Text>
+          </>
+        )}
+
+        {preview.length ? (
+          <View style={[styles.row, { marginTop: spacing.md }]}>
+            <Text style={styles.privacyHint}>Aperçu carte : {venue} · Partenaire · </Text>
+            {preview.map((c) => (
+              <View key={c} style={styles.previewChip}>
+                <Text style={styles.previewChipText}>{c}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <Text style={styles.label}>Adresse exacte *</Text>
+        <TextInput
+          style={styles.input}
+          value={exactAddress}
+          onChangeText={setExactAddress}
+          placeholder="Ex. 18 rue des Francs-Bourgeois, 75004 Paris"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="words"
+        />
+        <Text style={styles.privacyHint}>
+          Visible seulement après confirmation de l’invité.
+        </Text>
+
+        <Text style={styles.label}>Message *</Text>
+        <TextInput
+          style={[styles.input, styles.multiline]}
+          value={message}
+          onChangeText={setMessage}
+          placeholder="Ambiance, ce qui attend l’invité…"
+          placeholderTextColor={colors.textMuted}
+          multiline
+        />
+
+        <Text style={styles.publishFreeLabel}>Publication gratuite · 0 % de commission</Text>
+        <Text style={styles.publishFreeHint}>
+          Caution 20 € par invité confirmé (rendue s’il vient). Lapin ou
+          annulation tardive : 6,90 € Chance / 13,10 € pour le lieu. Si tu
+          annules avec des confirmés : cautions rendues + 1 avertissement (2e =
+          compte partenaire fermé).
+        </Text>
+        <Button title="Publier" onPress={onPublish} style={styles.cta} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 const styles = StyleSheet.create({
+  partnerInfo: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  partnerInfoTitle: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
+    marginBottom: 4,
+  },
+  partnerInfoBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  previewChip: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  previewChipText: {
+    ...typography.small,
+    color: colors.primaryDark,
+    fontFamily: fonts.semiBold,
+  },
   urgentBanner: {
     backgroundColor: colors.primarySoft,
     borderRadius: radius.md,

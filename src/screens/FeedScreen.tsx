@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DemoMenuModal } from '../components/DemoMenuModal';
 import { EmptyState } from '../components/EmptyState';
 import { OutingCard } from '../components/OutingCard';
+import { pinPartnerOutingsNearSoon } from '../utils/partners';
 import { PersonCard } from '../components/PersonCard';
 import { useChance } from '../data/ChanceContext';
 import { categoryLabels } from '../data/mockOutings';
@@ -315,7 +316,9 @@ export function FeedScreen() {
       }
       return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
     });
-    return list;
+    // Partenaires mélangés (badge) ; max 2 en tête seulement si proches +
+    // bientôt (pinned démo compte parmi les 2). Pas de priorité systématique.
+    return pinPartnerOutingsNearSoon(list, origin);
   }, [
     visibleOutings,
     categoryFilter,

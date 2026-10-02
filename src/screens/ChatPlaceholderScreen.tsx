@@ -20,6 +20,7 @@ import {
   clampLateMinutes,
   formatUntilChatOpens,
   getChatOpensAt,
+  chatUnlockOptsFor,
   isChatUnlocked,
   LATE_MAX_MINUTES,
   LATE_MIN_MINUTES,
@@ -68,9 +69,7 @@ export function ChatPlaceholderScreen() {
   }, []);
 
   const unlocked = outing
-    ? isChatUnlocked(outing.startsAt, now, {
-        urgentOnSite: outing.urgentOnSite,
-      })
+    ? isChatUnlocked(outing.startsAt, now, chatUnlockOptsFor(outing))
     : false;
 
   useEffect(() => {
@@ -155,9 +154,7 @@ export function ChatPlaceholderScreen() {
         <View style={styles.lockCard}>
           <Text style={styles.lockEmoji}>🔒</Text>
           <Text style={styles.lockTitle}>
-            {formatUntilChatOpens(outing.startsAt, now, {
-              urgentOnSite: outing.urgentOnSite,
-            })}
+            {formatUntilChatOpens(outing.startsAt, now, chatUnlockOptsFor(outing))}
           </Text>
           <Text style={styles.lockBody}>
             Le chat s’ouvre 1 h avant la sortie (
@@ -224,7 +221,7 @@ export function ChatPlaceholderScreen() {
           <Text style={styles.lockTitle}>Confirmation requise</Text>
           <Text style={styles.lockBody}>
             Le chat et l’adresse exacte n’apparaissent qu’après confirmation de
-            place (et le chat s’ouvre à H−1).
+            place{outing.isPartnerListing ? ' (chat ouvert dès la confirmation).' : ' (et le chat s’ouvre à H−1).'}
           </Text>
         </View>
         <View style={styles.info}>
@@ -277,7 +274,13 @@ export function ChatPlaceholderScreen() {
       <View style={styles.wrapTight}>
         <Text style={styles.title}>Chat</Text>
         {profileHeader}
-        <Text style={styles.openBadge}>Ouvert · H−1</Text>
+        <Text style={styles.openBadge}>
+          {outing.isPartnerListing
+            ? 'Ouvert dès la confirmation · invitation du lieu'
+            : outing.urgentOnSite
+              ? 'Ouvert · invitation urgente'
+              : 'Ouvert · H−1'}
+        </Text>
 
         {lateFromOthers.length ? (
           <View style={styles.lateBanner}>

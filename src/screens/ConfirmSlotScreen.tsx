@@ -13,6 +13,7 @@ import { formatCountdown } from '../utils/format';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { isStartsAtPast } from '../utils/parisTime';
 import { isUrgentOnSite } from '../utils/outingActive';
+import { isPartnerListing, partnerListingChips } from '../utils/partners';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'ConfirmSlot'>;
@@ -40,6 +41,7 @@ export function ConfirmSlotScreen() {
   const [now, setNow] = useState(Date.now());
   const [done, setDone] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [noSpot, setNoSpot] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -75,14 +77,32 @@ export function ConfirmSlotScreen() {
     );
   }
 
+  const partner = isPartnerListing(outing);
+
+  if (noSpot || (partner && request.partnerNoSpot)) {
+    return (
+      <SafeAreaView style={styles.wrap}>
+        <View style={styles.centerBlock}>
+          <Text style={styles.hero}>Plus de place</Text>
+          <Text style={styles.bodyCenter}>
+            Quelqu’un a confirmé juste avant toi. Ta caution n’a pas été
+            bloquée (ou t’est rendue immédiatement).
+          </Text>
+        </View>
+        <Button title="Retour aux annonces" onPress={goFeed} />
+      </SafeAreaView>
+    );
+  }
+
   if (done || request.status === 'confirmed') {
     return (
       <SafeAreaView style={styles.wrap}>
         <View style={styles.centerBlock}>
-          <Text style={styles.hero}>C’est noté</Text>
+          <Text style={styles.hero}>{partner ? 'Ta place est prise' : 'C’est noté'}</Text>
           <Text style={styles.bodyCenter}>
-            Le chat s’ouvrira 1 heure avant. L’adresse exacte est maintenant
-            visible sur la sortie.
+            {partner
+              ? 'Le lieu n’a rien à valider. Le chat est déjà ouvert et l’adresse exacte est visible sur la sortie. Sur place : « Je suis arrivé » dès 15 min avant.'
+              : 'Le chat s’ouvrira 1 heure avant. L’adresse exacte est maintenant visible sur la sortie.'}
           </Text>
         </View>
         <Button
@@ -174,6 +194,14 @@ export function ConfirmSlotScreen() {
         navigation.navigate('Paywall', {
           returnToConfirmRequestId: request.id,
         });
+        return;
+      }
+      if (result.reason === 'no_spot') {
+        showToast(
+          'Plus de place',
+          'Quelqu’un a confirmé juste avant toi — caution non bloquée.',
+        );
+        setNoSpot(true);
         return;
       }
       if (result.reason === 'race_lost') {
@@ -270,8 +298,16 @@ export function ConfirmSlotScreen() {
             size={56}
           />
           <View style={styles.hostText}>
-            <Text style={styles.hostName}>{outing.hostName}</Text>
-            <Text style={styles.hostMeta}>{outing.title}</Text>
+            <Text style={styles.hostName}>
+              {outing.hostName}
+              {partner ? ' · Partenaire' : ''}
+            </Text>
+            <Text style={styles.hostMeta}>
+              {outing.title}
+              {partner && partnerListingChips(outing).length
+                ? ` · ${partnerListingChips(outing).join(' · ')}`
+                : ''}
+            </Text>
           </View>
         </Pressable>
         <Text
@@ -280,13 +316,20 @@ export function ConfirmSlotScreen() {
         >
           {countdown}
         </Text>
+        {partner ? (
+          <Text style={styles.depositSub}>
+            {outing.spotsLeft > 0
+              ? `${outing.spotsLeft} place${outing.spotsLeft > 1 ? 's' : ''} encore libre${outing.spotsLeft > 1 ? 's' : ''} — la place est prise à ta confirmation (premier confirmé, premier servi).`
+              : 'Plus de place pour l’instant.'}
+          </Text>
+        ) : null}
         <Text style={styles.depositSub}>
           Caution {DEPOSIT_EUROS} € (ce n’est pas l’invitation). Rendue si tu
-          viens, si tu annules au moins 3 heures avant, ou si l’hôte annule.
-          Perdue si trop tard ou absence : 6,90 € Chance / 13,10 € hôte.
+          viens, si tu annules au moins 3 heures avant, ou si {partner ? 'le lieu' : 'l’hôte'} annule.
+          Perdue si trop tard ou absence : 6,90 € Chance / 13,10 € {partner ? 'lieu' : 'hôte'}.
         </Text>
       </View>
-      <Button title="Je confirme" onPress={onConfirm} />
+      <Button title={partner ? 'Je confirme ma venue' : 'Je confirme'} onPress={onConfirm} />
     </SafeAreaView>
   );
 }

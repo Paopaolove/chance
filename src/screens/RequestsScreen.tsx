@@ -23,6 +23,7 @@ import {
   isUrgentOnSite,
 } from '../utils/outingActive';
 import { Avatar } from '../components/Avatar';
+import { isPartnerListing } from '../utils/partners';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -189,7 +190,10 @@ export function RequestsScreen() {
           accessibilityLabel={`Sortie ${outing?.title ?? ''}`}
         >
           <Text style={styles.cardMeta}>
-            pour « {outing?.title ?? 'sortie'} » · {statusLabels[r.status]}
+            pour « {outing?.title ?? 'sortie'} » ·{' '}
+            {r.partnerAutoSeat && r.status === 'accepted'
+              ? 'a rejoint — confirmation en cours (rien à faire)'
+              : statusLabels[r.status]}
           </Text>
         </Pressable>
         {outing && isUrgentOnSite(outing) ? (
@@ -333,7 +337,7 @@ export function RequestsScreen() {
             <>
               <View style={styles.acceptRow}>
                 <Button
-                  title="J’accepte"
+                  title={r.partnerAutoSeat ? 'Confirmer ma venue' : 'J’accepte'}
                   onPress={() =>
                     navigation.navigate('ConfirmSlot', { requestId: r.id })
                   }
@@ -369,7 +373,9 @@ export function RequestsScreen() {
         ) : null}
         {r.status === 'confirmed' && outing ? (
           <Text style={styles.actionHint}>
-            Touche pour le chat (ouvert 1 h avant)
+            {isPartnerListing(outing) || outing.urgentOnSite
+              ? 'Touche pour le chat (ouvert)'
+              : 'Touche pour le chat (ouvert 1 h avant)'}
           </Text>
         ) : null}
       </>
