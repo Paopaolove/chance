@@ -4,6 +4,49 @@ export type AuthProvider = 'apple' | 'google' | 'email';
 
 export type OutingCategory = 'restaurant' | 'bar' | 'culture' | 'autre';
 
+/** Compte partenaire (lieu) : resto / bar / salle-théâtre (culture). */
+export type PartnerKind = 'resto' | 'bar' | 'culture';
+
+/**
+ * Statut du compte lieu (entrée Pro via Profil → « Je représente un lieu »).
+ * - none: particulier (défaut)
+ * - pending: « Demande envoyée » (visible Profil, pas dans le fil)
+ * - active: validé par l’équipe Chance (démo : bouton QA)
+ * - refused: refus → reste particulier
+ * - closed: 2e avertissement → compte partenaire fermé (publication bloquée)
+ */
+export type PartnerStatus = 'none' | 'pending' | 'active' | 'refused' | 'closed';
+
+/** Geste offert par un resto/bar partenaire (0 ou 1). « autre » = texte libre. */
+export type PartnerGesture =
+  | 'verre'
+  | 'dessert'
+  | 'cafe'
+  | 'entree'
+  | 'plat_du_jour'
+  | 'autre';
+
+/**
+ * Offre resto/bar partenaire : 2 groupes indépendants cumulables, au moins
+ * un requis. Jamais de « J’invite jusqu’à X € » côté partenaire. Culture :
+ * pas d’offre (places offertes).
+ */
+export type PartnerOffer = {
+  gesture?: PartnerGesture;
+  /** Texte libre quand gesture === 'autre'. */
+  gestureOther?: string;
+  /** Remise en % (10, 20 ou « Autre % » libre). */
+  discountPct?: number;
+};
+
+/** Litige présence partenaire (stub — pas de sanction auto). */
+export type PartnerDispute = {
+  openedAt: string;
+  /** Ordre des signaux : arrivé puis « Pas venu », ou l’inverse. */
+  trigger: 'absent_after_arrival' | 'arrival_after_absent';
+  note: string;
+};
+
 /**
  * Outing lifecycle (listing-level — distinct from per-guest RequestStatus):
  * - open: accepts new join requests while spotsLeft > 0
@@ -112,6 +155,30 @@ export interface User {
    * Empty / other month → joker available again.
    */
   jokerUsedMonthKey?: string;
+  /**
+   * Compte lieu actif (partnerStatus === 'active'). Publier depuis ce compte
+   * applique les règles partenaire (resto/bar : geste/remise ; culture :
+   * jusqu’à 5 invitations le même soir, 2 places chacune).
+   */
+  isPartner?: boolean;
+  partnerKind?: PartnerKind;
+  /** Nom du lieu (carte « Le Frank · Partenaire »). */
+  partnerVenueName?: string;
+  /** Quartier du lieu (fiche lieu). */
+  partnerNeighborhood?: string;
+  /** Téléphone du lieu (fiche lieu). */
+  partnerPhone?: string;
+  /** Phrase de présentation du lieu. */
+  partnerPhrase?: string;
+  /** Statut de la demande / du compte lieu. Absent = 'none'. */
+  partnerStatus?: PartnerStatus;
+  /** Avertissements partenaire (annulation / ne honore pas). 2 → closed. */
+  partnerWarnings?: number;
+  /**
+   * Démo : remontée en tête du fil (futur forfait 29 €/mois = 2 remontées,
+   * aucun paiement codé). Compte parmi les 2 partenaires max en tête.
+   */
+  partnerPinned?: boolean;
 }
 
 export type VenueIssueStatus =
@@ -202,12 +269,33 @@ export interface Outing {
   inviteeUserId?: string;
   inviteeName?: string;
   /**
+   * Annonce publiée par un compte lieu (badge « Partenaire »).
+   * Zéro clic côté lieu : Rejoindre → confirmer (10 min + caution) → place
+   * prise automatiquement à la confirmation si spotsLeft > 0.
+   */
+  isPartnerListing?: boolean;
+  partnerKind?: PartnerKind;
+  /** Resto/bar partenaire : geste et/ou remise (au moins un). */
+  partnerOffer?: PartnerOffer;
+  /** Démo : remontée en tête (copie de User.partnerPinned à la publication). */
+  partnerPinned?: boolean;
+  /**
+   * Clôturée automatiquement car pleine (closed ≠ cancelled). Si un confirmé
+   * se désiste avant l’heure, l’annonce se rouvre.
+   */
+  partnerAutoClosedFull?: boolean;
+  /**
    * Lot 6: host no-show already counted on this outing (idempotent).
    * Same event must not increment strikes twice.
    */
   hostNoShowReported?: boolean;
   /** Lot 6: never-honor sanction already applied on this outing. */
   hostNeverHonorReported?: boolean;
+  /**
+   * Partenaire : avertissement déjà compté sur cette sortie
+   * (annulation spectacle / no-show hôte) — idempotent.
+   */
+  partnerWarningApplied?: boolean;
 }
 
 export interface Request {
@@ -251,6 +339,25 @@ export interface Request {
    * Reviews / sorties honorées use present, never confirmed alone.
    */
   attendance?: 'present' | 'absent';
+  /**
+   * Annonce partenaire : demande créée directement « à confirmer » (10 min)
+   * SANS réserver de chaise. La chaise est prise à la confirmation si
+   * spotsLeft > 0 (premier confirmé gagne), sinon « Plus de place ».
+   */
+  partnerAutoSeat?: boolean;
+  /** Confirmation refusée faute de place — caution jamais bloquée. */
+  partnerNoSpot?: boolean;
+  /**
+   * Partenaire : invité a tapé « Je suis arrivé » (dès H−15).
+   * ISO UTC. Photo façade optionnelle (stub — pas une preuve seule).
+   */
+  guestArrivedAt?: string;
+  /** Photo façade optionnelle (stub, non bloquante). */
+  arrivalPhotoUri?: string;
+  /** Partenaire a tapé « Pas venu » (ISO UTC). */
+  partnerMarkedAbsentAt?: string;
+  /** Arrivé + « Pas venu » = litige (photo demandée plus tard, pas de sanction auto). */
+  partnerDispute?: PartnerDispute;
 }
 
 
@@ -379,6 +486,8 @@ export interface AppState {
   blockedUserIds: string[];
   /** Private moderation reports (demo). One report = one record, no multi-sanctions. */
   userReports: UserModerationReport[];
+  /** Host id → avertissements partenaire (annulation / ne honore pas). */
+  partnerWarningsByHost: Record<string, number>;
 }
 
 export type DispoProfileUpdate = {
@@ -594,7 +703,56 @@ export type AppAction =
   /** Private moderation — ≠ public rating. One report = one record. */
   | { type: 'REPORT_USER'; payload: UserModerationReport }
   | { type: 'BLOCK_USER'; payload: { userId: string } }
-  | { type: 'UNBLOCK_USER'; payload: { userId: string } };
+  | { type: 'UNBLOCK_USER'; payload: { userId: string } }
+  /** Profil → « Je représente un lieu » → fiche envoyée (status pending). */
+  | {
+      type: 'SUBMIT_PARTNER_APPLICATION';
+      payload: {
+        venueName: string;
+        kind: PartnerKind;
+        neighborhood: string;
+        phone: string;
+        phrase: string;
+      };
+    }
+  /** Équipe Chance (démo : QA) valide ou refuse la demande lieu. */
+  | {
+      type: 'REVIEW_PARTNER_APPLICATION';
+      payload: { decision: 'active' | 'refused' };
+    }
+  /** QA : « Passer en partenaire » direct (user courant, sans fiche). */
+  | { type: 'DEMO_BECOME_PARTNER'; payload: { kind: PartnerKind } }
+  /** QA : repasser particulier (efface le statut lieu). */
+  | { type: 'DEMO_LEAVE_PARTNER' }
+  /** QA : remontée en tête (forfait futur, sans paiement). */
+  | { type: 'SET_PARTNER_PINNED'; payload: { pinned: boolean } }
+  /**
+   * Partenaire annule / ne honore pas : +1 avertissement (idempotent par
+   * sortie) ; 2e → compte partenaire fermé (publication bloquée).
+   * Les cautions sont rendues par CANCEL_OUTING / RETURN_DEPOSITS_FOR_OUTING.
+   */
+  | { type: 'APPLY_PARTNER_WARNING'; payload: { outingId: string; hostId: string } }
+  /**
+   * Invité partenaire « Je suis arrivé » (dès H−15) → présent + caution rendue.
+   * Si le lieu avait déjà tapé « Pas venu » → litige (pas de sanction auto).
+   */
+  | {
+      type: 'GUEST_ARRIVED_PARTNER';
+      payload: {
+        requestId: string;
+        arrivedAt: string;
+        arrivalPhotoUri?: string;
+      };
+    }
+  /** Lieu : « Pas venu » sur un invité qui a dit « Je suis arrivé » → litige. */
+  | {
+      type: 'OPEN_PARTNER_DISPUTE';
+      payload: { requestId: string; at: string };
+    }
+  /** Lieu : « Pas venu » sans arrivée → trace (le lapin passe par REPORT_GUEST_NO_SHOW). */
+  | { type: 'MARK_PARTNER_ABSENT_AT'; payload: { requestId: string; at: string } }
+  /** Silence des deux le lendemain → caution rendue (pas d’absence, pas de présence). */
+  | { type: 'RETURN_DEPOSIT_SILENCE'; payload: { requestId: string } };
 
 /** Motif obligatoire si note personne 1 ou 2 (respect / rencontre). */
 export type LowStarReasonKind =

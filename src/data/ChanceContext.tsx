@@ -27,6 +27,8 @@ import {
   VenueAlternate,
   Outing,
   OutingCategory,
+  PartnerKind,
+  PartnerOffer,
   PlanId,
   PlanInterval,
   Request,
@@ -47,7 +49,30 @@ import {
   describeDepositForfeitMoment,
   isCancelFreeWindow,
 } from './pricing';
-import { isStartsAtPast, parisMonthKey, parisYmd } from '../utils/parisTime';
+import {
+  isParisSameDay,
+  isStartsAtPast,
+  parisMonthKey,
+  parisYmd,
+} from '../utils/parisTime';
+import {
+  canGuestSelfArrivePartner,
+  canPartnerFlagDispute,
+  canPartnerMarkGuestAbsent,
+  canPartnerOrUserCreateOuting,
+  isPartnerClosed,
+  isPartnerCultureHost,
+  isPartnerCultureListing,
+  isPartnerListing,
+  isPartnerRestoBarHost,
+  isPartnerUser,
+  nextPartnerWarningState,
+  PARTNER_CULTURE_CAPACITY,
+  PARTNER_KIND_LABELS,
+  requestHoldsSeat,
+  shouldAutoRefundPartnerSilence,
+  validatePartnerOffer,
+} from '../utils/partners';
 import {
   isOutingAcceptingRequests,
   isUrgentOnSite,
@@ -142,6 +167,26 @@ const initialState: AppState = {
   toast: null,
   blockedUserIds: [],
   userReports: [],
+  partnerWarningsByHost: {},
+};
+
+/** Paris neighborhoods default for a demo venue. */
+const DEMO_PARTNER_DEFAULTS: Record<
+  PartnerKind,
+  { venueName: string; phrase: string }
+> = {
+  resto: {
+    venueName: 'Mon bistrot (démo)',
+    phrase: 'Bistrot de quartier — une table libre de temps en temps.',
+  },
+  bar: {
+    venueName: 'Mon bar (démo)',
+    phrase: 'Bar de quartier — un verre pour lancer la soirée.',
+  },
+  culture: {
+    venueName: 'Ma salle (démo)',
+    phrase: 'Salle de spectacle — places offertes les soirs de première.',
+  },
 };
 
 function reducer(state: AppState, action: AppAction): AppState {
@@ -163,14 +208,14 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'CREATE_OUTING': {
       const user = state.currentUser;
       if (!user) return state;
-      // Same 1-active rule as createOuting callback (not open|full only).
-      const now = Date.now();
-      const hasActive = state.outings.some(
-        (o) =>
-          o.hostId === user.id &&
-          outingOccupiesActiveSlot(o, state.requests, now),
+      // Partenaire culture : jusqu'à 5 le même soir ; sinon 1 active.
+      const gate = canPartnerOrUserCreateOuting(
+        user,
+        action.payload.startsAt,
+        state.outings,
+        state.requests,
       );
-      if (hasActive) return state;
+      if (!gate.ok) return state;
       const targeted = action.targetedRequest;
       // Keep destinataire id — never rewrite targetedRequest.userId to currentUser.
       if (
@@ -206,8 +251,12 @@ function reducer(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
+      // Partner auto-seat holds (accepted sans chaise) ne rendent rien.
       const acceptedCount = state.requests.filter(
-        (r) => r.outingId === outingId && r.status === 'accepted',
+        (r) =>
+          r.outingId === outingId &&
+          r.status === 'accepted' &&
+          requestHoldsSeat(r),
       ).length;
       return {
         ...state,
@@ -282,7 +331,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         return state;
       }
       const outing = state.outings.find((o) => o.id === req.outingId);
-      const heldSeat = req.status === 'accepted' || req.status === 'confirmed';
+      // Partner auto-seat: accepted ne tient pas de chaise (prise à la confirm).
+      const heldSeat = requestHoldsSeat(req);
       let depositStatus = req.depositStatus;
       if (req.status === 'confirmed') {
         const free = Boolean(
@@ -317,9 +367,24 @@ function reducer(state: AppState, action: AppAction): AppState {
             : r,
         ),
         outings: heldSeat
-          ? state.outings.map((o) =>
-              o.id === req.outingId ? withRestoredSeat(o) : o,
-            )
+          ? state.outings.map((o) => {
+              if (o.id !== req.outingId) return o;
+              const restored = withRestoredSeat(o);
+              // Partenaire clôturé « plein » : un désistement avant l’heure rouvre.
+              if (
+                o.partnerAutoClosedFull &&
+                o.status === 'closed' &&
+                restored.spotsLeft > 0 &&
+                !isStartsAtPast(o.startsAt, new Date(cancelledAt).getTime())
+              ) {
+                return {
+                  ...restored,
+                  status: 'open' as const,
+                  partnerAutoClosedFull: false,
+                };
+              }
+              return restored;
+            })
           : state.outings,
       };
     }
@@ -352,6 +417,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!req || req.status !== 'pending') return state;
       const outing = state.outings.find((o) => o.id === req.outingId);
       if (!outing || outing.spotsLeft < 1) return state;
+      // Annonce partenaire : zéro clic côté lieu (pas d’« Accepter »).
+      if (isPartnerListing(outing)) return state;
       if (outing.status === 'completed' || outing.status === 'cancelled') {
         return state;
       }
@@ -457,6 +524,86 @@ function reducer(state: AppState, action: AppAction): AppState {
           payload: { requestId: action.payload.requestId },
         });
       }
+      // --- Annonce partenaire : chaise prise à la confirmation (atomique). ---
+      const partnerOuting = state.outings.find((o) => o.id === req.outingId);
+      if (partnerOuting && req.partnerAutoSeat && isPartnerListing(partnerOuting)) {
+        const hasSeat =
+          partnerOuting.status === 'open' && partnerOuting.spotsLeft > 0;
+        if (!hasSeat) {
+          // Plus de place : refus, caution jamais bloquée (ou rendue aussitôt).
+          return {
+            ...state,
+            requests: state.requests.map((r) =>
+              r.id === req.id
+                ? {
+                    ...r,
+                    status: 'expired' as const,
+                    partnerNoSpot: true,
+                    depositStatus:
+                      r.depositStatus === 'held'
+                        ? ('returned' as const)
+                        : ('none' as const),
+                  }
+                : r,
+            ),
+          };
+        }
+        const newSpots = partnerOuting.spotsLeft - 1;
+        const nowFull = newSpots <= 0;
+        let partnerUser = state.currentUser;
+        if (partnerUser && partnerUser.id === req.userId) {
+          partnerUser = {
+            ...partnerUser,
+            dispoSoir: false,
+            dispoExpiresAt: undefined,
+            ...(action.payload.consumeCredit &&
+            (partnerUser.outingCredits ?? 0) > 0
+              ? { outingCredits: (partnerUser.outingCredits ?? 0) - 1 }
+              : {}),
+          };
+        }
+        return {
+          ...state,
+          currentUser: partnerUser,
+          requests: state.requests.map((r) => {
+            if (r.id === req.id) {
+              return {
+                ...r,
+                status: 'confirmed' as const,
+                confirmedAt: action.payload.confirmedAt,
+                depositStatus: 'held' as const,
+              };
+            }
+            // Plein : les autres « à confirmer » voient « Plus de place ».
+            if (
+              nowFull &&
+              r.outingId === req.outingId &&
+              r.status === 'accepted' &&
+              r.partnerAutoSeat
+            ) {
+              return {
+                ...r,
+                status: 'expired' as const,
+                partnerNoSpot: true,
+                depositStatus: 'none' as const,
+              };
+            }
+            return r;
+          }),
+          outings: state.outings.map((o) =>
+            o.id === req.outingId
+              ? {
+                  ...o,
+                  spotsLeft: Math.max(0, newSpots),
+                  // Plein → clôturée (closed, pas cancelled).
+                  ...(nowFull
+                    ? { status: 'closed' as const, partnerAutoClosedFull: true }
+                    : {}),
+                }
+              : o,
+          ),
+        };
+      }
       const outingForRace = state.outings.find((o) => o.id === req.outingId);
       if (outingForRace) {
         const alreadyConfirmed = state.requests.filter(
@@ -522,6 +669,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Confirm window missed or race_lost — free the reserved seat.
       const req = state.requests.find((r) => r.id === action.payload.requestId);
       if (!req || req.status !== 'accepted') return state;
+      const restore = requestHoldsSeat(req);
       return {
         ...state,
         requests: state.requests.map((r) =>
@@ -529,9 +677,11 @@ function reducer(state: AppState, action: AppAction): AppState {
             ? { ...r, status: 'expired' as const }
             : r,
         ),
-        outings: state.outings.map((o) =>
-          o.id === req.outingId ? withRestoredSeat(o) : o,
-        ),
+        outings: restore
+          ? state.outings.map((o) =>
+              o.id === req.outingId ? withRestoredSeat(o) : o,
+            )
+          : state.outings,
       };
     }
 
@@ -650,6 +800,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         toast: null,
         blockedUserIds: [],
         userReports: [],
+        partnerWarningsByHost: {},
       };
 
     case 'ADD_CHAT_MESSAGE':
@@ -918,7 +1069,10 @@ function reducer(state: AppState, action: AppAction): AppState {
         return state;
       }
       const acceptedCount = state.requests.filter(
-        (r) => r.outingId === outingId && r.status === 'accepted',
+        (r) =>
+          r.outingId === outingId &&
+          r.status === 'accepted' &&
+          requestHoldsSeat(r),
       ).length;
       return {
         ...state,
@@ -1350,6 +1504,214 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'SUBMIT_PARTNER_APPLICATION': {
+      const u = state.currentUser;
+      if (!u) return state;
+      const st = u.partnerStatus ?? 'none';
+      if (st === 'pending' || st === 'active' || st === 'closed') return state;
+      const p = action.payload;
+      return {
+        ...state,
+        currentUser: {
+          ...u,
+          isPartner: false,
+          partnerStatus: 'pending',
+          partnerKind: p.kind,
+          partnerVenueName: p.venueName.trim(),
+          partnerNeighborhood: p.neighborhood.trim(),
+          partnerPhone: p.phone.trim(),
+          partnerPhrase: p.phrase.trim(),
+        },
+      };
+    }
+
+    case 'REVIEW_PARTNER_APPLICATION': {
+      const u = state.currentUser;
+      if (!u || u.partnerStatus !== 'pending') return state;
+      if (action.payload.decision === 'active') {
+        return {
+          ...state,
+          currentUser: {
+            ...u,
+            isPartner: true,
+            partnerStatus: 'active',
+            partnerWarnings: u.partnerWarnings ?? 0,
+          },
+        };
+      }
+      // Refus = reste particulier.
+      return {
+        ...state,
+        currentUser: { ...u, isPartner: false, partnerStatus: 'refused' },
+      };
+    }
+
+    case 'DEMO_BECOME_PARTNER': {
+      const u = state.currentUser;
+      if (!u) return state;
+      const kind = action.payload.kind;
+      const d = DEMO_PARTNER_DEFAULTS[kind];
+      const sameKind = u.partnerKind === kind && !!u.partnerVenueName?.trim();
+      return {
+        ...state,
+        currentUser: {
+          ...u,
+          isPartner: true,
+          partnerStatus: 'active',
+          partnerKind: kind,
+          partnerVenueName: sameKind ? u.partnerVenueName : d.venueName,
+          partnerNeighborhood: u.partnerNeighborhood || u.neighborhood,
+          partnerPhone: u.partnerPhone || u.phone,
+          partnerPhrase: sameKind && u.partnerPhrase ? u.partnerPhrase : d.phrase,
+          partnerWarnings: 0,
+        },
+      };
+    }
+
+    case 'DEMO_LEAVE_PARTNER': {
+      const u = state.currentUser;
+      if (!u) return state;
+      return {
+        ...state,
+        currentUser: {
+          ...u,
+          isPartner: false,
+          partnerStatus: 'none',
+          partnerWarnings: 0,
+          partnerPinned: false,
+        },
+      };
+    }
+
+    case 'SET_PARTNER_PINNED': {
+      const u = state.currentUser;
+      if (!u) return state;
+      const pinned = action.payload.pinned;
+      return {
+        ...state,
+        currentUser: { ...u, partnerPinned: pinned },
+        // Annonces partenaires en cours suivent le flag (démo).
+        outings: state.outings.map((o) =>
+          o.hostId === u.id && o.isPartnerListing
+            ? { ...o, partnerPinned: pinned }
+            : o,
+        ),
+      };
+    }
+
+    case 'APPLY_PARTNER_WARNING': {
+      const { outingId, hostId } = action.payload;
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing || !isPartnerListing(outing)) return state;
+      if (outing.partnerWarningApplied) return state;
+      const prev =
+        state.currentUser?.id === hostId
+          ? (state.currentUser.partnerWarnings ?? 0)
+          : (state.partnerWarningsByHost[hostId] ?? 0);
+      const next = nextPartnerWarningState(prev);
+      let currentUser = state.currentUser;
+      if (currentUser && currentUser.id === hostId) {
+        currentUser = {
+          ...currentUser,
+          partnerWarnings: next.partnerWarnings,
+          ...(next.closed
+            ? { partnerStatus: 'closed' as const, isPartner: false }
+            : {}),
+        };
+      }
+      return {
+        ...state,
+        currentUser,
+        partnerWarningsByHost: {
+          ...state.partnerWarningsByHost,
+          [hostId]: next.partnerWarnings,
+        },
+        outings: state.outings.map((o) =>
+          o.id === outingId ? { ...o, partnerWarningApplied: true } : o,
+        ),
+      };
+    }
+
+    case 'GUEST_ARRIVED_PARTNER': {
+      const { requestId, arrivedAt, arrivalPhotoUri } = action.payload;
+      return {
+        ...state,
+        requests: state.requests.map((r) => {
+          if (r.id !== requestId || r.status !== 'confirmed') return r;
+          if (r.guestArrivedAt || r.attendance === 'present') return r;
+          const photo = arrivalPhotoUri ? { arrivalPhotoUri } : {};
+          if (r.attendance === 'absent') {
+            // « Pas venu » déjà tapé puis « Je suis arrivé » → litige, pas de sanction auto.
+            return {
+              ...r,
+              guestArrivedAt: arrivedAt,
+              ...photo,
+              partnerDispute: r.partnerDispute ?? {
+                openedAt: arrivedAt,
+                trigger: 'arrival_after_absent' as const,
+                note: 'Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard (stub).',
+              },
+            };
+          }
+          // Arrivé + pas de « Pas venu » → présent, caution rendue.
+          return {
+            ...r,
+            attendance: 'present' as const,
+            guestArrivedAt: arrivedAt,
+            ...photo,
+            depositStatus:
+              r.depositStatus === 'held' || !r.depositStatus
+                ? ('returned' as const)
+                : r.depositStatus,
+          };
+        }),
+      };
+    }
+
+    case 'OPEN_PARTNER_DISPUTE': {
+      const { requestId, at } = action.payload;
+      return {
+        ...state,
+        requests: state.requests.map((r) => {
+          if (r.id !== requestId || r.status !== 'confirmed') return r;
+          if (r.partnerDispute || !r.guestArrivedAt) return r;
+          return {
+            ...r,
+            partnerMarkedAbsentAt: at,
+            partnerDispute: {
+              openedAt: at,
+              trigger: 'absent_after_arrival' as const,
+              note: 'Litige : l’invité dit être arrivé, le lieu signale « Pas venu ». Photo demandée plus tard (stub).',
+            },
+          };
+        }),
+      };
+    }
+
+    case 'MARK_PARTNER_ABSENT_AT': {
+      const { requestId, at } = action.payload;
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          r.id === requestId ? { ...r, partnerMarkedAbsentAt: at } : r,
+        ),
+      };
+    }
+
+    case 'RETURN_DEPOSIT_SILENCE': {
+      const { requestId } = action.payload;
+      return {
+        ...state,
+        requests: state.requests.map((r) => {
+          if (r.id !== requestId || r.status !== 'confirmed') return r;
+          if (r.attendance || r.partnerDispute) return r;
+          if (r.depositStatus !== 'held') return r;
+          // Silence des deux : caution rendue, ni absence ni présence.
+          return { ...r, depositStatus: 'returned' as const };
+        }),
+      };
+    }
+
     default:
       return state;
   }
@@ -1361,7 +1723,9 @@ function uid(prefix: string): string {
 
 /** Same neighborhood + similar budget (±15 €), else closest budget in quartier. */
 function pickAlternateVenue(outing: Outing): VenueAlternate {
-  const candidates = mockOutings.filter(
+  // Lieux partenaires exclus : leur offre ne se transfère pas à une autre sortie.
+  const pool0 = mockOutings.filter((o) => !isPartnerListing(o));
+  const candidates = pool0.filter(
     (o) =>
       o.id !== outing.id &&
       o.neighborhood === outing.neighborhood &&
@@ -1370,12 +1734,12 @@ function pickAlternateVenue(outing: Outing): VenueAlternate {
   const pool =
     candidates.length > 0
       ? candidates
-      : mockOutings.filter(
+      : pool0.filter(
           (o) => o.id !== outing.id && o.neighborhood === outing.neighborhood,
         );
   const pick =
     pool[0] ??
-    mockOutings.find((o) => o.id !== outing.id) ??
+    pool0.find((o) => o.id !== outing.id) ??
     outing;
   return {
     venueName: pick.venueName + (pick === outing ? ' (bis)' : ''),
@@ -1385,6 +1749,16 @@ function pickAlternateVenue(outing: Outing): VenueAlternate {
     neighborhood: pick.neighborhood,
   };
 }
+
+type CreateOutingFailReason =
+  | 'no_user'
+  | 'already_active'
+  | 'banned'
+  | 'starts_in_past'
+  | 'partner_closed'
+  | 'culture_evening_full'
+  | 'partner_offer_required'
+  | 'partner_offer_invalid';
 
 interface ChanceContextValue {
   state: AppState;
@@ -1423,11 +1797,13 @@ interface ChanceContextValue {
      */
     inviteeUserId?: string;
     inviteeName?: string;
+    /** Compte lieu resto/bar : geste et/ou remise (au moins un). */
+    partnerOffer?: PartnerOffer;
   }) =>
     | { ok: true; outingId: string }
     | {
         ok: false;
-        reason: 'no_user' | 'already_active' | 'banned' | 'starts_in_past';
+        reason: CreateOutingFailReason;
       };
   /**
    * Host closes listing (no new requests). Confirmed guests stay.
@@ -1481,6 +1857,7 @@ interface ChanceContextValue {
           | 'invalid'
           | 'paywall'
           | 'race_lost'
+          | 'no_spot'
           | 'outing_started'
           | 'outing_finished';
       };
@@ -1695,6 +2072,54 @@ interface ChanceContextValue {
     body: string,
     meta?: { type?: string; outingId?: string; requestId?: string },
   ) => void;
+  /** Profil → « Je représente un lieu » : fiche → statut « Demande envoyée ». */
+  submitPartnerApplication: (input: {
+    venueName: string;
+    kind: PartnerKind;
+    neighborhood: string;
+    phone: string;
+    phrase: string;
+  }) => { ok: true } | { ok: false; reason: string };
+  /** Démo QA (équipe Chance) : valider / refuser la demande lieu. */
+  reviewPartnerApplication: (
+    decision: 'active' | 'refused',
+  ) => { ok: true } | { ok: false; reason: string };
+  /** Démo QA : « Passer en partenaire » (user courant, statut actif direct). */
+  demoBecomePartner: (kind: PartnerKind) => void;
+  /** Démo QA : repasser particulier. */
+  demoLeavePartner: () => void;
+  /** Démo QA : remontée en tête (futur forfait, sans paiement). */
+  setPartnerPinned: (pinned: boolean) => void;
+  /**
+   * Invité partenaire : « Je suis arrivé » dès H−15 (photo façade optionnelle,
+   * stub non bloquant). → présent + caution rendue (ou litige si « Pas venu »).
+   */
+  guestArrivedPartner: (
+    requestId: string,
+    opts?: { arrivalPhotoUri?: string },
+  ) =>
+    | { ok: true; dispute: boolean }
+    | { ok: false; reason: string };
+  /**
+   * Lieu : « Pas venu » (chaise vide, soir même). Sans « Je suis arrivé » →
+   * lapin (6,90 / 13,10). Après « Je suis arrivé » → litige, pas de sanction.
+   */
+  partnerMarkNoShow: (
+    requestId: string,
+  ) =>
+    | { ok: true; outcome: 'lapin' | 'dispute' }
+    | { ok: false; reason: string };
+  /** Démo QA : N invités confirment sur une annonce partenaire (1er confirmé gagne). */
+  simulatePartnerGuestConfirms: (
+    outingId: string,
+    count: number,
+  ) =>
+    | { ok: true; confirmed: number; noSpot: number }
+    | { ok: false; reason: string };
+  /** Démo QA : « lendemain » — silence des deux → cautions rendues. */
+  simulatePartnerNextDay: (
+    outingId: string,
+  ) => { ok: true; refunded: number } | { ok: false; reason: string };
   reportHostNoShow: (
     outingId: string,
   ) =>
@@ -1944,27 +2369,47 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       /** Destinataire réel — never swapped for currentUser. */
       inviteeUserId?: string;
       inviteeName?: string;
+      partnerOffer?: PartnerOffer;
     }):
       | { ok: true; outingId: string }
-      | {
-          ok: false;
-          reason: 'no_user' | 'already_active' | 'banned' | 'starts_in_past';
-        } => {
+      | { ok: false; reason: CreateOutingFailReason } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       if (user.banned) return { ok: false, reason: 'banned' };
-      const urgent = input.urgentOnSite === true;
+      if (isPartnerClosed(user)) return { ok: false, reason: 'partner_closed' };
+      const partnerListing = isPartnerUser(user);
+      // Compte lieu : pas d’urgent « déjà sur place », pas de proposition ciblée.
+      const urgent = !partnerListing && input.urgentOnSite === true;
+      let partnerOffer: PartnerOffer | undefined;
+      if (isPartnerRestoBarHost(user)) {
+        const v = validatePartnerOffer(input.partnerOffer ?? {});
+        if (!v.ok) {
+          return {
+            ok: false,
+            reason:
+              v.reason === 'offer_required'
+                ? 'partner_offer_required'
+                : 'partner_offer_invalid',
+          };
+        }
+        partnerOffer = v.offer;
+      }
       // Urgent is by definition now — skip past-date block. Normal creates still blocked.
       if (!urgent && isStartsAtPast(input.startsAt)) {
         return { ok: false, reason: 'starts_in_past' };
       }
       const now = Date.now();
-      const hasActive = state.outings.some(
-        (o) =>
-          o.hostId === user.id &&
-          outingOccupiesActiveSlot(o, state.requests, now),
+      const startsAtProbe = urgent ? new Date().toISOString() : input.startsAt;
+      const createGate = canPartnerOrUserCreateOuting(
+        user,
+        startsAtProbe,
+        state.outings,
+        state.requests,
+        now,
       );
-      if (hasActive) return { ok: false, reason: 'already_active' };
+      if (!createGate.ok) {
+        return { ok: false, reason: createGate.reason };
+      }
       if (input.womenOnly && user.gender !== 'femme') {
         // Silently force off — UI should prevent this
       }
@@ -1975,10 +2420,23 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const excluded = (input.excludedTopics ?? [])
         .map((t) => t.trim())
         .filter(Boolean);
-      const capacity: 1 | 2 | 3 = urgent ? 1 : input.capacity;
+      // Culture partenaire : capacité forcée à 2. Urgent reste 1.
+      let capacity: 1 | 2 | 3 = urgent ? 1 : input.capacity;
+      if (!urgent && isPartnerCultureHost(user)) {
+        capacity = PARTNER_CULTURE_CAPACITY;
+      }
+      // Partenaire : jamais de plafond « J’invite jusqu’à X € ».
+      const budgetMaxEuros = partnerListing ? 0 : input.budgetMaxEuros;
+      const category: OutingCategory = partnerListing
+        ? user.partnerKind === 'culture'
+          ? 'culture'
+          : user.partnerKind === 'bar'
+            ? 'bar'
+            : 'restaurant'
+        : input.category;
       const startsAt = urgent ? new Date().toISOString() : input.startsAt;
       // Targeted Dispo proposition: keep THAT recipient (never currentUser).
-      const rawInviteeId = input.inviteeUserId?.trim();
+      const rawInviteeId = partnerListing ? undefined : input.inviteeUserId?.trim();
       const inviteeUserId =
         rawInviteeId && rawInviteeId !== user.id ? rawInviteeId : undefined;
       const inviteeProfile = inviteeUserId
@@ -1991,28 +2449,33 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         : undefined;
       // Pre-reserve one seat for the destinataire (accepted → confirm in Demandes).
       const spotsLeft = inviteeUserId ? capacity - 1 : capacity;
+      const partnerKind = user.partnerKind;
+      const venueName =
+        (partnerListing && user.partnerVenueName?.trim()) ||
+        input.venueName.trim();
       const outing: Outing = {
         id: uid('outing'),
         hostId: user.id,
-        hostName: user.firstName,
+        // Carte partenaire : « Le Frank · Partenaire » (nom du lieu).
+        hostName: partnerListing ? venueName : user.firstName,
         hostAge: user.age,
         hostGender: user.gender,
         title: input.title.trim(),
         description: input.description.trim(),
-        category: input.category,
+        category,
         neighborhood: input.neighborhood.trim(),
-        venueName: input.venueName.trim(),
+        venueName,
         approxArea: input.approxArea.trim(),
         exactAddress: input.exactAddress.trim(),
         startsAt,
         capacity,
         spotsLeft,
         womenOnly: input.womenOnly && user.gender === 'femme',
-        budgetMaxEuros: input.budgetMaxEuros,
+        budgetMaxEuros,
         status: spotsLeft < 1 ? 'full' : 'open',
         createdAt: new Date().toISOString(),
         ...(urgent ? { urgentOnSite: true } : {}),
-        ...(input.category === 'autre' && categoryDetail
+        ...(category === 'autre' && categoryDetail
           ? { categoryDetail }
           : {}),
         ...(topic ? { topic } : {}),
@@ -2020,9 +2483,19 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         ...(!urgent && input.flexibleSlot ? { flexibleSlot: true } : {}),
         ...(inviteIncludes ? { inviteIncludes } : {}),
         ...(inviteExtras ? { inviteExtras } : {}),
-        ...(input.ticketsAlreadyBought ? { ticketsAlreadyBought: true } : {}),
+        ...(input.ticketsAlreadyBought || isPartnerCultureHost(user)
+          ? { ticketsAlreadyBought: true }
+          : {}),
         ...(inviteeUserId
           ? { inviteeUserId, inviteeName: inviteeName! }
+          : {}),
+        ...(partnerListing
+          ? {
+              isPartnerListing: true as const,
+              ...(partnerKind ? { partnerKind } : {}),
+              ...(partnerOffer ? { partnerOffer } : {}),
+              ...(user.partnerPinned ? { partnerPinned: true } : {}),
+            }
           : {}),
       };
       let targetedRequest: Request | undefined;
@@ -2072,14 +2545,28 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'already_cancelled' };
       }
       clearOutingSchedules(outingId);
+      // Partenaire annule avec des confirmés : cautions rendues + 1 avertissement.
+      const partnerHadConfirmed =
+        isPartnerListing(outing) &&
+        state.requests.some(
+          (r) => r.outingId === outingId && r.status === 'confirmed',
+        );
       dispatch({
         type: 'CANCEL_OUTING',
         payload: { outingId, cancelledAt: new Date().toISOString() },
       });
+      if (partnerHadConfirmed) {
+        dispatch({
+          type: 'APPLY_PARTNER_WARNING',
+          payload: { outingId, hostId: outing.hostId },
+        });
+      }
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Annulation',
-        body: `« ${outing.title} » a été annulée.`,
+        body: partnerHadConfirmed
+          ? `« ${outing.title} » a été annulée par le lieu. Cautions rendues.`
+          : `« ${outing.title} » a été annulée.`,
         createdAt: new Date().toISOString(),
         type: 'cancellation',
         outingId,
@@ -2097,7 +2584,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       })();
       return { ok: true };
     },
-    [state.outings, clearOutingSchedules],
+    [state.outings, state.requests, clearOutingSchedules],
   );
 
   const cancelRequest = useCallback(
@@ -2182,6 +2669,29 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (already) return { ok: false, reason: 'already_requested' };
 
       const requestId = uid('req');
+      if (isPartnerListing(outing)) {
+        // Zéro clic côté lieu : Rejoindre → « à confirmer » 10 min, SANS chaise.
+        // La chaise est prise à la confirmation si spotsLeft > 0.
+        const now = new Date();
+        const partnerRequest: Request = {
+          id: requestId,
+          outingId,
+          userId: user.id,
+          userName: user.firstName,
+          userAge: user.age,
+          userGender: user.gender,
+          message: message.trim(),
+          status: 'accepted',
+          createdAt: now.toISOString(),
+          acceptedAt: now.toISOString(),
+          confirmDeadlineAt: new Date(
+            now.getTime() + CONFIRM_WINDOW_MS,
+          ).toISOString(),
+          partnerAutoSeat: true,
+        };
+        dispatch({ type: 'JOIN_OUTING', payload: partnerRequest });
+        return { ok: true, requestId };
+      }
       const request: Request = {
         id: requestId,
         outingId,
@@ -2319,6 +2829,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             | 'invalid'
             | 'paywall'
             | 'race_lost'
+            | 'no_spot'
             | 'outing_started'
             | 'outing_finished';
         } => {
@@ -2366,7 +2877,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'expired' };
       }
       const outingRace = state.outings.find((o) => o.id === req.outingId);
-      if (outingRace) {
+      if (outingRace && req.partnerAutoSeat && isPartnerListing(outingRace)) {
+        // Partenaire : plus de chaise → refus, caution non bloquée (reducer atomique).
+        if (outingRace.status !== 'open' || outingRace.spotsLeft < 1) {
+          clearRequestSchedules(requestId);
+          dispatch({
+            type: 'CONFIRM_SLOT',
+            payload: { requestId, confirmedAt: new Date().toISOString() },
+          });
+          return { ok: false, reason: 'no_spot' };
+        }
+      } else if (outingRace) {
         const confirmedCount = state.requests.filter(
           (r) => r.outingId === req.outingId && r.status === 'confirmed',
         ).length;
@@ -2390,7 +2911,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outingForChat = state.outings.find((o) => o.id === req.outingId);
       if (outingForChat) {
         void ensureAndroidChannel();
-        const urgentChat = isUrgentOnSite(outingForChat);
+        // Urgent ET annonce partenaire : chat ouvert dès la confirmation.
+        const urgentChat =
+          isUrgentOnSite(outingForChat) || isPartnerListing(outingForChat);
         const toast: AppToast = {
           id: uid('toast'),
           title: 'Place confirmée',
@@ -3362,6 +3885,58 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   }, [state.outings]);
 
   /**
+   * Culture partenaire à l’heure : clôture (closed, jamais cancelled).
+   * 2 confirmés → déjà clôturée à la confirm ; 1 confirmé → il garde sa place ;
+   * 0 confirmé → l’invitation tombe (closed sans invité, plus dans le fil).
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const outing of state.outings) {
+        if (!isPartnerCultureListing(outing)) continue;
+        if (outing.status !== 'open' && outing.status !== 'full') continue;
+        const startMs = new Date(outing.startsAt).getTime();
+        if (!Number.isFinite(startMs) || now < startMs) continue;
+        dispatch({ type: 'CLOSE_OUTING', payload: { outingId: outing.id } });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.outings]);
+
+  /**
+   * Partenaire — lendemain (Paris) : silence des deux → caution rendue.
+   * On ne pénalise pas le silence du lieu ; pas de présence auto non plus.
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const req of state.requests) {
+        const outing = state.outings.find((o) => o.id === req.outingId);
+        if (!outing) continue;
+        if (!shouldAutoRefundPartnerSilence(outing, req, now)) continue;
+        dispatch({ type: 'RETURN_DEPOSIT_SILENCE', payload: { requestId: req.id } });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.outings, state.requests]);
+
+  /**
    * Auto plan « terminée » : H + OUTING_AUTO_COMPLETE_AFTER_MS (30 min démo).
    * Urgent join window ends at H+30 via CLOSE_OUTING above (clôture only).
    * terminée is distinct: status → completed, never marks attendance present.
@@ -4227,6 +4802,39 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!canActorReportHostNoShow(user.id, hostId, actorIsConfirmedGuest)) {
         return { ok: false, reason: 'not_participant' };
       }
+      if (isPartnerListing(outing)) {
+        // Lieu ne honore pas : cautions rendues + 1 avertissement partenaire
+        // (2e → compte partenaire fermé). Pas de strike « hôte particulier ».
+        const prevW = state.partnerWarningsByHost[hostId] ?? 0;
+        const nextW = nextPartnerWarningState(prevW);
+        dispatch({
+          type: 'APPLY_PARTNER_WARNING',
+          payload: { outingId, hostId },
+        });
+        dispatch({
+          type: 'RETURN_DEPOSITS_FOR_OUTING',
+          payload: { outingId, reason: 'partner_no_show' },
+        });
+        dispatch({
+          type: 'REPORT_HOST_NO_SHOW',
+          payload: {
+            outingId,
+            hostId,
+            strike: state.hostNoShowStrikes[hostId] ?? 0,
+            banned: false,
+          },
+        });
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: nextW.closed ? 'Compte partenaire fermé' : 'Avertissement lieu',
+          body: nextW.closed
+            ? '2e avertissement — le lieu ne peut plus publier. Cautions rendues.'
+            : 'Le lieu n’a pas honoré — 1 avertissement. Cautions rendues.',
+          createdAt: new Date().toISOString(),
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+        return { ok: true, strike: nextW.partnerWarnings, banned: nextW.closed };
+      }
       const prev = state.hostNoShowStrikes[hostId] ?? 0;
       const strike = prev + 1;
       const { banned } = hostSanctionFromStrike(strike);
@@ -4272,7 +4880,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_TOAST', payload: toast });
       return { ok: true, strike, banned };
     },
-    [state.currentUser, state.outings, state.hostNoShowStrikes, state.requests],
+    [
+      state.currentUser,
+      state.outings,
+      state.hostNoShowStrikes,
+      state.requests,
+      state.partnerWarningsByHost,
+    ],
   );
 
   const reportVenueClosed = useCallback(
@@ -4731,6 +5345,253 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.outings],
   );
 
+  const submitPartnerApplication = useCallback(
+    (input: {
+      venueName: string;
+      kind: PartnerKind;
+      neighborhood: string;
+      phone: string;
+      phrase: string;
+    }): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const st = user.partnerStatus ?? 'none';
+      if (st === 'pending') return { ok: false, reason: 'already_pending' };
+      if (st === 'active') return { ok: false, reason: 'already_partner' };
+      if (st === 'closed') return { ok: false, reason: 'partner_closed' };
+      if (
+        !input.venueName.trim() ||
+        !input.neighborhood.trim() ||
+        !input.phone.trim()
+      ) {
+        return { ok: false, reason: 'missing_fields' };
+      }
+      dispatch({ type: 'SUBMIT_PARTNER_APPLICATION', payload: input });
+      return { ok: true };
+    },
+    [state.currentUser],
+  );
+
+  const reviewPartnerApplication = useCallback(
+    (
+      decision: 'active' | 'refused',
+    ): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      if (user.partnerStatus !== 'pending') {
+        return { ok: false, reason: 'no_pending_application' };
+      }
+      dispatch({ type: 'REVIEW_PARTNER_APPLICATION', payload: { decision } });
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: decision === 'active' ? 'Lieu validé' : 'Demande lieu refusée',
+        body:
+          decision === 'active'
+            ? `${user.partnerVenueName ?? 'Ton lieu'} est partenaire Chance. Tu peux publier depuis Créer.`
+            : 'L’équipe Chance n’a pas validé la demande — tu restes particulier.',
+        createdAt: new Date().toISOString(),
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true };
+    },
+    [state.currentUser],
+  );
+
+  const demoBecomePartner = useCallback((kind: PartnerKind) => {
+    dispatch({ type: 'DEMO_BECOME_PARTNER', payload: { kind } });
+  }, []);
+
+  const demoLeavePartner = useCallback(() => {
+    dispatch({ type: 'DEMO_LEAVE_PARTNER' });
+  }, []);
+
+  const setPartnerPinned = useCallback((pinned: boolean) => {
+    dispatch({ type: 'SET_PARTNER_PINNED', payload: { pinned } });
+  }, []);
+
+  const guestArrivedPartner = useCallback(
+    (
+      requestId: string,
+      opts?: { arrivalPhotoUri?: string },
+    ): { ok: true; dispute: boolean } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req) return { ok: false, reason: 'not_found' };
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      if (!canGuestSelfArrivePartner(outing, req, user.id)) {
+        return { ok: false, reason: 'not_yet' };
+      }
+      const dispute = req.attendance === 'absent';
+      dispatch({
+        type: 'GUEST_ARRIVED_PARTNER',
+        payload: {
+          requestId,
+          arrivedAt: new Date().toISOString(),
+          ...(opts?.arrivalPhotoUri
+            ? { arrivalPhotoUri: opts.arrivalPhotoUri }
+            : {}),
+        },
+      });
+      dispatch({
+        type: 'ADD_CHAT_MESSAGE',
+        payload: {
+          id: uid('msg'),
+          threadKey: chatThreadKey(outing.id, requestId),
+          outingId: outing.id,
+          requestId,
+          kind: 'system',
+          text: dispute
+            ? `${req.userName} dit être arrivé après un « Pas venu » du lieu — litige ouvert, pas de sanction automatique.`
+            : `${req.userName} est arrivé. Caution rendue.`,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      return { ok: true, dispute };
+    },
+    [state.currentUser, state.requests, state.outings],
+  );
+
+  const partnerMarkNoShow = useCallback(
+    (
+      requestId: string,
+    ):
+      | { ok: true; outcome: 'lapin' | 'dispute' }
+      | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req) return { ok: false, reason: 'not_found' };
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      const at = new Date().toISOString();
+      if (canPartnerFlagDispute(outing, req, user.id)) {
+        dispatch({ type: 'OPEN_PARTNER_DISPUTE', payload: { requestId, at } });
+        dispatch({
+          type: 'ADD_CHAT_MESSAGE',
+          payload: {
+            id: uid('msg'),
+            threadKey: chatThreadKey(outing.id, requestId),
+            outingId: outing.id,
+            requestId,
+            kind: 'system',
+            text: 'Litige : arrivé selon l’invité, « Pas venu » selon le lieu. Photo demandée plus tard (démo) — aucune sanction automatique.',
+            createdAt: at,
+          },
+        });
+        return { ok: true, outcome: 'dispute' };
+      }
+      if (!canPartnerMarkGuestAbsent(outing, req, user.id)) {
+        return { ok: false, reason: 'not_allowed_now' };
+      }
+      dispatch({ type: 'MARK_PARTNER_ABSENT_AT', payload: { requestId, at } });
+      // « Pas venu » sans « Je suis arrivé » → lapin (6,90 Chance / 13,10 lieu).
+      const res = reportGuestNoShow(requestId);
+      if (!res.ok) return { ok: false, reason: res.reason };
+      return { ok: true, outcome: 'lapin' };
+    },
+    [state.currentUser, state.requests, state.outings, reportGuestNoShow],
+  );
+
+  const simulatePartnerGuestConfirms = useCallback(
+    (
+      outingId: string,
+      count: number,
+    ):
+      | { ok: true; confirmed: number; noSpot: number }
+      | { ok: false; reason: string } => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing || !isPartnerListing(outing)) {
+        return { ok: false, reason: 'not_partner_listing' };
+      }
+      if (outing.status !== 'open') return { ok: false, reason: 'not_open' };
+      const names: [string, number, 'femme' | 'homme'][] = [
+        ['Camille', 29, 'femme'],
+        ['Hugo', 33, 'homme'],
+        ['Inès', 26, 'femme'],
+        ['Malik', 31, 'homme'],
+      ];
+      const now = Date.now();
+      let seats = outing.spotsLeft;
+      let confirmed = 0;
+      let noSpot = 0;
+      for (let i = 0; i < Math.max(1, Math.min(4, count)); i++) {
+        const [n, age, g] = names[i];
+        const id = uid('req');
+        dispatch({
+          type: 'JOIN_OUTING',
+          payload: {
+            id,
+            outingId,
+            userId: `demo-partner-guest-${i + 1}-${now}`,
+            userName: `${n} (démo)`,
+            userAge: age,
+            userGender: g,
+            message: '',
+            status: 'accepted',
+            createdAt: new Date(now - 60_000).toISOString(),
+            acceptedAt: new Date(now - 60_000).toISOString(),
+            confirmDeadlineAt: new Date(now + CONFIRM_WINDOW_MS).toISOString(),
+            partnerAutoSeat: true,
+          },
+        });
+        // Confirm dans l’ordre (timestamps croissants) : le reducer attribue
+        // les chaises atomiquement — les suivants reçoivent « Plus de place ».
+        dispatch({
+          type: 'CONFIRM_SLOT',
+          payload: {
+            requestId: id,
+            confirmedAt: new Date(now + i).toISOString(),
+          },
+        });
+        if (seats > 0) {
+          seats -= 1;
+          confirmed += 1;
+        } else {
+          noSpot += 1;
+        }
+      }
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: 'Confirmations partenaire',
+        body:
+          noSpot > 0
+            ? `${confirmed} chaise(s) prise(s) — ${noSpot} « Plus de place » (caution non bloquée).`
+            : `${confirmed} invité(s) confirmé(s) — place prise automatiquement.`,
+        createdAt: new Date().toISOString(),
+        outingId,
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true, confirmed, noSpot };
+    },
+    [state.outings],
+  );
+
+  const simulatePartnerNextDay = useCallback(
+    (
+      outingId: string,
+    ): { ok: true; refunded: number } | { ok: false; reason: string } => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing || !isPartnerListing(outing)) {
+        return { ok: false, reason: 'not_partner_listing' };
+      }
+      const targets = state.requests.filter(
+        (r) =>
+          r.outingId === outingId &&
+          r.status === 'confirmed' &&
+          !r.attendance &&
+          !r.partnerDispute &&
+          r.depositStatus === 'held',
+      );
+      for (const r of targets) {
+        dispatch({ type: 'RETURN_DEPOSIT_SILENCE', payload: { requestId: r.id } });
+      }
+      return { ok: true, refunded: targets.length };
+    },
+    [state.outings, state.requests],
+  );
+
   const simulateLocalNotifications = useCallback(
     async (outingTitle?: string) => {
       void ensureAndroidChannel();
@@ -4821,6 +5682,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNeverHonor,
       simulateConfirmRace,
       simulateLocalNotifications,
+      submitPartnerApplication,
+      reviewPartnerApplication,
+      demoBecomePartner,
+      demoLeavePartner,
+      setPartnerPinned,
+      guestArrivedPartner,
+      partnerMarkNoShow,
+      simulatePartnerGuestConfirms,
+      simulatePartnerNextDay,
     }),
     [
       state,
@@ -4901,6 +5771,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reportHostNeverHonor,
       simulateConfirmRace,
       simulateLocalNotifications,
+      submitPartnerApplication,
+      reviewPartnerApplication,
+      demoBecomePartner,
+      demoLeavePartner,
+      setPartnerPinned,
+      guestArrivedPartner,
+      partnerMarkNoShow,
+      simulatePartnerGuestConfirms,
+      simulatePartnerNextDay,
     ],
   );
 

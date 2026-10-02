@@ -211,6 +211,72 @@ export const mockHosts: User[] = [
     createdAt: '2026-07-01T10:00:00.000Z',
   },
 
+
+  {
+    id: 'partner-resto-1',
+    firstName: 'Le Frank',
+    age: 40,
+    gender: 'autre',
+    bio: 'Bistrot de quartier au Marais. Quand une table se libère, on la propose sur Chance.',
+    neighborhood: 'Le Marais',
+    plan: 'illimite',
+    trialEndsAt: '2026-12-01T00:00:00.000Z',
+    planInterval: 'month' as const,
+    outingCredits: 0,
+    dispoSoir: false,
+    interests: ['cuisine', 'vin'],
+    customFilters: [],
+    dispoCategories: [],
+    phone: '+33600000000',
+    authProvider: 'email' as const,
+    womenOnlyPreference: false,
+    registered: true,
+    notificationsGranted: false,
+    locationGranted: false,
+    createdAt: '2026-08-01T10:00:00.000Z',
+    isPartner: true,
+    partnerKind: 'resto' as const,
+    partnerVenueName: 'Le Frank',
+    partnerNeighborhood: 'Le Marais',
+    partnerPhone: '+33140000000',
+    partnerPhrase: 'Bistrot de quartier, cuisine du marché.',
+    partnerStatus: 'active' as const,
+    partnerWarnings: 0,
+  },
+
+  {
+    id: 'partner-culture-1',
+    firstName: 'Théâtre du Passage',
+    age: 45,
+    gender: 'autre',
+    bio: 'Premières et places offertes — chaque invitation = 2 places et son propre chat.',
+    neighborhood: 'Opéra',
+    plan: 'illimite',
+    trialEndsAt: '2026-12-01T00:00:00.000Z',
+    planInterval: 'month' as const,
+    outingCredits: 0,
+    dispoSoir: false,
+    interests: ['théâtre', 'culture'],
+    customFilters: [],
+    dispoCategories: [],
+    phone: '+33600000000',
+    authProvider: 'email' as const,
+    womenOnlyPreference: false,
+    registered: true,
+    notificationsGranted: false,
+    locationGranted: false,
+    createdAt: '2026-08-01T10:00:00.000Z',
+    isPartner: true,
+    partnerKind: 'culture' as const,
+    partnerVenueName: 'Théâtre du Passage',
+    partnerNeighborhood: 'Opéra',
+    partnerPhone: '+33140000001',
+    partnerPhrase: 'Salle de 200 places, créations et premières.',
+    partnerStatus: 'active' as const,
+    partnerWarnings: 0,
+    partnerPinned: true,
+  },
+
   {
     id: 'person-9',
     firstName: 'Margot',
@@ -307,6 +373,20 @@ function daysFromNow(days: number, hour = 19, minute = 30): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
   d.setHours(hour, minute, 0, 0);
+  return d.toISOString();
+}
+
+/**
+ * Mocks partenaires : ce soir à HH:MM, ou (si c’est déjà passé / trop proche)
+ * dans ~3 h arrondi au quart d’heure — toujours visibles + « bientôt » en démo.
+ */
+function partnerSoon(hour: number, minute: number): string {
+  const tonight = new Date();
+  tonight.setHours(hour, minute, 0, 0);
+  const minMs = Date.now() + 2 * 60 * 60 * 1000;
+  if (tonight.getTime() >= minMs) return tonight.toISOString();
+  const d = new Date(Date.now() + 3 * 60 * 60 * 1000);
+  d.setMinutes(Math.ceil(d.getMinutes() / 15) * 15, 0, 0);
   return d.toISOString();
 }
 
@@ -495,6 +575,58 @@ export const mockOutings: Outing[] = [
     status: 'open',
     createdAt: daysFromNow(0, 8, 0),
   },
+
+  {
+    id: 'outing-partner-resto-1',
+    hostId: 'partner-resto-1',
+    hostName: 'Le Frank',
+    hostAge: 40,
+    hostGender: 'autre',
+    title: 'Le Frank · table pour 2 ce soir',
+    description:
+      'Une table s’est libérée ce soir. Dessert offert et −10 % sur l’addition — tu règles ta part sur place.',
+    category: 'restaurant',
+    neighborhood: 'Le Marais',
+    venueName: 'Le Frank',
+    approxArea: 'près de Saint-Paul',
+    exactAddress: '18 rue des Francs-Bourgeois, 75004 Paris',
+    startsAt: partnerSoon(20, 30),
+    capacity: 2,
+    spotsLeft: 2,
+    womenOnly: false,
+    budgetMaxEuros: 0,
+    status: 'open',
+    createdAt: daysFromNow(0, 8, 0),
+    isPartnerListing: true,
+    partnerKind: 'resto',
+    partnerOffer: { gesture: 'dessert', discountPct: 10 },
+  },
+  {
+    id: 'outing-partner-culture-1',
+    hostId: 'partner-culture-1',
+    hostName: 'Théâtre du Passage',
+    hostAge: 45,
+    hostGender: 'autre',
+    title: 'Première — 2 places offertes',
+    description:
+      'Deux places offertes pour la première de ce soir. Billets au guichet à ton nom — cette invitation a son propre chat.',
+    category: 'culture',
+    neighborhood: 'Opéra',
+    venueName: 'Théâtre du Passage',
+    approxArea: 'près de l’Opéra',
+    exactAddress: '3 rue de la Michodière, 75002 Paris',
+    startsAt: partnerSoon(20, 0),
+    capacity: 2,
+    spotsLeft: 2,
+    womenOnly: false,
+    budgetMaxEuros: 0,
+    ticketsAlreadyBought: true,
+    status: 'open',
+    createdAt: daysFromNow(0, 8, 0),
+    isPartnerListing: true,
+    partnerKind: 'culture',
+    partnerPinned: true,
+  },
 ];
 
 export const categoryLabels: Record<OutingCategory | string, string> = {
@@ -529,3 +661,4 @@ export const inviteOfferLine = (
 
 /** @deprecated Import from `./pricing` — re-exported for compatibility. */
 export { pricing, DEPOSIT_EUROS, PRICING } from './pricing';
+

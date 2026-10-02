@@ -38,6 +38,8 @@ export function shouldAutoPromoteUrgent(
   nowMs = Date.now(),
 ): boolean {
   if (outing.urgentOnSite) return false;
+  // Annonce partenaire : pas de bascule « urgent » (concept particulier).
+  if (outing.isPartnerListing) return false;
   if (outing.status !== 'open' && outing.status !== 'full') return false;
   const hasConfirmed = requests.some(
     (r) => r.outingId === outing.id && r.status === 'confirmed',

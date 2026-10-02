@@ -32,6 +32,19 @@ export type ChatUnlockOpts = {
   urgentOnSite?: boolean;
 };
 
+/**
+ * Options d’ouverture du chat pour une sortie : urgent « déjà sur place » ET
+ * annonces partenaires (lieu) → chat ouvert dès la confirmation (pas H−1).
+ */
+export function chatUnlockOptsFor(outing: {
+  urgentOnSite?: boolean;
+  isPartnerListing?: boolean;
+}): ChatUnlockOpts {
+  return {
+    urgentOnSite: outing.urgentOnSite === true || outing.isPartnerListing === true,
+  };
+}
+
 export function isChatUnlocked(
   startsAt: string,
   nowMs = Date.now(),
