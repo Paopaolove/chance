@@ -47,6 +47,8 @@ export type RootStackParamList = {
   Reviews: { userId: string; userName: string };
   HostProfile: { userId: string };
   LeaveReview: { outingId: string; toUserId: string; toUserName: string };
+  /** Profil → « Je représente un lieu » (fiche demande partenaire). */
+  PartnerApply: undefined;
   VenueDetail: {
     venueKey: string;
     venueName: string;

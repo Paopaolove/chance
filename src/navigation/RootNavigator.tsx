@@ -14,6 +14,7 @@ import { EditProfileScreen } from '../screens/EditProfileScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { OutingDetailScreen } from '../screens/OutingDetailScreen';
 import { PaywallScreen } from '../screens/PaywallScreen';
+import { PartnerApplyScreen } from '../screens/PartnerApplyScreen';
 import { LeaveReviewScreen } from '../screens/LeaveReviewScreen';
 import { RegisterScreen } from '../screens/RegisterScreen';
 import { HostProfileScreen } from '../screens/HostProfileScreen';
@@ -128,6 +129,11 @@ export function RootNavigator() {
               name="LeaveReview"
               component={LeaveReviewScreen}
               options={{ title: 'Comment c’était ?' }}
+            />
+            <Stack.Screen
+              name="PartnerApply"
+              component={PartnerApplyScreen}
+              options={{ title: 'Je représente un lieu' }}
             />
             <Stack.Screen
               name="VenueDetail"

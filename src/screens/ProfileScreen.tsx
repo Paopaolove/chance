@@ -29,6 +29,11 @@ import {
   trialDaysRemaining,
 } from '../utils/subscription';
 import { pickProfilePhoto } from '../utils/pickProfilePhoto';
+import {
+  PARTNER_CULTURE_MAX_SAME_EVENING,
+  PARTNER_KIND_LABELS,
+  PARTNER_WARNINGS_BEFORE_CLOSE,
+} from '../utils/partners';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Profile'>,
@@ -328,6 +333,111 @@ export function ProfileScreen() {
               style={{ marginTop: spacing.sm }}
             />
           ) : null}
+        </View>
+
+        <View style={[styles.card, styles.partnerCard]}>
+          <Text style={styles.cardLabel}>Espace lieu</Text>
+          {(() => {
+            const st = user.partnerStatus ?? 'none';
+            if (st === 'pending') {
+              return (
+                <>
+                  <Text style={styles.cardValue}>Demande envoyée</Text>
+                  <Text style={styles.cardHint}>
+                    {user.partnerVenueName ?? 'Ton lieu'}
+                    {user.partnerKind
+                      ? ` · ${PARTNER_KIND_LABELS[user.partnerKind]}`
+                      : ''}
+                    {user.partnerNeighborhood
+                      ? ` · ${user.partnerNeighborhood}`
+                      : ''}
+                  </Text>
+                  <Text style={styles.cardHint}>
+                    L’équipe Chance vérifie ton lieu. Tu restes particulier en
+                    attendant.
+                  </Text>
+                </>
+              );
+            }
+            if (st === 'active') {
+              const warnings = user.partnerWarnings ?? 0;
+              return (
+                <>
+                  <Text style={styles.cardValue}>
+                    {user.partnerVenueName ?? 'Ton lieu'} · Partenaire
+                  </Text>
+                  <Text style={styles.cardHint}>
+                    {[
+                      user.partnerKind
+                        ? PARTNER_KIND_LABELS[user.partnerKind]
+                        : null,
+                      user.partnerNeighborhood,
+                      user.partnerPhone,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                  {user.partnerPhrase ? (
+                    <Text style={styles.cardHint}>« {user.partnerPhrase} »</Text>
+                  ) : null}
+                  <Text style={styles.cardHint}>
+                    {user.partnerKind === 'culture'
+                      ? `Places offertes : 2 par invitation, max ${PARTNER_CULTURE_MAX_SAME_EVENING} invitations le même soir.`
+                      : 'Offre : un geste et/ou une remise, 1 annonce active, 1–3 places.'}
+                  </Text>
+                  <Text style={styles.cardHint}>
+                    Avertissements : {warnings}/{PARTNER_WARNINGS_BEFORE_CLOSE}
+                    {warnings > 0
+                      ? ' — au prochain désistement du lieu, le compte partenaire est fermé.'
+                      : ''}
+                  </Text>
+                  {user.partnerPinned ? (
+                    <Text style={styles.cardHint}>
+                      Remontée en tête active (démo).
+                    </Text>
+                  ) : null}
+                </>
+              );
+            }
+            if (st === 'closed') {
+              return (
+                <>
+                  <Text style={[styles.cardValue, { color: colors.danger }]}>
+                    Compte partenaire fermé
+                  </Text>
+                  <Text style={styles.cardHint}>
+                    {user.partnerVenueName ?? 'Le lieu'} a eu 2 avertissements
+                    (sorties annulées ou non honorées). Publication en tant que
+                    lieu bloquée.
+                  </Text>
+                </>
+              );
+            }
+            return (
+              <>
+                <Text style={styles.cardValue}>
+                  {st === 'refused'
+                    ? 'Demande non validée'
+                    : 'Tu as un resto, un bar ou un lieu culturel ?'}
+                </Text>
+                <Text style={styles.cardHint}>
+                  {st === 'refused'
+                    ? 'L’équipe Chance n’a pas validé la demande — tu restes particulier. Tu peux renvoyer une fiche.'
+                    : 'Invite des gens chez toi : un geste, une remise ou des places offertes. 0 % de commission.'}
+                </Text>
+                <Button
+                  title="Je représente un lieu"
+                  variant="secondary"
+                  onPress={() => navigation.navigate('PartnerApply')}
+                  style={{ marginTop: spacing.md }}
+                />
+              </>
+            );
+          })()}
+          <Text style={[styles.cardHint, { marginTop: spacing.md }]}>
+            Bientôt : forfait lieu 29 €/mois = 2 remontées en tête du fil. Rien
+            à payer pour l’instant.
+          </Text>
         </View>
 
         <View style={styles.card}>
@@ -715,6 +825,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardLabel: { ...typography.caption, color: colors.textMuted },
+  partnerCard: { borderLeftWidth: 4, borderLeftColor: colors.primary },
   editLink: {
     ...typography.caption,
     color: colors.primary,

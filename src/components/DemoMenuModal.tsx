@@ -14,6 +14,7 @@ import { describeDepositForfeitMoment } from '../data/pricing';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { Button } from './Button';
+import { isPartnerListing } from '../utils/partners';
 
 type Props = {
   visible: boolean;
@@ -50,7 +51,47 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     reportHostNoShow,
     simulateConfirmRace,
     resetDemo,
+    demoBecomePartner,
+    demoLeavePartner,
+    reviewPartnerApplication,
+    setPartnerPinned,
+    simulatePartnerGuestConfirms,
+    simulatePartnerNextDay,
   } = useChance();
+
+  const me = state.currentUser;
+  const partnerStatus = me?.partnerStatus ?? 'none';
+  /** Ma dernière annonce lieu (open ou closed pleine), sinon null. */
+  const myPartnerOuting = me
+    ? [...state.outings]
+        .filter(
+          (o) =>
+            o.hostId === me.id &&
+            isPartnerListing(o) &&
+            o.status !== 'cancelled' &&
+            o.status !== 'completed',
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+    : null;
+  const mockPartnerOuting =
+    state.outings.find(
+      (o) => o.id === 'outing-partner-resto-1' && o.status === 'open',
+    ) ?? null;
+  /** Cible des confirmations simulées : mon annonce lieu, sinon Le Frank (mock). */
+  const partnerConfirmTarget =
+    myPartnerOuting && myPartnerOuting.status === 'open'
+      ? myPartnerOuting
+      : mockPartnerOuting;
+  /** Ma venue confirmée sur une annonce lieu (côté invité). */
+  const myPartnerGuestReq = outgoingRequests.find((r) => {
+    if (r.status !== 'confirmed') return false;
+    const o = getOutingById(r.outingId);
+    return !!o && isPartnerListing(o) && o.status !== 'cancelled';
+  });
+  const myPartnerGuestOuting = myPartnerGuestReq
+    ? getOutingById(myPartnerGuestReq.outingId) ?? null
+    : null;
+  const nextDayTarget = myPartnerOuting ?? myPartnerGuestOuting;
 
   const active = getActiveOutingForUser();
   const confirmed = [
@@ -485,6 +526,171 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             style={styles.btn}
           />
 
+          <Text style={styles.section}>Partenaires (lieux)</Text>
+          <Text style={styles.sectionHint}>
+            Statut lieu : {partnerStatus}
+            {me?.partnerVenueName ? ` · ${me.partnerVenueName}` : ''}
+            {me?.partnerWarnings ? ` · ${me.partnerWarnings} avert.` : ''}
+            {me?.partnerPinned ? ' · remontée en tête' : ''}
+          </Text>
+          {(['resto', 'bar', 'culture'] as const).map((k) => (
+            <Button
+              key={k}
+              title={`Passer en partenaire (${k === 'resto' ? 'resto' : k === 'bar' ? 'bar' : 'culture'})`}
+              variant="secondary"
+              disabled={busy || !me}
+              onPress={() =>
+                run('Partenaire', () => {
+                  demoBecomePartner(k);
+                  Alert.alert(
+                    'Compte partenaire actif (démo)',
+                    k === 'culture'
+                      ? 'Créer → places offertes (2 par invitation, max 5 le même soir).'
+                      : 'Créer → geste et/ou remise, 1 annonce active, 1–3 places.',
+                  );
+                })
+              }
+              style={styles.btn}
+            />
+          ))}
+          <Button
+            title="Confirmer la demande lieu (équipe Chance)"
+            variant="secondary"
+            disabled={busy || partnerStatus !== 'pending'}
+            onPress={() =>
+              run('Validation lieu', () => {
+                reviewPartnerApplication('active');
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Refuser la demande lieu"
+            variant="ghost"
+            disabled={busy || partnerStatus !== 'pending'}
+            onPress={() =>
+              run('Refus lieu', () => {
+                reviewPartnerApplication('refused');
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title={
+              me?.partnerPinned
+                ? 'Remontée en tête : désactiver'
+                : 'Remontée en tête : activer (forfait futur)'
+            }
+            variant="ghost"
+            disabled={busy || partnerStatus !== 'active'}
+            onPress={() =>
+              run('Remontée', () => {
+                setPartnerPinned(!me?.partnerPinned);
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Repasser particulier"
+            variant="ghost"
+            disabled={busy || partnerStatus === 'none'}
+            onPress={() =>
+              run('Particulier', () => {
+                demoLeavePartner();
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Lieu : 1 invité confirme sa venue"
+            variant="secondary"
+            disabled={busy || !partnerConfirmTarget}
+            onPress={() =>
+              run('Confirmation partenaire', () => {
+                if (!partnerConfirmTarget) return;
+                const res = simulatePartnerGuestConfirms(
+                  partnerConfirmTarget.id,
+                  1,
+                );
+                if (!res.ok) Alert.alert('Démo', res.reason);
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Lieu : 2 confirmations simultanées (1 chaise)"
+            variant="secondary"
+            disabled={busy || !partnerConfirmTarget}
+            onPress={() =>
+              run('Course partenaire', () => {
+                if (!partnerConfirmTarget) return;
+                // Remplit toutes les chaises restantes + 1 de trop :
+                // le premier confirmé a la chaise, le dernier « Plus de place ».
+                const res = simulatePartnerGuestConfirms(
+                  partnerConfirmTarget.id,
+                  Math.max(2, partnerConfirmTarget.spotsLeft + 1),
+                );
+                if (!res.ok) Alert.alert('Démo', res.reason);
+              })
+            }
+            style={styles.btn}
+          />
+          <Text style={styles.sectionHint}>
+            Cible : {partnerConfirmTarget
+              ? `« ${partnerConfirmTarget.title} » (${partnerConfirmTarget.spotsLeft} place(s))`
+              : 'aucune annonce lieu ouverte'}
+          </Text>
+          <Button
+            title="Invité : sortie lieu dans ~10 min (« Je suis arrivé »)"
+            variant="secondary"
+            disabled={busy || !myPartnerGuestOuting}
+            onPress={() =>
+              run('H−10', () => {
+                if (!myPartnerGuestOuting) return;
+                simulateOutingInMinutes(myPartnerGuestOuting.id, 10);
+                Alert.alert(
+                  'Démo',
+                  'Ouvre la sortie : « Je suis arrivé » est disponible (dès H−15).',
+                );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Lieu : mon annonce a commencé il y a 5 min (« Pas venu »)"
+            variant="secondary"
+            disabled={busy || !myPartnerOuting}
+            onPress={() =>
+              run('H+5', () => {
+                if (!myPartnerOuting) return;
+                simulateOutingInMinutes(myPartnerOuting.id, -5);
+                Alert.alert(
+                  'Démo',
+                  'Ouvre ton annonce : « Pas venu » apparaît pour chaque chaise vide (soir même).',
+                );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Simuler lendemain (silence → caution rendue)"
+            variant="ghost"
+            disabled={busy || !nextDayTarget}
+            onPress={() =>
+              run('Lendemain', () => {
+                if (!nextDayTarget) return;
+                const res = simulatePartnerNextDay(nextDayTarget.id);
+                Alert.alert(
+                  'Lendemain (démo)',
+                  res.ok
+                    ? `${res.refunded} caution(s) rendue(s) — silence des deux, aucune pénalité.`
+                    : res.reason,
+                );
+              })
+            }
+            style={styles.btn}
+          />
+
           <Text style={styles.section}>Dispo</Text>
           <Button
             title="Simuler minuit (couper Dispo)"
@@ -576,6 +782,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   btn: { marginBottom: spacing.sm },
+  sectionHint: {
+    ...typography.small,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
   footer: {
     ...typography.small,
     color: colors.textMuted,
