@@ -228,10 +228,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pillCompact: { minHeight: 34, paddingHorizontal: spacing.md },
-  /** Inactive : fond blanc, bord #E4DDD2, texte #1C1917. */
+  /** Inactive : fond blanc, bord #E6DFD4, texte #1C1917. */
   pillChip: { backgroundColor: colors.chip, borderColor: colors.chipBorder },
   pillOutline: { backgroundColor: colors.chip, borderColor: colors.chipBorder },
-  /** Active : fond orange #C85A12, texte blanc. */
+  /** Active : fond orange #E25B1A, texte blanc. */
   pillOn: { backgroundColor: colors.chipActive, borderColor: colors.chipActive },
   pressed: { opacity: 0.88 },
   pillText: {

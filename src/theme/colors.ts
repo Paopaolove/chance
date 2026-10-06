@@ -1,12 +1,12 @@
 export const colors = {
-  /** Fond d’écran — papier #F4F1EA ; cartes, champs et pastilles en blanc + liseré `border` */
-  background: '#F4F1EA',
+  /** Fond d’écran — papier #F6F1E8 ; cartes, champs et pastilles en blanc + liseré `border` */
+  background: '#F6F1E8',
   surface: '#FFFFFF',
   /** Surfaces secondaires — blanc + liseré `border` (un blanc, un noir, un orange) */
   surfaceMuted: '#FFFFFF',
-  /** Orange 70s #C85A12 — uniquement : bouton principal, mot accent, onglet actif, engrenage, pastille active */
-  primary: '#C85A12',
-  primaryDark: '#9E4710',
+  /** Orange #E25B1A — uniquement : bouton principal, mot accent, onglet actif, engrenage, pastille active */
+  primary: '#E25B1A',
+  primaryDark: '#C44A12',
   /** Ancien vert pâle → blanc (l’orange est réservé : CTA, mot accent, onglet actif, engrenage, pastille active) */
   primarySoft: '#FFFFFF',
   /** Texte principal — encre #1C1917 */
@@ -15,8 +15,8 @@ export const colors = {
   textSecondary: '#6F675E',
   /** Légendes / placeholders — même #6F675E (contraste ≥ 4.5 sur blanc) */
   textMuted: '#6F675E',
-  /** Bordures / liserés 1px — #E4DDD2 (cartes, champs, pastilles) */
-  border: '#E4DDD2',
+  /** Bordures / liserés 1px — #E6DFD4 (cartes, champs, pastilles) */
+  border: '#E6DFD4',
   /**
    * Pas de token « success » : une confirmation = coche + texte foncé
    * sur fond blanc (CheckNote). L’orange plein reste réservé au CTA.
@@ -28,12 +28,12 @@ export const colors = {
   /** Erreur / danger — countdown 10 min, no-show, clôturer, erreurs */
   danger: '#9B2C2C',
   dangerSoft: '#FFFFFF',
-  /** Pastille inactive : fond blanc, bord #E4DDD2, texte #1C1917 */
+  /** Pastille inactive : fond blanc, bord #E6DFD4, texte #1C1917 */
   chip: '#FFFFFF',
-  chipBorder: '#E4DDD2',
+  chipBorder: '#E6DFD4',
   chipText: '#1C1917',
-  /** Pastille active : fond orange #C85A12, texte blanc */
-  chipActive: '#C85A12',
+  /** Pastille active : fond orange #E25B1A, texte blanc */
+  chipActive: '#E25B1A',
   chipActiveText: '#FFFFFF',
   overlay: 'rgba(28, 25, 23, 0.45)',
   tabInactive: '#6F675E',
