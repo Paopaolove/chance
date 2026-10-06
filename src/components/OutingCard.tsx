@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
-  /** Une seule pastille : blanche + liseré ; « Maintenant » en noir plein (pas de vert sur la carte). */
+  /** Une seule pastille : blanche + liseré ; « Maintenant » en noir plein (pas d’orange sur la carte). */
   pill: {
     alignSelf: 'flex-start',
     marginTop: spacing.md,

@@ -2,12 +2,12 @@ export const colors = {
   /** Fond d’écran — papier #F4F1EA ; cartes, champs et pastilles en blanc + liseré `border` */
   background: '#F4F1EA',
   surface: '#FFFFFF',
-  /** Surfaces secondaires — blanc + liseré `border` (un blanc, un noir, un vert) */
+  /** Surfaces secondaires — blanc + liseré `border` (un blanc, un noir, un orange) */
   surfaceMuted: '#FFFFFF',
-  /** Vert #3D5C45 — uniquement : bouton principal, mot accent, onglet actif, engrenage, pastille active */
-  primary: '#3D5C45',
-  primaryDark: '#2C4534',
-  /** Ancien vert pâle → blanc (le vert est réservé : CTA, mot accent, onglet actif, engrenage, pastille active) */
+  /** Orange 70s #C85A12 — uniquement : bouton principal, mot accent, onglet actif, engrenage, pastille active */
+  primary: '#C85A12',
+  primaryDark: '#9E4710',
+  /** Ancien vert pâle → blanc (l’orange est réservé : CTA, mot accent, onglet actif, engrenage, pastille active) */
   primarySoft: '#FFFFFF',
   /** Texte principal — encre #1C1917 */
   text: '#1C1917',
@@ -19,7 +19,7 @@ export const colors = {
   border: '#E4DDD2',
   /**
    * Pas de token « success » : une confirmation = coche + texte foncé
-   * sur fond blanc (CheckNote). Le vert plein reste réservé au CTA.
+   * sur fond blanc (CheckNote). L’orange plein reste réservé au CTA.
    */
   /** Avertissement — texte + liseré #A15C07, sur fond blanc */
   warning: '#A15C07',
@@ -32,8 +32,8 @@ export const colors = {
   chip: '#FFFFFF',
   chipBorder: '#E4DDD2',
   chipText: '#1C1917',
-  /** Pastille active : fond vert #3D5C45, texte blanc */
-  chipActive: '#3D5C45',
+  /** Pastille active : fond orange #C85A12, texte blanc */
+  chipActive: '#C85A12',
   chipActiveText: '#FFFFFF',
   overlay: 'rgba(28, 25, 23, 0.45)',
   tabInactive: '#6F675E',

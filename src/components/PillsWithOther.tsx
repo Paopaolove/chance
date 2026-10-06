@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   /** Inactive : fond blanc, bord #E4DDD2, texte #1C1917. */
   pillChip: { backgroundColor: colors.chip, borderColor: colors.chipBorder },
   pillOutline: { backgroundColor: colors.chip, borderColor: colors.chipBorder },
-  /** Active : fond vert, texte blanc. */
+  /** Active : fond orange #C85A12, texte blanc. */
   pillOn: { backgroundColor: colors.chipActive, borderColor: colors.chipActive },
   pressed: { opacity: 0.88 },
   pillText: {

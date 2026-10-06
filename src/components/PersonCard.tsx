@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
     color: colors.chipText,
   },
-  /** Bouton secondaire (pilule contour) : un seul bouton vert par écran. */
+  /** Bouton secondaire (pilule contour) : un seul bouton orange par écran. */
   cta: {
     marginTop: spacing.lg,
     alignSelf: 'stretch',

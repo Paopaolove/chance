@@ -13,8 +13,8 @@ interface Props {
 }
 
 /**
- * Confirmation sobre : coche vert Jaguar + texte foncé, sans fond plein.
- * Le vert plein reste réservé à l’action principale (CTA).
+ * Confirmation sobre : coche #1C1917 + texte foncé, sans fond plein.
+ * L’orange plein reste réservé à l’action principale (CTA).
  */
 export function CheckNote({ children, center, size = 16, style, textStyle }: Props) {
   return (

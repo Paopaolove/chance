@@ -34,8 +34,8 @@ import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 const { width } = Dimensions.get('window');
 
 /**
- * 3 slides avant le tunnel : grand titre 34 à gauche (« partager. » / « Moment » en vert,
- * slide 2 sans mot vert),
+ * 3 slides avant le tunnel : grand titre 34 à gauche (« partager. » / « Moment » en orange,
+ * slide 2 sans mot en couleur),
  * beaucoup d’air. Rien sur la caution / les 10 min / le joker ici (c’est dans
  * « Comment ça marche », plus loin dans le tunnel).
  */

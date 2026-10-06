@@ -972,7 +972,7 @@ export function FeedScreen() {
 
   const listHeader = (
     <View style={styles.listHeader}>
-      {/* Segment Annonces / Dispo : la pastille choisie reste verte */}
+      {/* Segment Annonces / Dispo : la pastille choisie reste orange */}
       <View style={styles.segment}>
         {(['sorties', 'dispos'] as FeedMode[]).map((m) => {
           const selected = mode === m;
@@ -1091,7 +1091,7 @@ const styles = StyleSheet.create({
   title: { ...typography.title, color: colors.text, marginTop: 2 },
   sub: { ...typography.caption, color: colors.textSecondary, marginTop: 4 },
   listHeader: { marginBottom: spacing.lg },
-  /** Annonces / Dispo : pastille active verte + texte blanc, l’autre blanche + liseré. */
+  /** Annonces / Dispo : pastille active orange + texte blanc, l’autre blanche + liseré. */
   segment: {
     flexDirection: 'row',
     gap: spacing.sm,
