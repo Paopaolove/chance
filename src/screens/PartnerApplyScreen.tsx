@@ -92,6 +92,8 @@ export function PartnerApplyScreen() {
 
           <Text style={styles.label}>Nom du lieu</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={venueName}
             onChangeText={setVenueName}
@@ -122,6 +124,8 @@ export function PartnerApplyScreen() {
 
           <Text style={styles.label}>Quartier</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={neighborhood}
             onChangeText={setNeighborhood}
@@ -132,6 +136,8 @@ export function PartnerApplyScreen() {
 
           <Text style={styles.label}>Téléphone du lieu</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
@@ -146,6 +152,8 @@ export function PartnerApplyScreen() {
 
           <Text style={styles.label}>Une phrase sur le lieu (facultatif)</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={[styles.input, styles.multiline]}
             value={phrase}
             onChangeText={setPhrase}

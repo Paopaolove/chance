@@ -679,6 +679,8 @@ export function FeedScreen() {
   const categoryFree = (
     <View style={styles.categoryFreeRow}>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={[
           styles.categoryFreeInput,
           categoryText.trim() !== '' && styles.categoryFreeInputOn,
@@ -811,6 +813,8 @@ export function FeedScreen() {
           />
           <Text style={styles.quartierFreeLabel}>Heure : à partir de …</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.quartierFreeInput}
             value={whenFromTime}
             onChangeText={(t) => {

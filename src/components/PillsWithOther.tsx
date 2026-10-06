@@ -125,6 +125,8 @@ export function PillsWithOther<T extends string | number>({
           })
         : null}
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         ref={inputRef}
         style={[
           styles.input,

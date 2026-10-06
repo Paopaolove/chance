@@ -700,6 +700,8 @@ export function CreateOutingScreen() {
 
           <Text style={styles.label}>Lieu *</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={venueName}
             onChangeText={setVenueName}
@@ -709,6 +711,8 @@ export function CreateOutingScreen() {
 
           <Text style={styles.label}>Quartier *</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={neighborhood}
             onChangeText={(t) => {
@@ -769,6 +773,8 @@ export function CreateOutingScreen() {
 
           <Text style={styles.label}>Message *</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={[styles.input, styles.multiline]}
             value={message}
             onChangeText={setMessage}
@@ -885,6 +891,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Lieu *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={venueName}
           onChangeText={setVenueName}
@@ -894,6 +902,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Adresse exacte *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={exactAddress}
           onChangeText={setExactAddress}
@@ -908,6 +918,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Quartier *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={neighborhood}
           onChangeText={(t) => {
@@ -952,6 +964,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Heure *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={timeStr}
           onChangeText={setTimeStr}
@@ -1070,6 +1084,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Ce que j'offre (optionnel)</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={inviteIncludes}
           onChangeText={setInviteIncludes}
@@ -1079,6 +1095,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Hors invitation (optionnel)</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={inviteExtras}
           onChangeText={setInviteExtras}
@@ -1107,6 +1125,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Message *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={[styles.input, styles.multiline]}
           value={message}
           onChangeText={setMessage}
@@ -1117,6 +1137,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Sujet (optionnel)</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={topic}
           onChangeText={setTopic}
@@ -1126,6 +1148,8 @@ export function CreateOutingScreen() {
 
         <Text style={styles.label}>Sujets exclus (optionnel)</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={excludedTopics}
           onChangeText={setExcludedTopics}
@@ -1337,6 +1361,8 @@ function PartnerCreateForm() {
           <>
             <Text style={styles.label}>Spectacle / événement *</Text>
             <TextInput
+              selectionColor={colors.primary}
+              cursorColor={colors.primary}
               style={styles.input}
               value={show}
               onChangeText={setShow}
@@ -1350,6 +1376,8 @@ function PartnerCreateForm() {
         <DayPills dateStr={dateStr} onChangeDateStr={setDateStr} />
         <Text style={styles.label}>Heure *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={timeStr}
           onChangeText={setTimeStr}
@@ -1489,6 +1517,8 @@ function PartnerCreateForm() {
 
         <Text style={styles.label}>Adresse exacte *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={exactAddress}
           onChangeText={setExactAddress}
@@ -1502,6 +1532,8 @@ function PartnerCreateForm() {
 
         <Text style={styles.label}>Message *</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={[styles.input, styles.multiline]}
           value={message}
           onChangeText={setMessage}

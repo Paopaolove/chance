@@ -1178,6 +1178,8 @@ export function OutingDetailScreen() {
           </Text>
           <Text style={styles.section}>Message d’intro recommandé</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             placeholder={RECOMMENDED_INTRO}
             placeholderTextColor={colors.textMuted}
@@ -1193,6 +1195,8 @@ export function OutingDetailScreen() {
             « samedi soir ».
           </Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             placeholder="Ex. demain 20h, samedi soir…"
             placeholderTextColor={colors.textMuted}

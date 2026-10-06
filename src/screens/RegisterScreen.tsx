@@ -46,6 +46,8 @@ export function RegisterScreen() {
         <Text style={styles.hint}>{subtitle}</Text>
         <Text style={styles.label}>E-mail</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={email}
           onChangeText={setEmail}
@@ -57,6 +59,8 @@ export function RegisterScreen() {
         />
         <Text style={styles.label}>Mot de passe</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={password}
           onChangeText={setPassword}

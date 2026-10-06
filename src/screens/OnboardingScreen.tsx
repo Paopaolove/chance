@@ -33,85 +33,62 @@ import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 
 const { width } = Dimensions.get('window');
 
+/**
+ * 3 slides avant le tunnel : fond blanc, grand titre à gauche, un mot en vert,
+ * beaucoup d’air. Rien sur la caution / les 10 min / le joker ici (c’est dans
+ * « Comment ça marche », plus loin dans le tunnel).
+ */
+type SlideLine = {
+  /** Mot en gras en début de ligne (ex. « Sport. »). */
+  lead?: string;
+  text: string;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** Ligne mise à part (plus d’espace avant). */
+  apart?: boolean;
+};
+
 const slides: {
   key: string;
-  titlePrefix: string;
-  titleBold: string;
-  titleSuffix: string;
-  body: string;
-  bodyExtra?: string;
+  titleBefore: string;
+  titleGreen: string;
+  titleAfter: string;
+  lines: SlideLine[];
 }[] = [
   {
     key: '1',
-    // Pas de titre : le logo Moment suffit, puis l’encadré.
-    titlePrefix: '',
-    titleBold: '',
-    titleSuffix: '',
-    body: '',
+    titleBefore: 'Un moment à ',
+    titleGreen: 'partager.',
+    titleAfter: '',
+    lines: [
+      { text: 'Pas de fil sans fin, pas de swipe.' },
+      { text: 'L’échange d’abord.', apart: true },
+      { text: 'Personne à convoiter.' },
+      { text: 'Un moment à partager.' },
+    ],
   },
   {
     key: '2',
-    titlePrefix: 'Un vrai ',
-    titleBold: 'partage',
-    titleSuffix: '.',
-    body: 'Pas de fil sans fin, pas de swipe.',
-    bodyExtra: 'L’échange d’abord.\nPersonne à convoiter.\nUn moment à partager.',
+    titleBefore: 'Autour d’une ',
+    titleGreen: 'table',
+    titleAfter: '. Ou pas.',
+    lines: [
+      { lead: 'Sport.', text: 'Foot, course, salle.', icon: 'football-outline' },
+      { lead: 'Culture.', text: 'Expo, théâtre, concert.', icon: 'ticket-outline' },
+      { lead: 'Table.', text: 'Resto, bar.', icon: 'restaurant-outline' },
+      { text: 'Si tu cherches un date, ce n’est pas ici.', apart: true },
+    ],
   },
   {
     key: '3',
-    titlePrefix: 'Prends un ',
-    titleBold: 'Moment',
-    titleSuffix: '.',
-    body: 'Propose un moment. Ou rejoins-en un.\nLe premier mois est offert.',
+    titleBefore: 'Prends un ',
+    titleGreen: 'Moment',
+    titleAfter: '.',
+    lines: [
+      { text: 'Propose un moment. Ou rejoins-en un.' },
+      { text: 'Le premier mois est offert.' },
+    ],
   },
 ];
-
-/** Premier écran : encadré « pas une appli pour draguer », puis exemples. */
-const FIRST_SLIDE_NOTICE = [
-  'Pas une appli pour draguer.',
-  'On partage une table, un verre ou une sortie.',
-  'Pas de flirt.',
-] as const;
-
-const FIRST_SLIDE_EXAMPLES: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  detail: string;
-}[] = [
-  { icon: 'football-outline', label: 'Sport', detail: 'foot, course, salle' },
-  { icon: 'ticket-outline', label: 'Culture', detail: 'expo, théâtre, concert' },
-  { icon: 'restaurant-outline', label: 'Table', detail: 'au resto ou au bar' },
-];
-
-const FIRST_SLIDE_NOT_HERE = 'Si tu cherches un date, ce n’est pas ici.';
-
-function FirstSlideContent() {
-  return (
-    <>
-      <View style={styles.noticeBox}>
-        {FIRST_SLIDE_NOTICE.map((line) => (
-          <Text key={line} style={styles.noticeLine}>
-            {line}
-          </Text>
-        ))}
-      </View>
-      <View style={styles.examples}>
-        {FIRST_SLIDE_EXAMPLES.map((ex) => (
-          <View key={ex.label} style={styles.exampleRow}>
-            <View style={styles.exampleIcon}>
-              <Ionicons name={ex.icon} size={18} color={colors.primary} />
-            </View>
-            <Text style={styles.exampleText}>
-              <Text style={styles.exampleLabel}>{ex.label}</Text>
-              {` · ${ex.detail}`}
-            </Text>
-          </View>
-        ))}
-      </View>
-      <Text style={styles.notHere}>{FIRST_SLIDE_NOT_HERE}</Text>
-    </>
-  );
-}
 
 const genders: { id: Gender; label: string }[] = [
   { id: 'femme', label: 'Femme' },
@@ -354,6 +331,8 @@ export function OnboardingScreen() {
           <Text style={styles.hint}>Démo locale : rien n’est envoyé.</Text>
           <Text style={styles.label}>E-mail</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={email}
             onChangeText={setEmail}
@@ -365,6 +344,8 @@ export function OnboardingScreen() {
           />
           <Text style={styles.label}>Mot de passe</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={password}
             onChangeText={setPassword}
@@ -399,6 +380,8 @@ export function OnboardingScreen() {
           </Text>
           <Text style={styles.label}>Téléphone *</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={phone}
             onChangeText={setPhone}
@@ -480,6 +463,8 @@ export function OnboardingScreen() {
           </Text>
           <Text style={styles.label}>Âge *</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={ageText}
             onChangeText={setAgeText}
@@ -538,6 +523,8 @@ export function OnboardingScreen() {
           </Text>
           <Text style={styles.label}>Prénom *</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             value={firstName}
             onChangeText={setFirstName}
@@ -546,6 +533,8 @@ export function OnboardingScreen() {
           />
           <Text style={styles.label}>Bio (optionnel)</Text>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={[styles.input, styles.multiline]}
             value={bio}
             onChangeText={setBio}
@@ -848,7 +837,6 @@ export function OnboardingScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
         <Text style={styles.brand}>Moment</Text>
-        <Text style={styles.brandTagline}>Un moment à partager.</Text>
       </View>
       <FlatList
         ref={listRef}
@@ -857,41 +845,45 @@ export function OnboardingScreen() {
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
+        scrollEventThrottle={16}
         keyExtractor={(item) => item.key}
-        renderItem={({ item }) => {
-          const title = (
-            <Text style={styles.slideTitle}>
-              <Text style={styles.slideTitlePlain}>{item.titlePrefix}</Text>
-              <Text style={styles.slideTitleBold}>{item.titleBold}</Text>
-              {item.titleSuffix ? (
-                <Text style={styles.slideTitlePlain}>{item.titleSuffix}</Text>
-              ) : null}
+        renderItem={({ item }) => (
+          <ScrollView
+            style={{ width }}
+            contentContainerStyle={styles.slide}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
+            <Text style={styles.slideTitle} accessibilityRole="header">
+              {item.titleBefore}
+              <Text style={styles.slideTitleGreen}>{item.titleGreen}</Text>
+              {item.titleAfter}
             </Text>
-          );
-          if (item.key === '1') {
-            return (
-              <ScrollView
-                style={{ width }}
-                contentContainerStyle={styles.firstSlide}
-                showsVerticalScrollIndicator={false}
-                bounces={false}
-              >
-                <FirstSlideContent />
-              </ScrollView>
-            );
-          }
-          return (
-            <View style={[styles.slide, { width }]}>
-              {title}
-              <Text style={styles.slideBody}>{item.body}</Text>
-              {item.bodyExtra ? (
-                <Text style={[styles.slideBody, styles.slideBodyExtra]}>
-                  {item.bodyExtra}
-                </Text>
-              ) : null}
+            <View style={styles.slideLines}>
+              {item.lines.map((line: SlideLine) => (
+                <View
+                  key={line.text}
+                  style={[styles.slideLineRow, line.apart && styles.slideLineApart]}
+                >
+                  {line.icon ? (
+                    <Ionicons
+                      name={line.icon}
+                      size={22}
+                      color={colors.primary}
+                      style={styles.slideLineIcon}
+                    />
+                  ) : null}
+                  <Text style={styles.slideLine}>
+                    {line.lead ? (
+                      <Text style={styles.slideLineLead}>{`${line.lead} `}</Text>
+                    ) : null}
+                    {line.text}
+                  </Text>
+                </View>
+              ))}
             </View>
-          );
-        }}
+          </ScrollView>
+        )}
       />
       <View style={styles.footer}>
         <View style={styles.dots}>
@@ -913,93 +905,50 @@ export function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg },
+  header: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   brand: {
     ...typography.subtitle,
     color: colors.primary,
     fontFamily: fonts.bold,
   },
-  brandTagline: {
-    ...typography.caption,
-    color: colors.primary,
-    fontFamily: fonts.semiBold,
-    marginTop: 2,
-  },
   slide: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl,
-    justifyContent: 'center',
-  },
-  slideTitle: {
-    ...typography.hero,
-    color: colors.text,
-    marginBottom: spacing.lg,
-  },
-  slideTitlePlain: {
-    fontFamily: fonts.semiBold,
-    color: colors.text,
-  },
-  slideTitleBold: {
-    fontFamily: fonts.bold,
-    color: colors.primary,
-  },
-  slideBody: {
-    ...typography.body,
-    color: colors.textSecondary,
-    maxWidth: 320,
-  },
-  slideBodyExtra: { marginTop: spacing.lg },
-  firstSlide: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
-  noticeBox: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.xs,
-    marginBottom: spacing.xl,
-  },
-  noticeLine: {
-    ...typography.bodyStrong,
+  slideTitle: {
+    ...typography.hero,
+    fontSize: 38,
+    lineHeight: 46,
     color: colors.text,
+    textAlign: 'left',
+    marginBottom: spacing.xxl,
   },
-  examples: {
-    gap: spacing.md,
-    marginBottom: spacing.xl,
+  slideTitleGreen: {
+    fontFamily: fonts.bold,
+    color: colors.primary,
   },
-  exampleRow: {
+  slideLines: { gap: spacing.md },
+  slideLineRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
-  exampleIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  exampleText: {
+  slideLineApart: { marginTop: spacing.lg },
+  slideLineIcon: { width: 24 },
+  slideLine: {
     ...typography.body,
+    fontSize: 18,
+    lineHeight: 26,
     color: colors.textSecondary,
-    flex: 1,
+    textAlign: 'left',
+    flexShrink: 1,
   },
-  exampleLabel: {
+  slideLineLead: {
     fontFamily: fonts.bold,
     color: colors.text,
-  },
-  notHere: {
-    ...typography.bodyStrong,
-    color: colors.primaryDark,
   },
   footer: {
     paddingHorizontal: spacing.xl,
@@ -1007,8 +956,14 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   dots: { flexDirection: 'row', gap: 8, justifyContent: 'center' },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
-  dotActive: { backgroundColor: colors.primary, width: 20 },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    opacity: 0.25,
+  },
+  dotActive: { backgroundColor: colors.primary, width: 20, opacity: 1 },
   wrap: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
   wrapScroll: {
     paddingHorizontal: spacing.xl,

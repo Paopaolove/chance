@@ -274,6 +274,8 @@ export function LeaveReviewScreen() {
             ))}
             {/* Champ libre « Autre » toujours visible : écrire sélectionne Autre. */}
             <TextInput
+              selectionColor={colors.primary}
+              cursorColor={colors.primary}
               style={styles.inputOneLine}
               placeholder="Autre : précise en une ligne"
               placeholderTextColor={colors.textMuted}
@@ -338,6 +340,8 @@ export function LeaveReviewScreen() {
           Commentaire sur la personne (optionnel)
         </Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           placeholder="Respect, ponctualité, discussion… Pas le resto."
           placeholderTextColor={colors.textMuted}
@@ -382,6 +386,8 @@ export function LeaveReviewScreen() {
 
         <Text style={styles.label}>Commentaire sur le lieu (optionnel)</Text>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           placeholder="Cuisine, bruit, accueil… Pas la personne."
           placeholderTextColor={colors.textMuted}

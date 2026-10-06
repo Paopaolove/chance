@@ -223,6 +223,8 @@ export function ImprevuScreen() {
         Raison (obligatoire)
       </Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={styles.input}
         placeholder={IMPREVU_REASON_PLACEHOLDER}
         placeholderTextColor={colors.textMuted}

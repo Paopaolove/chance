@@ -58,6 +58,8 @@ export function CustomFiltersEditor({
       </Text>
       <View style={styles.row}>
         <TextInput
+          selectionColor={colors.primary}
+          cursorColor={colors.primary}
           style={styles.input}
           value={draft}
           onChangeText={(t) => {

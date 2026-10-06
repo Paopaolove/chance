@@ -324,6 +324,8 @@ export function DispoSoirScreen() {
       <Text style={styles.sectionHint}>Autre : jour et heure libres</Text>
       <Text style={styles.freeLabel}>Jour</Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         ref={freeDateRef}
         style={[styles.input, useFree && styles.inputOn]}
         value={freeDate}
@@ -338,6 +340,8 @@ export function DispoSoirScreen() {
       />
       <Text style={styles.freeLabel}>Heure</Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={[styles.input, useFree && styles.inputOn]}
         value={freeTime}
         onChangeText={onFreeTimeChange}
@@ -373,6 +377,8 @@ export function DispoSoirScreen() {
       {hint ? <Text style={styles.error}>{hint}</Text> : null}
       {/* Champ libre « Autre » toujours visible : écrire coche Autre. */}
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={[
           styles.input,
           styles.categoryFree,
@@ -397,6 +403,8 @@ export function DispoSoirScreen() {
         Choisis une suggestion ou écris n’importe quel quartier.
       </Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={styles.input}
         value={quartier}
         onChangeText={(t) => {
@@ -439,6 +447,8 @@ export function DispoSoirScreen() {
 
       <Text style={styles.section}>Sujet</Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={styles.input}
         value={topic}
         onChangeText={setTopic}
@@ -449,6 +459,8 @@ export function DispoSoirScreen() {
       <Text style={styles.section}>Exclusions</Text>
       <Text style={styles.sectionHint}>Séparées par des virgules.</Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={styles.input}
         value={exclusions}
         onChangeText={setExclusions}

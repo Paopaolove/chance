@@ -127,6 +127,8 @@ export function EditProfileScreen() {
 
       <Text style={styles.label}>Prénom *</Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={styles.input}
         value={firstName}
         onChangeText={setFirstName}
@@ -137,6 +139,8 @@ export function EditProfileScreen() {
       <Text style={styles.label}>Âge *</Text>
       <Text style={styles.fieldHint}>18 ans minimum — pas d’âge par défaut.</Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={styles.input}
         value={ageText}
         onChangeText={setAgeText}
@@ -168,6 +172,8 @@ export function EditProfileScreen() {
 
       <Text style={styles.label}>Bio (optionnel)</Text>
       <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
         style={[styles.input, styles.multiline]}
         value={bio}
         onChangeText={setBio}

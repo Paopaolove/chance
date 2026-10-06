@@ -373,6 +373,8 @@ export function ChatPlaceholderScreen() {
             <View style={styles.lateCustomRow}>
               <Text style={styles.lateOtherLabel}>Autre</Text>
               <TextInput
+                selectionColor={colors.primary}
+                cursorColor={colors.primary}
                 style={styles.lateCustomInput}
                 value={lateCustom}
                 onChangeText={(t) => setLateCustom(t.replace(/[^0-9]/g, ''))}
@@ -417,6 +419,8 @@ export function ChatPlaceholderScreen() {
 
         <View style={styles.composer}>
           <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
             style={styles.input}
             placeholder="Écrire un message…"
             placeholderTextColor={colors.textMuted}

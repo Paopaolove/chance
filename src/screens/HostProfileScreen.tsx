@@ -207,6 +207,8 @@ export function HostProfileScreen() {
             <View style={styles.reportBox}>
               <Text style={styles.label}>Motif du signalement</Text>
               <TextInput
+                selectionColor={colors.primary}
+                cursorColor={colors.primary}
                 style={styles.input}
                 value={reportReason}
                 onChangeText={setReportReason}

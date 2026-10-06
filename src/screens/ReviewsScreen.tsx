@@ -184,6 +184,8 @@ export function ReviewsScreen() {
               {canReply ? (
                 <View style={styles.replyForm}>
                   <TextInput
+                    selectionColor={colors.primary}
+                    cursorColor={colors.primary}
                     style={styles.input}
                     placeholder="Une réponse (1 max)…"
                     placeholderTextColor={colors.textMuted}
