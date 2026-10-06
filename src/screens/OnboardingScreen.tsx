@@ -630,7 +630,7 @@ export function OnboardingScreen() {
         text:
           'Tu invites à ta table jusqu’à un montant que tu choisis — ou tu rejoins une invitation.',
         caption:
-          'Exemple : dîner au Frank, tu invites pour 20 €. Tu règles ça au restaurant.',
+          'Une expo, une place. Rien à régler sur place.\nUn dîner, tu invites pour 20 €. Tu règles sur place.',
       },
       {
         text: 'Si on t’accepte, tu as 10 minutes pour dire oui.',
