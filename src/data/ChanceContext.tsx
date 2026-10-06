@@ -3211,7 +3211,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           outingId,
           requestId,
           kind: 'system',
-          text: 'Le chat est ouvert — 1 h avant la sortie. Bonne rencontre !',
+          text: 'Le chat est ouvert — 1 h avant la sortie. Bonne sortie !',
           createdAt: now,
         },
       ];

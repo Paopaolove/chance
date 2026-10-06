@@ -43,11 +43,11 @@ const slides = [
   },
   {
     key: '2',
-    titlePrefix: 'Une vraie ',
-    titleBold: 'rencontre',
+    titlePrefix: 'Un vrai ',
+    titleBold: 'partage',
     titleSuffix: '.',
     body:
-      'Pas de fil sans fin, pas de swipe.\nUne vraie rencontre autour d’une table, d’un bar ou d’une sortie.',
+      'Pas de fil sans fin, pas de swipe.\nOn partage d’abord. La rencontre, s’il y en a une, vient ensuite.',
   },
   {
     key: '3',
@@ -58,9 +58,9 @@ const slides = [
   },
 ];
 
-/** Premier écran : encadré « pas une appli de rencontres », puis exemples. */
+/** Premier écran : encadré « pas une appli pour draguer », puis exemples. */
 const FIRST_SLIDE_NOTICE = [
-  'Pas une appli de rencontres.',
+  'Pas une appli pour draguer.',
   'On partage une table, un verre ou une sortie.',
   'Pas de flirt.',
 ] as const;
@@ -653,7 +653,7 @@ export function OnboardingScreen() {
           <Text style={styles.title}>Comment ça marche</Text>
           <View style={styles.disclaimerBox}>
             <Text style={styles.disclaimerLead}>
-              Chance n’est pas un site de rencontre.
+              Chance n’est pas une appli pour draguer.
             </Text>
             <Text style={styles.disclaimerLead}>
               On ne swipe pas. On ne cherche pas quelqu’un.
