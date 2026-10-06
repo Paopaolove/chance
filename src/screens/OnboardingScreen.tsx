@@ -35,9 +35,10 @@ const { width } = Dimensions.get('window');
 const slides = [
   {
     key: '1',
-    titlePrefix: 'Une place pour ',
-    titleBold: 'toi',
-    titleSuffix: '.',
+    // Pas de titre : le logo Chance suffit, puis l’encadré.
+    titlePrefix: '',
+    titleBold: '',
+    titleSuffix: '',
     body: '',
   },
   {
@@ -61,7 +62,7 @@ const slides = [
 const FIRST_SLIDE_NOTICE = [
   'Pas une appli de rencontres.',
   'On partage une table, un verre ou une sortie.',
-  'Pas de match. Pas de flirt.',
+  'Pas de flirt.',
 ] as const;
 
 const FIRST_SLIDE_EXAMPLES: {
@@ -412,8 +413,7 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Genre</Text>
           <Text style={styles.hint}>
-            Sert à la sécurité, pas au matching dating. Si tu es une femme,
-            option Femmes uniquement.
+            Pas pour draguer. Le filtre sert à se sentir à l’aise.
           </Text>
           <View style={styles.row}>
             {genders.map((g) => (
@@ -655,7 +655,7 @@ export function OnboardingScreen() {
               Chance n’est pas un site de rencontre.
             </Text>
             <Text style={styles.disclaimerLead}>
-              On ne swipe pas, on ne cherche pas un match.
+              On ne swipe pas. On ne cherche pas quelqu’un.
             </Text>
             <Text style={styles.disclaimerLead}>
               On partage une table, un verre ou une sortie.
@@ -879,7 +879,6 @@ export function OnboardingScreen() {
                 showsVerticalScrollIndicator={false}
                 bounces={false}
               >
-                {title}
                 <FirstSlideContent />
               </ScrollView>
             );
