@@ -413,7 +413,8 @@ export function OnboardingScreen() {
           <Text style={styles.brand}>Chance</Text>
           <Text style={styles.title}>Genre</Text>
           <Text style={styles.hint}>
-            Pas pour draguer. Le filtre sert à se sentir à l’aise.
+            Pas pour draguer. Le filtre sert à se sentir à l’aise.{'\n'}
+            Si tu es une femme, tu peux limiter la sortie aux femmes.
           </Text>
           <View style={styles.row}>
             {genders.map((g) => (

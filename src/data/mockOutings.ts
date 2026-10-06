@@ -516,7 +516,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'homme',
     title: 'Déjeuner vietnamien Latin',
     description:
-      'Pho maison et conversation légère. Une place pour quelqu’un de passage dans le quartier.',
+      'Pho maison et conversation légère. Quelqu’un dans le quartier, pas envie de manger seul.',
     category: 'restaurant',
     neighborhood: 'Quartier Latin',
     venueName: 'Pho du Panthéon',
