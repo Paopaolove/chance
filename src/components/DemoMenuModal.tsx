@@ -22,7 +22,7 @@ type Props = {
 };
 
 /**
- * Hidden QA menu (cahier I) — opened by 5 taps on the Chance logo.
+ * Hidden QA menu (cahier I) — opened by 5 taps on the Moment logo.
  * Mid-flow « Simuler … » buttons live here ONLY — not on Profile.
  */
 export function DemoMenuModal({ visible, onClose }: Props) {
@@ -132,7 +132,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
           </Pressable>
         </View>
         <Text style={styles.hint}>
-          Outil QA caché (5 taps sur Chance). Tous les « Simuler … » sont ici —
+          Outil QA caché (5 taps sur Moment). Tous les « Simuler … » sont ici —
           pas sur l’écran Profil.
         </Text>
         <ScrollView
@@ -554,7 +554,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             />
           ))}
           <Button
-            title="Confirmer la demande lieu (équipe Chance)"
+            title="Confirmer la demande lieu (équipe Moment)"
             variant="secondary"
             disabled={busy || partnerStatus !== 'pending'}
             onPress={() =>

@@ -199,7 +199,7 @@ export function RequestsScreen() {
         {outing && isUrgentOnSite(outing) ? (
           <View style={styles.urgentPill}>
             <Text style={styles.urgentPillText}>
-              {outing.urgentAutoH90 ? 'Urgent' : 'Maintenant'}
+              Maintenant
             </Text>
           </View>
         ) : null}
@@ -311,7 +311,7 @@ export function RequestsScreen() {
         {outing && isUrgentOnSite(outing) ? (
           <View style={styles.urgentPill}>
             <Text style={styles.urgentPillText}>
-              {outing.urgentAutoH90 ? 'Urgent' : 'Maintenant'}
+              Maintenant
             </Text>
           </View>
         ) : null}

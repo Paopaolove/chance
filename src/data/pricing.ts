@@ -2,7 +2,7 @@ import { PlanId } from './types';
 
 export type PlanInterval = 'month' | 'year';
 
-/** Authoritative Chance pricing (post J+30 trial). */
+/** Authoritative Moment pricing (post J+30 trial). */
 export const DEPOSIT_EUROS = 20;
 
 /** Part plateforme quand la caution est perdue (annulation tardive / absence). */
@@ -121,7 +121,7 @@ export function formatPriceEuros(value: number): string {
 
 /** Libellé court du partage caution perdue (6,90 / 13,10). */
 export function describeDepositForfeitSplit(): string {
-  return `${formatPriceEuros(DEPOSIT_FORFEIT_CHANCE_EUROS)} pour Chance, ${formatPriceEuros(DEPOSIT_FORFEIT_HOST_EUROS)} pour l’hôte`;
+  return `${formatPriceEuros(DEPOSIT_FORFEIT_CHANCE_EUROS)} pour Moment, ${formatPriceEuros(DEPOSIT_FORFEIT_HOST_EUROS)} pour l’hôte`;
 }
 
 /** Phrase UI au moment de la perte (Alert / bannière). */
@@ -141,7 +141,7 @@ export type DepositStatusKey = keyof typeof DEPOSIT_STATUS_LABELS;
 
 /**
  * Phrase UI pour l’issue caution (mock).
- * Forfeit → split 6,90 Chance / 13,10 hôte (pas d’autre amende).
+ * Forfeit → split 6,90 Moment / 13,10 hôte (pas d’autre amende).
  */
 export function describeDepositOutcome(
   status: DepositStatusKey | undefined,

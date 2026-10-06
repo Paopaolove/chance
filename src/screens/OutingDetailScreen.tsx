@@ -247,7 +247,7 @@ export function OutingDetailScreen() {
                 else
                   Alert.alert(
                     'Imprévu refusé',
-                    'Caution encore bloquée. Annule au moins 3 heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Chance / 13,10 € hôte). L’invité peut utiliser son joker.',
+                    'Caution encore bloquée. Annule au moins 3 heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). L’invité peut utiliser son joker.',
                   );
               }}
               style={{ marginTop: spacing.sm }}
@@ -699,7 +699,7 @@ export function OutingDetailScreen() {
                         : r.attendance === 'present'
                           ? `${r.userName} · arrivé · caution rendue`
                           : r.attendance === 'absent'
-                            ? `${r.userName} · pas venu · caution perdue (6,90 € Chance / 13,10 € pour ton lieu)`
+                            ? `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
                             : r.depositStatus === 'returned'
                               ? `${r.userName} · caution rendue (silence le lendemain)`
                               : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, le soir même.'}
@@ -711,7 +711,7 @@ export function OutingDetailScreen() {
                         onPress={() => {
                           Alert.alert(
                             'Chaise vide ?',
-                            `${r.userName} n’a pas signalé son arrivée. « Pas venu » = lapin : caution perdue (6,90 € Chance / 13,10 € pour ton lieu).`,
+                            `${r.userName} n’a pas signalé son arrivée. « Pas venu » = lapin : caution perdue (6,90 € Moment / 13,10 € pour ton lieu).`,
                             [
                               { text: 'Retour', style: 'cancel' },
                               {
@@ -738,7 +738,7 @@ export function OutingDetailScreen() {
                           else
                             Alert.alert(
                               'Litige ouvert',
-                              'Arrivé selon l’invité, pas venu selon toi : l’équipe Chance demandera une photo plus tard. Aucune sanction automatique.',
+                              'Arrivé selon l’invité, pas venu selon toi : l’équipe Moment demandera une photo plus tard. Aucune sanction automatique.',
                             );
                         }}
                         style={{ marginTop: spacing.sm }}
@@ -791,10 +791,10 @@ export function OutingDetailScreen() {
                               ? 'Priorité baissée'
                               : 'Absence signalée',
                           res.banned
-                            ? '3e absence — compte fermé. Caution perdue : 6,90 € Chance / 13,10 € hôte.'
+                            ? '3e absence — compte fermé. Caution perdue : 6,90 € Moment / 13,10 € hôte.'
                             : res.lowerPriority
                               ? '2e absence — priorité baissée + mention profil.'
-                              : 'Caution perdue : 6,90 € Chance / 13,10 € hôte.',
+                              : 'Caution perdue : 6,90 € Moment / 13,10 € hôte.',
                         );
                       } else {
                         Alert.alert('Impossible', res.reason);
@@ -920,7 +920,7 @@ export function OutingDetailScreen() {
                     if (full.partnerDispute) {
                       return (
                         <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                          Litige présence ouvert — l’équipe Chance te demandera
+                          Litige présence ouvert — l’équipe Moment te demandera
                           une photo plus tard. Pas de sanction automatique.
                         </Text>
                       );
@@ -1021,7 +1021,7 @@ export function OutingDetailScreen() {
                 <Text style={styles.hint}>
                   Caution 20 € bloquée (mock). Rendue si tu annules au moins 3
                   heures avant, si l’hôte annule / imprévu accepté / joker ;
-                  perdue si trop tard ou absence (6,90 € Chance / 13,10 € hôte).
+                  perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).
                 </Text>
               ) : null}
 

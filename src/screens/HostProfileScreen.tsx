@@ -257,8 +257,8 @@ export function HostProfileScreen() {
         <Text style={styles.sectionTitle}>Avis rencontre</Text>
         {isNew ? (
           <Text style={[styles.stats, styles.statsNew]}>
-            {`${firstName} vient d’arriver. Donne-lui sa `}
-            <Text style={styles.chanceBrand}>Chance</Text>
+            {`${firstName} vient d’arriver. Donne-lui son `}
+            <Text style={styles.chanceBrand}>Moment</Text>
             {'.'}
           </Text>
         ) : (
@@ -280,8 +280,8 @@ export function HostProfileScreen() {
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyTitle}>Pas encore d’avis</Text>
           <Text style={styles.emptySub}>
-            {`${firstName} vient d’arriver. Donne-lui sa `}
-            <Text style={styles.chanceBrand}>Chance</Text>
+            {`${firstName} vient d’arriver. Donne-lui son `}
+            <Text style={styles.chanceBrand}>Moment</Text>
             {'.'}
           </Text>
         </View>

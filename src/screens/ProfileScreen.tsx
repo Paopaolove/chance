@@ -121,7 +121,7 @@ export function ProfileScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Localisation refusée',
-          'Sans localisation, Chance reste limité à Paris intramuros en liste classique.',
+          'Sans localisation, Moment reste limité à Paris intramuros en liste classique.',
         );
       }
     } finally {
@@ -132,7 +132,7 @@ export function ProfileScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
-        <Text style={styles.brand}>Chance</Text>
+        <Text style={styles.brand}>Moment</Text>
         {user.banned ? (
           <View style={styles.banBanner}>
             <Text style={styles.banTitle}>Compte suspendu (démo)</Text>
@@ -353,7 +353,7 @@ export function ProfileScreen() {
                       : ''}
                   </Text>
                   <Text style={styles.cardHint}>
-                    L’équipe Chance vérifie ton lieu. Tu restes particulier en
+                    L’équipe Moment vérifie ton lieu. Tu restes particulier en
                     attendant.
                   </Text>
                 </>
@@ -422,7 +422,7 @@ export function ProfileScreen() {
                 </Text>
                 <Text style={styles.cardHint}>
                   {st === 'refused'
-                    ? 'L’équipe Chance n’a pas validé la demande — tu restes particulier. Tu peux renvoyer une fiche.'
+                    ? 'L’équipe Moment n’a pas validé la demande — tu restes particulier. Tu peux renvoyer une fiche.'
                     : 'Invite des gens chez toi : un geste, une remise ou des places offertes. 0 % de commission.'}
                 </Text>
                 <Button
@@ -710,7 +710,7 @@ export function ProfileScreen() {
 
         <Text style={styles.demoNote}>
           Mode démo local — pas de Stripe ni Supabase pour l’instant. Outils QA :
-          5 taps sur le logo Chance.
+          5 taps sur le logo Moment.
         </Text>
       </ScrollView>
     </SafeAreaView>

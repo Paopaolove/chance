@@ -907,7 +907,7 @@ export function FeedScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <Pressable onPress={onLogoTap} hitSlop={12}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
         </Pressable>
         <Text style={styles.title}>Autour de toi</Text>
         <Text style={styles.sub}>

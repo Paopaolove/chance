@@ -27,7 +27,7 @@ const KINDS: PartnerKind[] = ['resto', 'bar', 'culture'];
 /**
  * Profil → « Je représente un lieu » : fiche lieu.
  * Après envoi : statut « Demande envoyée » (visible dans Profil seulement).
- * Validation par l’équipe Chance (démo : menu QA).
+ * Validation par l’équipe Moment (démo : menu QA).
  */
 export function PartnerApplyScreen() {
   const navigation = useNavigation<Nav>();
@@ -68,7 +68,7 @@ export function PartnerApplyScreen() {
     }
     Alert.alert(
       'Demande envoyée',
-      'L’équipe Chance vérifie ton lieu (en général sous 48 h). Tu restes particulier en attendant — le statut est visible dans ton Profil.',
+      'L’équipe Moment vérifie ton lieu (en général sous 48 h). Tu restes particulier en attendant — le statut est visible dans ton Profil.',
       [{ text: 'OK', onPress: () => navigation.goBack() }],
     );
   };
@@ -141,7 +141,7 @@ export function PartnerApplyScreen() {
             maxLength={20}
           />
           <Text style={styles.hint}>
-            Utilisé seulement par l’équipe Chance pour vérifier le lieu.
+            Utilisé seulement par l’équipe Moment pour vérifier le lieu.
           </Text>
 
           <Text style={styles.label}>Une phrase sur le lieu (facultatif)</Text>

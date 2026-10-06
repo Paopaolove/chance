@@ -4,7 +4,7 @@ export const colors = {
   surface: '#FFFFFF',
   /** Surfaces secondaires — vert très pâle (palette vert Jaguar) */
   surfaceMuted: '#EDF2EE',
-  /** Vert Jaguar — CTA, logo, engrenage, liens, accents « Chance » */
+  /** Vert Jaguar — CTA, logo, engrenage, liens, accents « Moment » */
   primary: '#1B4D3E',
   primaryDark: '#143D32',
   /** Fond de pastille / aperçu — vert Jaguar très pâle */

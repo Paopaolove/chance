@@ -10,7 +10,7 @@ async function ensureLibraryPermission(): Promise<boolean> {
   if (asked.granted) return true;
   Alert.alert(
     'Accès photos refusé',
-    'Autorise l’accès à ta photothèque dans les réglages pour ajouter une photo de profil sur Chance.',
+    'Autorise l’accès à ta photothèque dans les réglages pour ajouter une photo de profil sur Moment.',
   );
   return false;
 }

@@ -17,7 +17,7 @@ export const mockReviews: Review[] = [
     rating: 5,
     comment:
       'Léa est super accueillante, soirée fluide et sans pression. On a bien ri.',
-    reply: 'Merci Juliette, hâte de croiser d’autres Chance !',
+    reply: 'Merci Juliette, hâte de partager d’autres Moments !',
     venueRating: 5,
     venueComment: 'Trattoria cosy, pasta au top, service souriant.',
     venueKey: makeVenueKey('Trattoria du pont', 'Le Marais'),

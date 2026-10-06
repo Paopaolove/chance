@@ -118,7 +118,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               {outing.urgentOnSite ? (
                 <View style={[styles.chip, styles.chipUrgent]}>
                   <Text style={[styles.chipText, styles.chipUrgentText]}>
-                    {outing.urgentAutoH90 ? 'Urgent' : 'Maintenant'}
+                    Maintenant
                   </Text>
                 </View>
               ) : null}

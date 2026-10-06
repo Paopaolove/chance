@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Chance",
+    "name": "Moment",
     "slug": "chance",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,11 +9,11 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Chance utilise ta position pour te montrer des sorties près de toi à Paris.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Chance utilise ta position pour te montrer des sorties près de toi à Paris.",
-        "NSPhotoLibraryUsageDescription": "Chance utilise ta photothèque pour ta photo de profil.",
-        "NSCameraUsageDescription": "Chance utilise l’appareil photo pour ta photo de profil.",
-        "NSPhotoLibraryAddUsageDescription": "Chance peut enregistrer une photo de profil."
+        "NSLocationWhenInUseUsageDescription": "Moment utilise ta position pour te montrer des sorties près de toi à Paris.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Moment utilise ta position pour te montrer des sorties près de toi à Paris.",
+        "NSPhotoLibraryUsageDescription": "Moment utilise ta photothèque pour ta photo de profil.",
+        "NSCameraUsageDescription": "Moment utilise l’appareil photo pour ta photo de profil.",
+        "NSPhotoLibraryAddUsageDescription": "Moment peut enregistrer une photo de profil."
       }
     },
     "android": {
@@ -39,7 +39,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Chance utilise ta position pour te montrer des sorties près de toi à Paris."
+          "locationWhenInUsePermission": "Moment utilise ta position pour te montrer des sorties près de toi à Paris."
         }
       ],
       "expo-notifications",
@@ -47,8 +47,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Chance utilise ta photothèque pour ta photo de profil.",
-          "cameraPermission": "Chance utilise l’appareil photo pour ta photo de profil."
+          "photosPermission": "Moment utilise ta photothèque pour ta photo de profil.",
+          "cameraPermission": "Moment utilise l’appareil photo pour ta photo de profil."
         }
       ]
     ]

@@ -60,7 +60,7 @@ const BUDGET_PRESETS = [10, 20, 30, 40] as const;
 /** Default invite cap for restaurant / bar. */
 const BUDGET_DEFAULT_EUROS = 20;
 
-/** Prefill exact — urgent « déjà sur place » (≠ no-show / lapin Chance). */
+/** Prefill exact — urgent « déjà sur place » (≠ no-show / lapin Moment). */
 const URGENT_ON_SITE_MESSAGE =
   'Une place est libre, mon ami ne vient plus.';
 
@@ -483,7 +483,7 @@ export function CreateOutingScreen() {
       inviteeName ? 'Proposition envoyée' : 'Annonce publiée',
       inviteeName
         ? `Proposition pour ${inviteeName} — visible dans ses Demandes (démo : quand currentUser = destinataire). Pas publiée sur Annonces.`
-        : 'Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Chance → Simuler demande Juliette.)',
+        : 'Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Moment → Simuler demande Juliette.)',
     );
     setVenueName('');
     setMessage('');
@@ -599,7 +599,7 @@ export function CreateOutingScreen() {
             <Text style={styles.urgentBannerTitle}>Invitation urgente</Text>
             <Text style={styles.urgentBannerBody}>
               Tu es déjà au lieu et une place s’est libérée. Ce n’est pas un
-              signal d’absence d’un invité Chance.
+              signal d’absence d’un invité Moment.
             </Text>
             <Pressable onPress={exitUrgentMode} hitSlop={8}>
               <Text style={styles.urgentBannerLink}>
@@ -1065,7 +1065,7 @@ export function CreateOutingScreen() {
 
         <Text style={styles.publishFreeLabel}>Publication gratuite</Text>
         <Text style={styles.publishFreeHint}>
-          L'hôte ne paie rien pour publier. L'invité paie les frais Chance +
+          L'hôte ne paie rien pour publier. L'invité paie les frais Moment +
           caution 20 € à la confirmation (ce n’est pas l’addition).
         </Text>
         <Button title="Publier" onPress={onPublish} style={styles.cta} />
@@ -1445,7 +1445,7 @@ function PartnerCreateForm() {
         <Text style={styles.publishFreeLabel}>Publication gratuite · 0 % de commission</Text>
         <Text style={styles.publishFreeHint}>
           Caution 20 € par invité confirmé (rendue s’il vient). Lapin ou
-          annulation tardive : 6,90 € Chance / 13,10 € pour le lieu. Si tu
+          annulation tardive : 6,90 € Moment / 13,10 € pour le lieu. Si tu
           annules avec des confirmés : cautions rendues + 1 avertissement (2e =
           compte partenaire fermé).
         </Text>

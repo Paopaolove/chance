@@ -134,7 +134,7 @@ export function ImprevuScreen() {
           : existing.jokerUsed
             ? 'Joker utilisé — caution rendue · ce n’est pas une absence · hôte 0 €'
             : existing.status === 'auto_refused'
-              ? 'Sans réponse à l’heure — refus + absence (caution perdue : 6,90 € Chance / 13,10 € hôte si invité)'
+              ? 'Sans réponse à l’heure — refus + absence (caution perdue : 6,90 € Moment / 13,10 € hôte si invité)'
               : 'Refusé — caution encore bloquée · au moins 3 heures pour annuler sans perdre';
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -172,7 +172,7 @@ export function ImprevuScreen() {
           !existing.jokerUsed ? (
           <Text style={[styles.body, { marginBottom: spacing.md }]}>
             Joker déjà utilisé ce mois — si tu annules trop tard ou tu ne viens
-            pas : 6,90 € pour Chance, 13,10 € pour l’hôte.
+            pas : 6,90 € pour Moment, 13,10 € pour l’hôte.
           </Text>
         ) : null}
         <Button
@@ -197,7 +197,7 @@ export function ImprevuScreen() {
         accepte ou refuse — pas de chat libre (réservé à H−1). Accepté → caution
         20 € rendue et sortie annulée (ce n’est pas une absence). Refusé → tu
         peux utiliser ton joker, sinon règle des 3 heures (trop tard / absence
-        → 6,90 € Chance / 13,10 € hôte).
+        → 6,90 € Moment / 13,10 € hôte).
       </Text>
 
       <Text style={[styles.section, { marginTop: spacing.lg }]}>Motif</Text>

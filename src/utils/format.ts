@@ -50,7 +50,7 @@ export function formatRatingAverage(average: number): string {
 
 /** Exact empty-reviews / new-user French copy. */
 export function newUserChanceCopy(firstName: string): string {
-  return `${firstName} vient d’arriver. Donne-lui sa Chance.`;
+  return `${firstName} vient d’arriver. Donne-lui son Moment.`;
 }
 
 /** Profile / card line: « 4,6 · 12 sorties » or new-user copy. */

@@ -9,4 +9,4 @@ export function parseAdultAge(raw: string | number | null | undefined): number |
 }
 
 export const AGE_REQUIRED_HINT = 'Indique ton âge (18 ans minimum).';
-export const AGE_UNDERAGE_HINT = 'Chance est réservé aux adultes (18 ans et plus).';
+export const AGE_UNDERAGE_HINT = 'Moment est réservé aux adultes (18 ans et plus).';

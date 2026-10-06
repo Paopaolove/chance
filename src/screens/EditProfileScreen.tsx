@@ -98,7 +98,7 @@ export function EditProfileScreen() {
       customFilters,
       photoUri: photoUri ?? null,
     });
-    Alert.alert('Profil mis à jour', 'Tes infos sont visibles sur Chance.');
+    Alert.alert('Profil mis à jour', 'Tes infos sont visibles sur Moment.');
     navigation.goBack();
   };
 

@@ -12,12 +12,12 @@ interface Props {
   style?: object;
   /**
    * underPhoto: short line under the avatar — « 5,0 · 2 sorties »
-   * or « vient d’arriver » (no long Chance copy).
+   * or « vient d’arriver » (no long Moment copy).
    */
   variant?: 'default' | 'underPhoto';
 }
 
-/** « 4,6 · 12 sorties » or new-user empty-state copy with branded « Chance ». */
+/** « 4,6 · 12 sorties » or new-user empty-state copy with branded « Moment ». */
 export function RatingLine({
   userId,
   firstName,
@@ -49,8 +49,8 @@ export function RatingLine({
   } else if (isNew) {
     content = (
       <Text style={[styles.text, styles.newText, style]} numberOfLines={2}>
-        {`${firstName} vient d’arriver. Donne-lui sa `}
-        <Text style={styles.chanceBrand}>Chance</Text>
+        {`${firstName} vient d’arriver. Donne-lui son `}
+        <Text style={styles.chanceBrand}>Moment</Text>
         {'.'}
       </Text>
     );

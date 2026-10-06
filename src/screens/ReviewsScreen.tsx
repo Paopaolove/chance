@@ -84,8 +84,8 @@ export function ReviewsScreen() {
     >
       {isNew ? (
         <Text style={[styles.header, styles.headerNew]}>
-          {`${userName} vient d’arriver. Donne-lui sa `}
-          <Text style={styles.chanceBrand}>Chance</Text>
+          {`${userName} vient d’arriver. Donne-lui son `}
+          <Text style={styles.chanceBrand}>Moment</Text>
           {'.'}
         </Text>
       ) : (
@@ -106,8 +106,8 @@ export function ReviewsScreen() {
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyTitle}>Pas encore d’avis</Text>
           <Text style={styles.emptySub}>
-            {`${userName} vient d’arriver. Donne-lui sa `}
-            <Text style={styles.chanceBrand}>Chance</Text>
+            {`${userName} vient d’arriver. Donne-lui son `}
+            <Text style={styles.chanceBrand}>Moment</Text>
             {'.'}
           </Text>
         </View>

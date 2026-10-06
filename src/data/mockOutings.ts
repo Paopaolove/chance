@@ -241,7 +241,7 @@ export const mockHosts: User[] = [
     firstName: 'Le Frank',
     age: 40,
     gender: 'autre',
-    bio: 'Bistrot de quartier au Marais. Quand une table se libère, on la propose sur Chance.',
+    bio: 'Bistrot de quartier au Marais. Quand une table se libère, on la propose sur Moment.',
     neighborhood: 'Le Marais',
     plan: 'illimite',
     trialEndsAt: '2026-12-01T00:00:00.000Z',

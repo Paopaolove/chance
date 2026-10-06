@@ -23,7 +23,7 @@ export function isUrgentOnSite(outing: Outing): boolean {
   return outing.urgentOnSite === true;
 }
 
-/** Manual « déjà sur place » vs auto H−90 (pill Maintenant vs Urgent). */
+/** Manual « déjà sur place » vs auto H−90 (même pastille « Maintenant » ; logique distincte). */
 export function isUrgentAutoH90(outing: Outing): boolean {
   return outing.urgentOnSite === true && outing.urgentAutoH90 === true;
 }

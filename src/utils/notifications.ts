@@ -331,7 +331,7 @@ export async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
   try {
     await Notifications.setNotificationChannelAsync('chance-default', {
-      name: 'Chance',
+      name: 'Moment',
       importance: Notifications.AndroidImportance.DEFAULT,
     });
   } catch {

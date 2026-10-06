@@ -42,7 +42,7 @@ const slides: {
 }[] = [
   {
     key: '1',
-    // Pas de titre : le logo Chance suffit, puis l’encadré.
+    // Pas de titre : le logo Moment suffit, puis l’encadré.
     titlePrefix: '',
     titleBold: '',
     titleSuffix: '',
@@ -59,9 +59,9 @@ const slides: {
   },
   {
     key: '3',
-    titlePrefix: 'Laisse une ',
-    titleBold: 'Chance',
-    titleSuffix: '',
+    titlePrefix: 'Prends un ',
+    titleBold: 'Moment',
+    titleSuffix: '.',
     body: 'Crée une sortie. Ou rejoins-en une.\nLe premier mois est ouvert.',
   },
 ];
@@ -317,7 +317,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Crée ton compte</Text>
           <Text style={styles.hint}>
             Connexion simulée (démo) — Apple / Google / e-mail. Ce n’est pas une
@@ -349,7 +349,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>E-mail</Text>
           <Text style={styles.hint}>Démo locale : rien n’est envoyé.</Text>
           <Text style={styles.label}>E-mail</Text>
@@ -392,7 +392,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Ton numéro</Text>
           <Text style={styles.hint}>
             Obligatoire pour la sécurité et les rappels. Format France.
@@ -418,7 +418,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Genre</Text>
           <Text style={styles.hint}>
             Pas pour draguer. Le filtre sert à se sentir à l’aise.{'\n'}
@@ -472,10 +472,10 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Ton âge</Text>
           <Text style={styles.hint}>
-            Obligatoire — Chance est réservé aux adultes (18 ans et plus). Pas
+            Obligatoire — Moment est réservé aux adultes (18 ans et plus). Pas
             d’âge par défaut.
           </Text>
           <Text style={styles.label}>Âge *</Text>
@@ -499,7 +499,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Une photo</Text>
           <Text style={styles.hint}>
             Optionnelle — tu pourras l’ajouter plus tard.
@@ -530,7 +530,7 @@ export function OnboardingScreen() {
           contentContainerStyle={styles.wrapScroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Prénom & bio</Text>
           <Text style={styles.hint}>
             Prénom obligatoire. Bio optionnelle — tu pourras la modifier plus
@@ -577,7 +577,7 @@ export function OnboardingScreen() {
           contentContainerStyle={styles.wrapScroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Centres d’intérêt</Text>
           <Text style={styles.hint}>
             Optionnel — suggéré {SUGGESTED_INTERESTS_MIN} à{' '}
@@ -657,11 +657,11 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.wrapScroll}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Comment ça marche</Text>
           <View style={styles.disclaimerBox}>
             <Text style={styles.disclaimerLead}>
-              Chance n’est pas une appli pour draguer.
+              Moment n’est pas une appli pour draguer.
             </Text>
             <Text style={styles.disclaimerLead}>
               On ne swipe pas. On ne cherche pas quelqu’un.
@@ -700,7 +700,7 @@ export function OnboardingScreen() {
                 La caution de 20 €, c’est ton engagement à venir.
               </Text>
               <Text style={styles.rulesLine}>
-                Ce n’est pas l’addition du restaurant, ni l’abonnement Chance.
+                Ce n’est pas l’addition du restaurant, ni l’abonnement Moment.
               </Text>
               <Text style={styles.rulesLine}>Si tu es là, on te la rend.</Text>
               <Text style={[styles.rulesLine, styles.rulesGap]}>
@@ -710,7 +710,7 @@ export function OnboardingScreen() {
                 Si tu annules trop tard ou tu ne viens pas, tu la perds :
               </Text>
               <Text style={styles.rulesLine}>
-                6,90 € pour Chance, 13,10 € pour l’hôte.
+                6,90 € pour Moment, 13,10 € pour l’hôte.
               </Text>
               <Text style={[styles.rulesLine, styles.rulesGap]}>
                 Un imprévu, tu peux le signaler une fois par sortie, avec une
@@ -768,7 +768,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.wrapScroll}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Ton quartier</Text>
           <Text style={styles.hint}>
             Pas de GPS continu. Choisis un quartier ou écris le tien.
@@ -825,7 +825,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Chance</Text>
+          <Text style={styles.brand}>Moment</Text>
           <Text style={styles.title}>Prêt ?</Text>
           <Text style={styles.hint}>
             Invite à ta table, parcours les invitations autour de toi, ou
@@ -860,7 +860,8 @@ export function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Text style={styles.brand}>Chance</Text>
+        <Text style={styles.brand}>Moment</Text>
+        <Text style={styles.brandTagline}>Un moment à partager.</Text>
       </View>
       <FlatList
         ref={listRef}
@@ -930,6 +931,12 @@ const styles = StyleSheet.create({
     ...typography.subtitle,
     color: colors.primary,
     fontFamily: fonts.bold,
+  },
+  brandTagline: {
+    ...typography.caption,
+    color: colors.primary,
+    fontFamily: fonts.semiBold,
+    marginTop: 2,
   },
   slide: {
     paddingHorizontal: spacing.xl,

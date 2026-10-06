@@ -2080,7 +2080,7 @@ interface ChanceContextValue {
     phone: string;
     phrase: string;
   }) => { ok: true } | { ok: false; reason: string };
-  /** Démo QA (équipe Chance) : valider / refuser la demande lieu. */
+  /** Démo QA (équipe Moment) : valider / refuser la demande lieu. */
   reviewPartnerApplication: (
     decision: 'active' | 'refused',
   ) => { ok: true } | { ok: false; reason: string };
@@ -3536,7 +3536,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Imprévu refusé',
-        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Chance / 13,10 € hôte). Tu peux utiliser ton joker si tu en as un.`,
+        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). Tu peux utiliser ton joker si tu en as un.`,
         createdAt: nowIso,
         type: 'imprevu',
         outingId: report.outingId,
@@ -5190,10 +5190,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         requestId,
         kind: 'system',
         text: banned
-          ? 'Note auto · 3e absence invité — compte fermé. Caution perdue (6,90 € Chance / 13,10 € hôte).'
+          ? 'Note auto · 3e absence invité — compte fermé. Caution perdue (6,90 € Moment / 13,10 € hôte).'
           : lowerPriority
-            ? 'Note auto · 2e absence invité — priorité baissée + mention profil. Caution perdue (6,90 € Chance / 13,10 € hôte).'
-            : 'Note auto · absence après confirmation — caution perdue (6,90 € Chance / 13,10 € hôte).',
+            ? 'Note auto · 2e absence invité — priorité baissée + mention profil. Caution perdue (6,90 € Moment / 13,10 € hôte).'
+            : 'Note auto · absence après confirmation — caution perdue (6,90 € Moment / 13,10 € hôte).',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
@@ -5205,10 +5205,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             ? 'Priorité baissée'
             : 'Caution perdue',
         body: banned
-          ? '3e absence — compte fermé. Caution perdue : 6,90 € Chance / 13,10 € hôte.'
+          ? '3e absence — compte fermé. Caution perdue : 6,90 € Moment / 13,10 € hôte.'
           : lowerPriority
             ? '2e no-show invité — priorité baissée + mention sur le profil.'
-            : 'Absence après confirmation — caution perdue : 6,90 € pour Chance, 13,10 € pour l’hôte.',
+            : 'Absence après confirmation — caution perdue : 6,90 € pour Moment, 13,10 € pour l’hôte.',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
@@ -5387,8 +5387,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: decision === 'active' ? 'Lieu validé' : 'Demande lieu refusée',
         body:
           decision === 'active'
-            ? `${user.partnerVenueName ?? 'Ton lieu'} est partenaire Chance. Tu peux publier depuis Créer.`
-            : 'L’équipe Chance n’a pas validé la demande — tu restes particulier.',
+            ? `${user.partnerVenueName ?? 'Ton lieu'} est partenaire Moment. Tu peux publier depuis Créer.`
+            : 'L’équipe Moment n’a pas validé la demande — tu restes particulier.',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
@@ -5486,7 +5486,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'not_allowed_now' };
       }
       dispatch({ type: 'MARK_PARTNER_ABSENT_AT', payload: { requestId, at } });
-      // « Pas venu » sans « Je suis arrivé » → lapin (6,90 Chance / 13,10 lieu).
+      // « Pas venu » sans « Je suis arrivé » → lapin (6,90 Moment / 13,10 lieu).
       const res = reportGuestNoShow(requestId);
       if (!res.ok) return { ok: false, reason: res.reason };
       return { ok: true, outcome: 'lapin' };

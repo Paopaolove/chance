@@ -16,7 +16,7 @@ export type PartnerKind = 'resto' | 'bar' | 'culture';
  * Statut du compte lieu (entrée Pro via Profil → « Je représente un lieu »).
  * - none: particulier (défaut)
  * - pending: « Demande envoyée » (visible Profil, pas dans le fil)
- * - active: validé par l’équipe Chance (démo : bouton QA)
+ * - active: validé par l’équipe Moment (démo : bouton QA)
  * - refused: refus → reste particulier
  * - closed: 2e avertissement → compte partenaire fermé (publication bloquée)
  */
@@ -266,7 +266,7 @@ export interface Outing {
    */
   urgentOnSite?: boolean;
   /**
-   * Auto H−90 promotion (no confirmed guests). Pill « Urgent ».
+   * Auto H−90 promotion (no confirmed guests). Pill « Maintenant » (comme le manuel).
    * Manual on-site keeps urgentOnSite without this flag → pill « Maintenant ».
    */
   urgentAutoH90?: boolean;
@@ -329,7 +329,7 @@ export interface Request {
   /** ISO UTC — when guest confirmed (deposit held, credit consumed). */
   confirmedAt?: string;
   /**
-   * Caution mock (20 €, DEPOSIT_EUROS) — ≠ frais Chance, ≠ invitation / addition.
+   * Caution mock (20 €, DEPOSIT_EUROS) — ≠ frais Moment, ≠ invitation / addition.
    * - none: pas bloquée (non confirmé)
    * - held: bloquée une fois à confirmSlot (idempotent, pas de double hold)
    * - returned: rendue (cancel ≥3h, host cancelOuting / no-show, venue alternate
@@ -723,7 +723,7 @@ export type AppAction =
         phrase: string;
       };
     }
-  /** Équipe Chance (démo : QA) valide ou refuse la demande lieu. */
+  /** Équipe Moment (démo : QA) valide ou refuse la demande lieu. */
   | {
       type: 'REVIEW_PARTNER_APPLICATION';
       payload: { decision: 'active' | 'refused' };
