@@ -61,7 +61,7 @@ const slides: {
     titlePrefix: 'Prends un ',
     titleBold: 'Moment',
     titleSuffix: '.',
-    body: 'Crée une sortie. Ou rejoins-en une.\nLe premier mois est ouvert.',
+    body: 'Propose un moment. Ou rejoins-en un.\nLe premier mois est offert.',
   },
 ];
 
