@@ -57,7 +57,11 @@ export function MainTabs() {
           paddingTop: 4,
           height: 88,
         },
-        tabBarLabelStyle: { fontSize: 11, fontFamily: fonts.semiBold },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontFamily: fonts.medium,
+          letterSpacing: 0.2,
+        },
         tabBarIcon: ({ color, size }) => {
           const map: Record<
             keyof MainTabParamList,

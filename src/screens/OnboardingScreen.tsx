@@ -69,9 +69,9 @@ const slides: {
   },
   {
     key: '2',
-    titleBefore: 'Autour d’une table. Ou pas.',
-    titleGreen: '',
-    titleAfter: '',
+    titleBefore: 'Autour d’une ',
+    titleGreen: 'table',
+    titleAfter: '. Ou pas.',
     lines: [
       { lead: 'Sport.', text: 'Foot, course, salle.', icon: 'football-outline' },
       { lead: 'Culture.', text: 'Expo, théâtre, concert.', icon: 'ticket-outline' },
@@ -917,6 +917,7 @@ const styles = StyleSheet.create({
     ...typography.subtitle,
     color: colors.primary,
     fontFamily: fonts.bold,
+    letterSpacing: -0.4,
   },
   slide: {
     flexGrow: 1,

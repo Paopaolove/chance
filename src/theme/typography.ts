@@ -10,15 +10,15 @@ export const fonts = {
 export const typography = {
   hero: {
     fontFamily: fonts.bold,
-    fontSize: 34,
-    letterSpacing: -0.6,
-    lineHeight: 40,
+    fontSize: 40,
+    letterSpacing: -1.2,
+    lineHeight: 44,
   } as TextStyle,
   title: {
     fontFamily: fonts.bold,
-    fontSize: 26,
-    letterSpacing: -0.4,
-    lineHeight: 32,
+    fontSize: 28,
+    letterSpacing: -0.6,
+    lineHeight: 34,
   } as TextStyle,
   subtitle: {
     fontFamily: fonts.semiBold,
