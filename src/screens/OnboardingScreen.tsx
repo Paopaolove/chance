@@ -86,7 +86,6 @@ const slides: {
     lines: [
       { text: 'Propose un moment. Ou rejoins-en un.' },
       { text: 'Le premier mois est offert.' },
-      { text: 'Le moment d’abord.', apart: true },
     ],
   },
 ];
