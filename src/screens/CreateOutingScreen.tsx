@@ -44,6 +44,7 @@ import {
   PARTNER_KIND_LABELS,
   partnerOfferChips,
 } from '../utils/partners';
+import { CheckNote } from '../components/CheckNote';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type CreateRoute = RouteProp<MainTabParamList, 'Create'>;
@@ -1063,7 +1064,9 @@ export function CreateOutingScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.publishFreeLabel}>Publication gratuite</Text>
+        <CheckNote center style={styles.publishFreeRow} textStyle={styles.publishFreeLabel}>
+          Publication gratuite
+        </CheckNote>
         <Text style={styles.publishFreeHint}>
           L'hôte ne paie rien pour publier. L'invité paie les frais Moment +
           caution 20 € à la confirmation (ce n’est pas l’addition).
@@ -1442,7 +1445,9 @@ function PartnerCreateForm() {
           multiline
         />
 
-        <Text style={styles.publishFreeLabel}>Publication gratuite · 0 % de commission</Text>
+        <CheckNote center style={styles.publishFreeRow} textStyle={styles.publishFreeLabel}>
+          Publication gratuite · 0 % de commission
+        </CheckNote>
         <Text style={styles.publishFreeHint}>
           Caution 20 € par invité confirmé (rendue s’il vient). Lapin ou
           annulation tardive : 6,90 € Moment / 13,10 € pour le lieu. Si tu
@@ -1537,7 +1542,9 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
   },
   dispoBanner: {
-    backgroundColor: colors.successSoft,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.lg,
     marginBottom: spacing.lg,
@@ -1545,7 +1552,7 @@ const styles = StyleSheet.create({
   },
   dispoBannerTitle: {
     ...typography.bodyStrong,
-    color: colors.success,
+    color: colors.primaryDark,
     marginBottom: 4,
   },
   dispoBannerBody: {
@@ -1573,11 +1580,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginBottom: spacing.sm,
   },
+  publishFreeRow: { marginTop: spacing.xl },
   publishFreeLabel: {
     ...typography.bodyStrong,
-    color: colors.success,
-    marginTop: spacing.xl,
-    textAlign: 'center',
+    color: colors.text,
   },
   publishFreeHint: {
     ...typography.small,

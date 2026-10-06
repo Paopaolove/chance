@@ -44,6 +44,7 @@ import {
 import { makeVenueKey } from '../utils/venue';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
+import { CheckNote } from '../components/CheckNote';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'OutingDetail'>;
@@ -314,19 +315,19 @@ export function OutingDetailScreen() {
                 {iAccepted ||
                 (outing.venueIssue.status === 'alternate_accepted' &&
                   !iRefused) ? (
-                  <Text style={styles.venueIssueOk}>
+                  <CheckNote textStyle={styles.venueIssueOk}>
                     Nouveau lieu accepté — caution conservée.
-                  </Text>
+                  </CheckNote>
                 ) : null}
                 {iRefused ? (
-                  <Text style={styles.venueIssueOk}>
+                  <CheckNote textStyle={styles.venueIssueOk}>
                     Tu as refusé — tu sors, caution rendue (pas d’absence).
-                  </Text>
+                  </CheckNote>
                 ) : null}
                 {outing.venueIssue.status === 'refused' && !iRefused ? (
-                  <Text style={styles.venueIssueOk}>
+                  <CheckNote textStyle={styles.venueIssueOk}>
                     Nouveau lieu refusé par les invités — cautions rendues.
-                  </Text>
+                  </CheckNote>
                 ) : null}
               </>
             );
@@ -912,7 +913,7 @@ export function OutingDetailScreen() {
           )}
           {myRequest.status === 'confirmed' && (
             <>
-              <Text style={styles.statusOk}>Place confirmée.</Text>
+              <CheckNote center size={20} textStyle={styles.statusOk}>Place confirmée.</CheckNote>
               {partner && 'id' in myRequest
                 ? (() => {
                     const full = getRequestById(myRequest.id);
@@ -927,9 +928,9 @@ export function OutingDetailScreen() {
                     }
                     if (full.guestArrivedAt) {
                       return (
-                        <Text style={styles.depositReturned}>
+                        <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
                           Arrivée signalée — tu es présent, caution rendue.
-                        </Text>
+                        </CheckNote>
                       );
                     }
                     const canArrive = canGuestSelfArrivePartner(
@@ -1008,9 +1009,9 @@ export function OutingDetailScreen() {
               )}
               {'id' in myRequest &&
               getRequestById(myRequest.id)?.depositStatus === 'returned' ? (
-                <Text style={styles.depositReturned}>
+                <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
                   Caution remboursée (mock).
-                </Text>
+                </CheckNote>
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'forfeited' ? (
                 <Text style={styles.hint}>
@@ -1284,7 +1285,7 @@ const styles = StyleSheet.create({
   },
   statusOk: {
     ...typography.bodyStrong,
-    color: colors.success,
+    color: colors.text,
     textAlign: 'center',
   },
   venueIssueCard: {
@@ -1308,7 +1309,7 @@ const styles = StyleSheet.create({
   venueIssueActions: { marginTop: spacing.sm },
   venueIssueOk: {
     ...typography.caption,
-    color: colors.success,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   venueLink: {
@@ -1321,11 +1322,10 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
     marginTop: spacing.xs,
   },
-    depositReturned: {
+  depositReturnedRow: { marginTop: spacing.sm },
+  depositReturned: {
     ...typography.caption,
-    color: colors.success,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   lateBanner: {

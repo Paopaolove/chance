@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { categoryLabels } from '../data/mockOutings';
@@ -85,6 +86,7 @@ export function PersonCard({ person, onPropose }: Props) {
             ) : null}
             <View style={styles.chips}>
               <View style={[styles.chip, styles.dispoPill]}>
+                <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
                 <Text style={[styles.chipText, styles.dispoPillText]}>
                   Dispo
                 </Text>
@@ -171,11 +173,15 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontFamily: fonts.medium,
   },
+  /** Confirmation sobre : coche + texte foncé sur crème (pas de vert plein). */
   dispoPill: {
-    backgroundColor: colors.successSoft,
+    backgroundColor: colors.background,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   dispoPillText: {
-    color: colors.success,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   cta: {

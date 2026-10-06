@@ -33,6 +33,7 @@ import { formatOutingWhen } from '../utils/format';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { Avatar } from '../components/Avatar';
 import { mockHosts } from '../data/mockOutings';
+import { CheckNote } from '../components/CheckNote';
 
 type R = RouteProp<RootStackParamList, 'ChatPlaceholder'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -274,13 +275,13 @@ export function ChatPlaceholderScreen() {
       <View style={styles.wrapTight}>
         <Text style={styles.title}>Chat</Text>
         {profileHeader}
-        <Text style={styles.openBadge}>
+        <CheckNote style={styles.openBadgeRow} textStyle={styles.openBadge}>
           {outing.isPartnerListing
             ? 'Ouvert dès la confirmation · invitation du lieu'
             : outing.urgentOnSite
               ? 'Ouvert · invitation urgente'
               : 'Ouvert · H−1'}
-        </Text>
+        </CheckNote>
 
         {lateFromOthers.length ? (
           <View style={styles.lateBanner}>
@@ -462,11 +463,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     minHeight: 44,
   },
+  openBadgeRow: { marginBottom: spacing.md },
   openBadge: {
     ...typography.small,
-    color: colors.success,
+    color: colors.text,
     fontFamily: fonts.semiBold,
-    marginBottom: spacing.md,
   },
   lateBanner: {
     backgroundColor: colors.warningSoft,

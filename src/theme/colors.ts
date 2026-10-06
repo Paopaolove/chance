@@ -16,13 +16,16 @@ export const colors = {
   textMuted: '#78716C',
   /** Bordures — gris-vert neutre */
   border: '#D8E2DC',
-  success: '#3F6B4A',
-  successSoft: '#E4EFE7',
-  /** Avertissement — graphite neutre */
-  warning: '#3D4A44',
-  warningSoft: '#ECEFED',
-  danger: '#B42318',
-  dangerSoft: '#FCE8E6',
+  /**
+   * Pas de token « success » : une confirmation = coche vert Jaguar + texte foncé
+   * sur crème (CheckNote). Le vert plein reste réservé au CTA.
+   */
+  /** Avertissement — texte + liseré */
+  warning: '#A15C07',
+  warningSoft: '#F8F1E3',
+  /** Erreur / danger — countdown 10 min, no-show, clôturer, erreurs */
+  danger: '#9B2C2C',
+  dangerSoft: '#F6E7E7',
   /** Chips non sélectionnées — vert très pâle */
   chip: '#E8EFEA',
   overlay: 'rgba(28, 25, 23, 0.45)',

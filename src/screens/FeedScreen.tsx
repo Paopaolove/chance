@@ -32,6 +32,7 @@ import {
   dispoSlotCreatePrefill,
 } from '../utils/dispo';
 import { clampInt, parseLooseInt } from '../utils/parseLooseNumber';
+import { CheckNote } from '../components/CheckNote';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
@@ -488,9 +489,17 @@ export function FeedScreen() {
 
   const dispoBanner = (
     <View style={[styles.banner, isDispo ? styles.bannerOn : styles.bannerOff]}>
-      <Text style={[styles.bannerTitle, isDispo && styles.bannerTitleOn]}>
-        Dispo
-      </Text>
+      {isDispo ? (
+        <CheckNote
+          size={20}
+          style={styles.bannerCheckRow}
+          textStyle={[styles.bannerTitle, styles.bannerTitleOn]}
+        >
+          Dispo
+        </CheckNote>
+      ) : (
+        <Text style={styles.bannerTitle}>Dispo</Text>
+      )}
       <Text style={[styles.bannerBody, isDispo && styles.bannerBodyOn]}>
         {`Les autres peuvent te proposer une sortie.\nÇa s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.`}
       </Text>
@@ -1031,16 +1040,20 @@ const styles = StyleSheet.create({
   bannerOff: {
     backgroundColor: colors.primarySoft,
   },
+  /** Dispo active : fond crème + liseré, coche — pas de vert plein. */
   bannerOn: {
-    backgroundColor: colors.successSoft,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
+  bannerCheckRow: { marginBottom: 6 },
   bannerTitle: {
     ...typography.subtitle,
     fontFamily: fonts.semiBold,
     color: colors.primaryDark,
     marginBottom: 6,
   },
-  bannerTitleOn: { color: colors.success },
+  bannerTitleOn: { color: colors.text, marginBottom: 0 },
   bannerBody: {
     ...typography.body,
     color: colors.textSecondary,
@@ -1051,7 +1064,7 @@ const styles = StyleSheet.create({
     ...typography.bodyStrong,
     color: colors.primary,
   },
-  bannerCtaOn: { color: colors.success },
+  bannerCtaOn: { color: colors.primary },
   inviteCtaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
