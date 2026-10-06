@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import {
   Dimensions,
@@ -37,7 +38,7 @@ const slides = [
     titlePrefix: 'Une place pour ',
     titleBold: 'toi',
     titleSuffix: '.',
-    body: 'Un repas, un verre, une expo.\nPartage le moment.',
+    body: '',
   },
   {
     key: '2',
@@ -55,6 +56,53 @@ const slides = [
     body: 'Crée une sortie. Ou rejoins-en une.\nLe premier mois est ouvert.',
   },
 ];
+
+/** Premier écran : encadré « pas une appli de rencontres », puis exemples. */
+const FIRST_SLIDE_NOTICE = [
+  'Pas une appli de rencontres.',
+  'On partage une table, un verre ou une sortie.',
+  'Pas de match. Pas de flirt.',
+] as const;
+
+const FIRST_SLIDE_EXAMPLES: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  detail: string;
+}[] = [
+  { icon: 'football-outline', label: 'Sport', detail: 'foot, course, salle' },
+  { icon: 'ticket-outline', label: 'Culture', detail: 'expo, théâtre, concert' },
+  { icon: 'restaurant-outline', label: 'Table', detail: 'au resto ou au bar' },
+];
+
+const FIRST_SLIDE_NOT_HERE = 'Si tu cherches un date, ce n’est pas ici.';
+
+function FirstSlideContent() {
+  return (
+    <>
+      <View style={styles.noticeBox}>
+        {FIRST_SLIDE_NOTICE.map((line) => (
+          <Text key={line} style={styles.noticeLine}>
+            {line}
+          </Text>
+        ))}
+      </View>
+      <View style={styles.examples}>
+        {FIRST_SLIDE_EXAMPLES.map((ex) => (
+          <View key={ex.label} style={styles.exampleRow}>
+            <View style={styles.exampleIcon}>
+              <Ionicons name={ex.icon} size={18} color={colors.primary} />
+            </View>
+            <Text style={styles.exampleText}>
+              <Text style={styles.exampleLabel}>{ex.label}</Text>
+              {` · ${ex.detail}`}
+            </Text>
+          </View>
+        ))}
+      </View>
+      <Text style={styles.notHere}>{FIRST_SLIDE_NOT_HERE}</Text>
+    </>
+  );
+}
 
 const genders: { id: Gender; label: string }[] = [
   { id: 'femme', label: 'Femme' },
@@ -813,8 +861,8 @@ export function OnboardingScreen() {
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         keyExtractor={(item) => item.key}
-        renderItem={({ item }) => (
-          <View style={[styles.slide, { width }]}>
+        renderItem={({ item }) => {
+          const title = (
             <Text style={styles.slideTitle}>
               <Text style={styles.slideTitlePlain}>{item.titlePrefix}</Text>
               <Text style={styles.slideTitleBold}>{item.titleBold}</Text>
@@ -822,9 +870,27 @@ export function OnboardingScreen() {
                 <Text style={styles.slideTitlePlain}>{item.titleSuffix}</Text>
               ) : null}
             </Text>
-            <Text style={styles.slideBody}>{item.body}</Text>
-          </View>
-        )}
+          );
+          if (item.key === '1') {
+            return (
+              <ScrollView
+                style={{ width }}
+                contentContainerStyle={styles.firstSlide}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+              >
+                {title}
+                <FirstSlideContent />
+              </ScrollView>
+            );
+          }
+          return (
+            <View style={[styles.slide, { width }]}>
+              {title}
+              <Text style={styles.slideBody}>{item.body}</Text>
+            </View>
+          );
+        }}
       />
       <View style={styles.footer}>
         <View style={styles.dots}>
@@ -874,6 +940,58 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     maxWidth: 320,
+  },
+  firstSlide: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+  },
+  noticeBox: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  noticeLine: {
+    ...typography.bodyStrong,
+    color: colors.text,
+  },
+  examples: {
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  exampleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  exampleIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exampleText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  exampleLabel: {
+    fontFamily: fonts.bold,
+    color: colors.text,
+  },
+  notHere: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
   },
   footer: {
     paddingHorizontal: spacing.xl,
