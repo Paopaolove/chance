@@ -336,7 +336,7 @@ export function DispoSoirScreen() {
 
       <Text style={styles.section}>Catégorie *</Text>
       <Text style={styles.sectionHint}>
-        Restaurant, bar, culture… au moins une si tu actives la dispo.
+        Restaurant, bar, culture, sport… au moins une si tu actives la dispo.
       </Text>
       <View style={styles.chips}>
         {ALL_CATEGORIES.map((id) => {

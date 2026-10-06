@@ -211,6 +211,30 @@ export const mockHosts: User[] = [
     createdAt: '2026-07-01T10:00:00.000Z',
   },
 
+  {
+    id: 'host-9',
+    firstName: 'Karim',
+    age: 31,
+    gender: 'homme',
+    bio: 'Coureur du dimanche et joueur de padel. Toujours partant pour un footing tranquille aux Buttes-Chaumont.',
+    neighborhood: 'Buttes-Chaumont',
+    plan: 'essai',
+    trialEndsAt: '2026-11-20T00:00:00.000Z',
+    planInterval: null,
+    outingCredits: 0,
+    dispoSoir: false,
+    interests: ['sport', 'balades', 'café'],
+    customFilters: [],
+    dispoCategories: [],
+    phone: '+33600000000',
+    authProvider: 'email' as const,
+    womenOnlyPreference: false,
+    registered: true,
+    notificationsGranted: false,
+    locationGranted: false,
+    createdAt: '2026-09-01T10:00:00.000Z',
+  },
+
 
   {
     id: 'partner-resto-1',
@@ -321,7 +345,7 @@ export const mockHosts: User[] = [
     interests: ['sport', 'musées', 'apéro', 'musique'],
     customFilters: [],
     dispoBudgetMax: 30,
-    dispoCategories: ['culture', 'bar'],
+    dispoCategories: ['culture', 'sport', 'bar'],
     dispoSlot: 'soir',
     dispoNeighborhood: 'Nation',
     dispoTopic: 'Culture / expo',
@@ -577,6 +601,30 @@ export const mockOutings: Outing[] = [
   },
 
   {
+    id: 'outing-9',
+    hostId: 'host-9',
+    hostName: 'Karim',
+    hostAge: 31,
+    hostGender: 'homme',
+    title: 'Footing Buttes-Chaumont · 9h',
+    description:
+      'Deux tours du parc à allure tranquille (~6 km), on papote en courant. Tous niveaux.',
+    category: 'sport',
+    categoryDetail: 'Footing',
+    neighborhood: 'Buttes-Chaumont',
+    venueName: 'Parc des Buttes-Chaumont',
+    approxArea: 'entrée métro Botzaris',
+    exactAddress: 'Entrée Botzaris, 1 rue Botzaris, 75019 Paris',
+    startsAt: daysFromNow(1, 9, 0),
+    capacity: 3,
+    spotsLeft: 3,
+    womenOnly: false,
+    budgetMaxEuros: 0,
+    status: 'open',
+    createdAt: daysFromNow(0, 7, 30),
+  },
+
+  {
     id: 'outing-partner-resto-1',
     hostId: 'partner-resto-1',
     hostName: 'Le Frank',
@@ -633,6 +681,7 @@ export const categoryLabels: Record<OutingCategory | string, string> = {
   restaurant: 'Restaurant',
   bar: 'Bar',
   culture: 'Culture',
+  sport: 'Sport',
   autre: 'Autre',
 };
 
@@ -640,6 +689,7 @@ export const ALL_CATEGORIES: OutingCategory[] = [
   'restaurant',
   'bar',
   'culture',
+  'sport',
   'autre',
 ];
 

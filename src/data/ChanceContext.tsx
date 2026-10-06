@@ -2287,7 +2287,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         interests: input.interests,
         customFilters: input.customFilters ?? [],
         photoUri: input.photoUri,
-        dispoCategories: input.dispoSoir ? ['restaurant', 'bar', 'culture', 'autre'] : [],
+        dispoCategories: input.dispoSoir ? [...ALL_CATEGORIES] : [],
         dispoSlot: input.dispoSoir ? 'soir' : undefined,
         dispoNeighborhood: input.dispoSoir
           ? input.neighborhood.trim()
@@ -2475,7 +2475,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         status: spotsLeft < 1 ? 'full' : 'open',
         createdAt: new Date().toISOString(),
         ...(urgent ? { urgentOnSite: true } : {}),
-        ...(category === 'autre' && categoryDetail
+        ...((category === 'autre' || category === 'sport') && categoryDetail
           ? { categoryDetail }
           : {}),
         ...(topic ? { topic } : {}),

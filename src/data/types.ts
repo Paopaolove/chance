@@ -2,7 +2,12 @@ export type Gender = 'femme' | 'homme' | 'autre';
 
 export type AuthProvider = 'apple' | 'google' | 'email';
 
-export type OutingCategory = 'restaurant' | 'bar' | 'culture' | 'autre';
+export type OutingCategory =
+  | 'restaurant'
+  | 'bar'
+  | 'culture'
+  | 'sport'
+  | 'autre';
 
 /** Compte partenaire (lieu) : resto / bar / salle-théâtre (culture). */
 export type PartnerKind = 'resto' | 'bar' | 'culture';
@@ -214,7 +219,10 @@ export interface Outing {
   title: string;
   description: string;
   category: OutingCategory;
-  /** Free detail when category === 'autre' (ex. bowling). */
+  /**
+   * Free detail when category === 'autre' (ex. bowling, requis) or
+   * 'sport' (« Quel sport ? », facultatif, ex. padel).
+   */
   categoryDetail?: string;
   neighborhood: string;
   venueName: string;
@@ -229,7 +237,7 @@ export interface Outing {
   /**
    * Invitation cap per guest in EUR, covered by the host at the venue (not via the app).
    * Restaurant / bar: positive amount (chips 10–40 or free amount).
-   * Culture / autre: 0 = no € cap (sortie sans addition). Beyond a positive cap is outside the invitation.
+   * Culture / sport / autre: 0 = no € cap (sortie sans addition). Beyond a positive cap is outside the invitation.
    * Not a split bill, not peer transfer, not an unlimited free meal.
    */
   budgetMaxEuros: number;

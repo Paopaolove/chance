@@ -43,6 +43,7 @@ const FILTERS: { id: FilterId; label: string }[] = [
   { id: 'restaurant', label: categoryLabels.restaurant },
   { id: 'bar', label: categoryLabels.bar },
   { id: 'culture', label: categoryLabels.culture },
+  { id: 'sport', label: categoryLabels.sport },
   { id: 'autre', label: categoryLabels.autre },
 ];
 

@@ -52,6 +52,7 @@ const categories: { id: OutingCategory; label: string }[] = [
   { id: 'restaurant', label: 'Restaurant' },
   { id: 'bar', label: 'Bar' },
   { id: 'culture', label: 'Culture' },
+  { id: 'sport', label: 'Sport' },
   { id: 'autre', label: 'Autre' },
 ];
 
@@ -67,7 +68,7 @@ function clampCreateBudget(n: number): number {
   return clampInt(n, BUDGET_MIN_EUROS, BUDGET_MAX_EUROS);
 }
 
-/** Restaurant / bar: chips + free amount. Culture / autre: no € cap. */
+/** Restaurant / bar: chips + free amount. Culture / sport / autre: no € cap. */
 function isPaidInviteCategory(category: OutingCategory): boolean {
   return category === 'restaurant' || category === 'bar';
 }
@@ -241,7 +242,7 @@ export function CreateOutingScreen() {
       setMessage((prev) => (prev.trim() ? prev : URGENT_ON_SITE_MESSAGE));
       setCapacity(1);
       // Urgent short form → autre = invitation sans montant €.
-      setCategory((c) => (c === 'restaurant' || c === 'bar' || c === 'culture' || c === 'autre' ? 'autre' : c));
+      setCategory('autre');
       setCategoryDetail((d) => d.trim() || 'Sur place');
       setBudgetMaxEuros(0);
     }
@@ -251,7 +252,7 @@ export function CreateOutingScreen() {
     if (!prefill?.fromDispo) return;
     if (prefill.category) {
       setCategory(prefill.category);
-      // Culture / autre: no € chips — force 0. Never copy Dispo guest budget.
+      // Culture / sport / autre: no € chips — force 0. Never copy Dispo guest budget.
       if (!isPaidInviteCategory(prefill.category)) {
         setBudgetMaxEuros(0);
       } else {
@@ -434,7 +435,9 @@ export function CreateOutingScreen() {
       description: message.trim(),
       category,
       categoryDetail:
-        category === 'autre' ? categoryDetail.trim() : undefined,
+        category === 'autre' || category === 'sport'
+          ? categoryDetail.trim() || undefined
+          : undefined,
       neighborhood,
       venueName,
       approxArea: neighborhood,
@@ -731,6 +734,8 @@ export function CreateOutingScreen() {
               title={c.label}
               variant={category === c.id ? 'primary' : 'ghost'}
               onPress={() => {
+                // Détail libre propre à Autre / Sport : pas de report de l’un à l’autre.
+                if (c.id !== category) setCategoryDetail('');
                 setCategory(c.id);
                 if (!isPaidInviteCategory(c.id)) {
                   setBudgetMaxEuros(0);
@@ -753,6 +758,20 @@ export function CreateOutingScreen() {
               placeholderTextColor={colors.textMuted}
               autoCorrect={false}
               accessibilityLabel="Précise la sortie"
+            />
+          </>
+        ) : null}
+        {category === 'sport' ? (
+          <>
+            <Text style={styles.label}>Quel sport ? (optionnel)</Text>
+            <TextInput
+              style={styles.input}
+              value={categoryDetail}
+              onChangeText={setCategoryDetail}
+              placeholder="Ex. padel, footing, foot, escalade…"
+              placeholderTextColor={colors.textMuted}
+              autoCorrect={false}
+              accessibilityLabel="Quel sport ?"
             />
           </>
         ) : null}
