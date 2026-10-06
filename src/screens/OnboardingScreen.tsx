@@ -63,6 +63,7 @@ const slides: {
     lines: [
       { text: 'Pas de fil sans fin, pas de swipe.' },
       { text: 'L’échange d’abord.', apart: true },
+      { text: 'Personne à convoiter.' },
       { text: 'Un moment à partager.' },
     ],
   },
