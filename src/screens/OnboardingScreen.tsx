@@ -32,7 +32,14 @@ import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 
 const { width } = Dimensions.get('window');
 
-const slides = [
+const slides: {
+  key: string;
+  titlePrefix: string;
+  titleBold: string;
+  titleSuffix: string;
+  body: string;
+  bodyExtra?: string;
+}[] = [
   {
     key: '1',
     // Pas de titre : le logo Chance suffit, puis l’encadré.
@@ -48,6 +55,7 @@ const slides = [
     titleSuffix: '.',
     body:
       'Pas de fil sans fin, pas de swipe.\nOn partage d’abord. La rencontre, s’il y en a une, vient ensuite.',
+    bodyExtra: 'L’échange d’abord.\nPersonne à convoiter.\nUn moment à partager.',
   },
   {
     key: '3',
@@ -888,6 +896,11 @@ export function OnboardingScreen() {
             <View style={[styles.slide, { width }]}>
               {title}
               <Text style={styles.slideBody}>{item.body}</Text>
+              {item.bodyExtra ? (
+                <Text style={[styles.slideBody, styles.slideBodyExtra]}>
+                  {item.bodyExtra}
+                </Text>
+              ) : null}
             </View>
           );
         }}
@@ -941,6 +954,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     maxWidth: 320,
   },
+  slideBodyExtra: { marginTop: spacing.lg },
   firstSlide: {
     flexGrow: 1,
     justifyContent: 'center',
