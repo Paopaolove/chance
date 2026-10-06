@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "primaryColor": "#E25B1A",
+    "primaryColor": "#E37A55",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#F6F1E8",
+        "backgroundColor": "#F7F1EA",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
