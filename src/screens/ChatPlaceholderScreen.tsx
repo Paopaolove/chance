@@ -559,13 +559,15 @@ const styles = StyleSheet.create({
   bubbleTextMe: { color: colors.white },
   latePanel: {
     backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: colors.warning,
     borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
   lateTitle: {
     ...typography.bodyStrong,
-    color: colors.text,
+    color: colors.warning,
     marginBottom: 4,
   },
   lateHint: {

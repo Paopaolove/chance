@@ -1040,7 +1040,7 @@ const styles = StyleSheet.create({
   bannerOff: {
     backgroundColor: colors.primarySoft,
   },
-  /** Dispo active : fond crème + liseré, coche — pas de vert plein. */
+  /** Dispo active : fond blanc + liseré, coche — pas de vert plein. */
   bannerOn: {
     backgroundColor: colors.background,
     borderWidth: 1,

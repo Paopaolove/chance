@@ -173,9 +173,11 @@ const styles = StyleSheet.create({
     color: colors.primaryDark,
     fontFamily: fonts.medium,
   },
-  /** Confirmation sobre : coche + texte foncé sur crème (pas de vert plein). */
+  /** Confirmation sobre : coche + texte foncé sur fond blanc, liseré léger (pas de vert plein). */
   dispoPill: {
     backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,

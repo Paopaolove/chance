@@ -748,6 +748,8 @@ const styles = StyleSheet.create({
   },
   warnBanner: {
     backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: colors.warning,
     borderRadius: 16,
     padding: spacing.lg,
     marginBottom: spacing.md,

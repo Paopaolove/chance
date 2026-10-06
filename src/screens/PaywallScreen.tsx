@@ -98,7 +98,7 @@ export function PaywallScreen() {
         </View>
       ) : (
         <View style={[styles.banner, styles.bannerWarn]}>
-          <Text style={styles.bannerTitle}>Essai terminé</Text>
+          <Text style={[styles.bannerTitle, styles.bannerTitleWarn]}>Essai terminé</Text>
           <Text style={styles.bannerBody}>
             Choisis une formule pour confirmer une place (hôte : publication
             gratuite).
@@ -239,6 +239,11 @@ const styles = StyleSheet.create({
   },
   bannerWarn: {
     backgroundColor: colors.warningSoft,
+    borderWidth: 1,
+    borderColor: colors.warning,
+  },
+  bannerTitleWarn: {
+    color: colors.warning,
   },
   bannerTitle: {
     ...typography.bodyStrong,

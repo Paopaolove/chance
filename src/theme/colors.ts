@@ -1,6 +1,6 @@
 export const colors = {
-  /** Fond app crème années 70 */
-  background: '#FFF1E0',
+  /** Fond app — blanc pur (plus de crème) ; cartes séparées par un liseré `border` */
+  background: '#FFFFFF',
   surface: '#FFFFFF',
   /** Surfaces secondaires — vert très pâle (palette vert Jaguar) */
   surfaceMuted: '#EDF2EE',
@@ -10,19 +10,20 @@ export const colors = {
   /** Fond de pastille / aperçu — vert Jaguar très pâle */
   primarySoft: '#E3EDE8',
   text: '#1C1917',
-  /** Secondary labels — darkened for cream/white contrast (lot 8) */
+  /** Secondary labels — darkened for white contrast (lot 8) */
   textSecondary: '#57534E',
-  /** Muted / captions — was too pale (#A8A29E) on crème */
+  /** Muted / captions — was too pale (#A8A29E) on white */
   textMuted: '#78716C',
   /** Bordures — gris-vert neutre */
   border: '#D8E2DC',
   /**
    * Pas de token « success » : une confirmation = coche vert Jaguar + texte foncé
-   * sur crème (CheckNote). Le vert plein reste réservé au CTA.
+   * sur fond blanc (CheckNote). Le vert plein reste réservé au CTA.
    */
-  /** Avertissement — texte + liseré */
+  /** Avertissement — texte + liseré #A15C07, sur fond blanc */
   warning: '#A15C07',
-  warningSoft: '#F8F1E3',
+  /** Fond des encarts d’avertissement — blanc (plus de crème) */
+  warningSoft: '#FFFFFF',
   /** Erreur / danger — countdown 10 min, no-show, clôturer, erreurs */
   danger: '#9B2C2C',
   dangerSoft: '#F6E7E7',
