@@ -75,7 +75,7 @@ const slides: {
       { lead: 'Sport.', text: 'Foot, course, salle.', icon: 'football-outline' },
       { lead: 'Culture.', text: 'Expo, théâtre, concert.', icon: 'ticket-outline' },
       { lead: 'Table.', text: 'Resto, bar.', icon: 'restaurant-outline' },
-      { text: 'Si tu cherches un date, ce n’est pas ici.', apart: true },
+      { text: 'On vient pour le moment. Pas pour un rencard.', apart: true },
     ],
   },
   {
@@ -86,6 +86,7 @@ const slides: {
     lines: [
       { text: 'Propose un moment. Ou rejoins-en un.' },
       { text: 'Le premier mois est offert.' },
+      { text: 'Le moment d’abord.', apart: true },
     ],
   },
 ];
