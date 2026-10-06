@@ -53,8 +53,7 @@ const slides: {
     titlePrefix: 'Un vrai ',
     titleBold: 'partage',
     titleSuffix: '.',
-    body:
-      'Pas de fil sans fin, pas de swipe.\nOn partage d’abord. La rencontre, s’il y en a une, vient ensuite.',
+    body: 'Pas de fil sans fin, pas de swipe.',
     bodyExtra: 'L’échange d’abord.\nPersonne à convoiter.\nUn moment à partager.',
   },
   {
