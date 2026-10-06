@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
   },
   close: {
     ...typography.bodyStrong,
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   hint: {

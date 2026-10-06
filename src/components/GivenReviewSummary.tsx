@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
   },
   link: {
     ...typography.caption,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
     textDecorationLine: 'underline',
   },

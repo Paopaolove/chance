@@ -232,7 +232,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   banner: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -300,8 +302,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   cardActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
+    borderColor: colors.text,
+    backgroundColor: colors.surface,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -310,7 +312,7 @@ const styles = StyleSheet.create({
   },
   planTitle: { ...typography.subtitle, color: colors.text },
   badge: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.text,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: 999,
@@ -318,7 +320,7 @@ const styles = StyleSheet.create({
   badgeText: { ...typography.small, color: colors.white },
   price: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     marginTop: spacing.sm,
   },
   detail: {

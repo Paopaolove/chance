@@ -54,7 +54,7 @@ export function VenueDetailScreen() {
         <View style={styles.emptyWrap}>
           <Text style={styles.emptyTitle}>Aucun commentaire lieu</Text>
           <Text style={styles.emptySub}>
-            Les avis lieu apparaîtront ici après les sorties.
+            Les avis lieu apparaîtront ici après les moments.
           </Text>
         </View>
       ) : (
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
   },
   stars: {
     fontSize: 18,
-    color: colors.primaryDark,
+    color: colors.text,
     letterSpacing: 2,
   },
   meta: {

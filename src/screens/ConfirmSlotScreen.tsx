@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     fontSize: 88,
     lineHeight: 96,
     fontFamily: fonts.bold,
-    color: colors.primary,
+    color: colors.text,
     fontVariant: ['tabular-nums'],
     letterSpacing: -2,
     textAlign: 'center',

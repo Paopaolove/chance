@@ -287,7 +287,7 @@ export function RequestsScreen() {
     const body = (
       <>
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>{outing?.title ?? 'Sortie'}</Text>
+          <Text style={styles.cardTitle}>{outing?.title ?? 'Moment'}</Text>
           <View style={styles.rolePill}>
             <Text style={styles.rolePillText}>Envoyée</Text>
           </View>
@@ -423,7 +423,7 @@ export function RequestsScreen() {
         {empty ? (
           <EmptyState
             title="Rien pour l’instant"
-            subtitle="Rejoins une sortie autour de toi, ou publie la tienne."
+            subtitle="Rejoins un moment autour de toi, ou propose le tien."
           />
         ) : (
           sections.map((section, idx) => (
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   },
   /** Slight border accent for cards waiting on guest confirm */
   cardConfirm: {
-    borderColor: colors.primary,
+    borderColor: colors.text,
     borderWidth: 1.5,
   },
   cardHeader: {
@@ -499,19 +499,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rolePill: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: radius.full,
   },
   rolePillText: {
     ...typography.small,
-    color: colors.textSecondary,
+    color: colors.chipText,
     fontFamily: fonts.semiBold,
   },
   urgentPill: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radius.full,
@@ -521,7 +525,7 @@ const styles = StyleSheet.create({
   },
   urgentPillText: {
     ...typography.small,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   cardMeta: {
@@ -539,7 +543,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   actionHint: {
     ...typography.caption,
-    color: colors.primaryDark,
+    color: colors.text,
     marginTop: spacing.sm,
   },
   acceptRow: {
@@ -556,7 +560,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     lineHeight: 40,
     fontFamily: fonts.bold,
-    color: colors.primary,
+    color: colors.text,
     fontVariant: ['tabular-nums'],
     letterSpacing: -1,
     minWidth: 72,

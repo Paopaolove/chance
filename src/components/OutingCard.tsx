@@ -1,13 +1,9 @@
 import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useChance } from '../data/ChanceContext';
-import { mockHosts } from '../data/mockOutings';
-import {
-  formatTravelMinutes,
-  getTravelMinutes,
-} from '../data/travelTime';
+import { categoryLabels, mockHosts } from '../data/mockOutings';
 import { Outing } from '../data/types';
-import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
+import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatOutingWhen } from '../utils/format';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hostPhotoSize } from '../utils/subscription';
@@ -18,22 +14,48 @@ import { RatingLine } from './RatingLine';
 interface Props {
   outing: Outing;
   onPress: () => void;
-  /** Precomputed travel minutes from current user neighborhood. */
+  /**
+   * Trajet précalculé (gardé pour compatibilité ; affiché dans la fiche,
+   * plus sur la carte — une seule ligne de lieu).
+   */
   travelMinutes?: number;
 }
 
-export function OutingCard({ outing, onPress, travelMinutes }: Props) {
+type CardPill = { label: string; tone: 'now' | 'neutral' };
+
+/**
+ * Une seule pastille par carte, par priorité :
+ * Maintenant > offre partenaire (geste / remise / places offertes) >
+ * catégorie (+ plafond « jusqu’à X € » si invitation payante).
+ * « Partenaire » est un simple badge texte à côté du nom.
+ * Le détail (trajet, message, autres offres) reste sur la fiche.
+ */
+function cardPill(outing: Outing, partner: boolean): CardPill {
+  if (outing.urgentOnSite) return { label: 'Maintenant', tone: 'now' };
+  if (partner) {
+    const offer = partnerListingChips(outing)[0];
+    if (offer) return { label: offer, tone: 'neutral' };
+  }
+  const cat =
+    outing.category === 'autre' && outing.categoryDetail?.trim()
+      ? outing.categoryDetail.trim()
+      : categoryLabels[outing.category];
+  return {
+    label:
+      outing.budgetMaxEuros > 0
+        ? `${cat} · jusqu’à ${outing.budgetMaxEuros} €`
+        : cat,
+    tone: 'neutral',
+  };
+}
+
+export function OutingCard({ outing, onPress }: Props) {
   const openProfile = useOpenUserProfile();
   const { state } = useChance();
   const viewer = state.currentUser;
-  const from = state.currentUser?.neighborhood;
-  const minutes =
-    travelMinutes ??
-    (from ? getTravelMinutes(from, outing.neighborhood) : undefined);
   const photoSize = hostPhotoSize(viewer);
-  const isFree = outing.budgetMaxEuros <= 0;
   const partner = isPartnerListing(outing);
-  const partnerChips = partner ? partnerListingChips(outing) : [];
+  const pill = cardPill(outing, partner);
 
   const photoUri = useMemo(() => {
     if (state.currentUser?.id === outing.hostId) {
@@ -44,14 +66,31 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
 
   const openHost = () => openProfile(outing.hostId);
 
+  // Une ligne : quand · lieu · quartier (pas de « Maintenant » en double avec la pastille).
+  const showWhen = !(outing.urgentOnSite && !outing.urgentAutoH90);
+  const place = partner ? outing.title : outing.venueName;
+  const placeLine = [
+    showWhen ? formatOutingWhen(outing.startsAt) : null,
+    place,
+    outing.neighborhood,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <View style={[styles.card, partner && styles.cardPartner]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Sortie ${place}`}
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+    >
       <View style={styles.mainRow}>
+        {/* Photo → profil (Pressable séparé) */}
         <Pressable
           onPress={openHost}
           accessibilityRole="button"
           accessibilityLabel={`Voir le profil de ${outing.hostName}`}
-          hitSlop={12}
+          hitSlop={8}
           style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
           <Avatar
@@ -60,6 +99,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
             seed={outing.hostId}
             size={photoSize}
           />
+          {/* Note sous la photo */}
           <RatingLine
             userId={outing.hostId}
             firstName={outing.hostName}
@@ -68,83 +108,41 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
           />
         </Pressable>
         <View style={styles.mainText}>
-          {/* Photo / prénom / notes → profil (Pressable séparé) */}
+          {/* Prénom → profil (Pressable séparé, n’ouvre pas la sortie) */}
           <Pressable
             onPress={openHost}
             accessibilityRole="button"
             accessibilityLabel={`Voir le profil de ${outing.hostName}`}
-            style={({ pressed }) => pressed && styles.pressed}
+            hitSlop={{ top: 8, bottom: 4 }}
+            style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
           >
-            {partner ? (
-              <View style={styles.partnerTitleRow}>
-                <Text style={[styles.title, styles.partnerTitle]} numberOfLines={1}>
-                  {outing.hostName}
-                </Text>
-                <View style={styles.partnerBadge}>
-                  <Text style={styles.partnerBadgeText}>Partenaire</Text>
-                </View>
-              </View>
-            ) : (
-              <Text style={styles.title} numberOfLines={1}>
-                {outing.hostName} t'invite
-              </Text>
-            )}
-            {outing.description.trim() ? (
-              <Text style={styles.message} numberOfLines={2}>
-                {outing.description.trim()}
-              </Text>
-            ) : null}
+            <Text style={styles.title} numberOfLines={1}>
+              {partner ? outing.hostName : `${outing.hostName} t’invite`}
+            </Text>
           </Pressable>
-          {/* Reste carte → sortie */}
-          <Pressable
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel={`Sortie ${outing.venueName}`}
-            style={({ pressed }) => pressed && styles.pressed}
+          {partner ? <Text style={styles.partnerTag}>Partenaire</Text> : null}
+          <Text style={styles.place} numberOfLines={1}>
+            {placeLine}
+          </Text>
+          <View
+            style={[
+              styles.pill,
+              pill.tone === 'now' && styles.pillNow,
+            ]}
           >
-            <Text style={styles.venue} numberOfLines={1}>
-              {partner ? outing.title : outing.venueName}
+            <Text
+              style={[
+                styles.pillText,
+                pill.tone === 'now' && styles.pillTextNow,
+              ]}
+              numberOfLines={1}
+            >
+              {pill.label}
             </Text>
-            <Text style={styles.meta}>
-              {outing.urgentOnSite && !outing.urgentAutoH90
-                ? 'Maintenant'
-                : formatOutingWhen(outing.startsAt)}{' '}
-              · {outing.neighborhood}
-              {minutes !== undefined
-                ? ` · ${formatTravelMinutes(minutes)}`
-                : ''}
-            </Text>
-            <View style={styles.chipsRow}>
-              {outing.urgentOnSite ? (
-                <View style={[styles.chip, styles.chipUrgent]}>
-                  <Text style={[styles.chipText, styles.chipUrgentText]}>
-                    Maintenant
-                  </Text>
-                </View>
-              ) : null}
-              {partner ? (
-                // Partenaire : geste / remise / places offertes — jamais de €.
-                partnerChips.map((c) => (
-                  <View key={c} style={[styles.chip, styles.chipAccent]}>
-                    <Text style={[styles.chipText, styles.chipAccentText]}>
-                      {c}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <View style={[styles.chip, styles.chipAccent]}>
-                  <Text style={[styles.chipText, styles.chipAccentText]}>
-                    {isFree
-                      ? 'Gratuit'
-                      : `J'invite jusqu'à ${outing.budgetMaxEuros} €`}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Pressable>
+          </View>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -152,87 +150,57 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
   },
-  /** Liseré vert discret — pas une carte pub. */
-  cardPartner: {
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
-  },
-  partnerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: 2,
-  },
-  partnerTitle: { flexShrink: 1, marginBottom: 0 },
-  partnerBadge: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  partnerBadgeText: {
-    ...typography.small,
-    color: colors.primaryDark,
-    fontFamily: fonts.semiBold,
-  },
-  pressed: { opacity: 0.94 },
+  pressed: { opacity: 0.92 },
   mainRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
+    gap: spacing.lg,
   },
-  photoCol: {
-    alignItems: 'center',
-    width: 72,
+  photoCol: { alignItems: 'center', width: 72 },
+  /** Badge texte, pas de carte colorée. */
+  partnerTag: {
+    ...typography.small,
+    fontFamily: fonts.semiBold,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
-  mainText: { flex: 1 },
+  mainText: { flex: 1, minWidth: 0 },
+  nameTap: { alignSelf: 'flex-start', maxWidth: '100%' },
   title: {
     ...typography.subtitle,
     fontFamily: fonts.semiBold,
     fontSize: 18,
     lineHeight: 24,
     color: colors.text,
-    marginBottom: 2,
   },
-  venue: {
-    ...typography.body,
-    fontFamily: fonts.semiBold,
-    color: colors.text,
-    marginBottom: 4,
-    marginTop: spacing.xs,
-  },
-  meta: {
+  place: {
     ...typography.caption,
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
+    marginTop: spacing.xs,
   },
-  message: {
-    ...typography.body,
-    color: colors.text,
-    marginBottom: spacing.xs,
-  },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
+  /** Une seule pastille : blanche + liseré ; « Maintenant » en noir plein (pas de vert sur la carte). */
+  pill: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: radius.full,
-    minHeight: 32,
-    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.chip,
+    maxWidth: '100%',
   },
-  chipAccent: { backgroundColor: colors.primarySoft },
-  chipUrgent: { backgroundColor: colors.primarySoft },
-  chipText: { ...typography.small, color: colors.textSecondary },
-  chipAccentText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
-  chipUrgentText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
+  pillNow: { backgroundColor: colors.text, borderColor: colors.text },
+  pillText: {
+    ...typography.small,
+    fontFamily: fonts.semiBold,
+    color: colors.chipText,
+  },
+  pillTextNow: { color: colors.white },
 });

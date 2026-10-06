@@ -409,7 +409,7 @@ export function OutingDetailScreen() {
         {partner ? (
           partnerChips.map((c) => (
             <View key={c} style={[styles.chip, styles.chipWomen]}>
-              <Text style={[styles.chipText, { color: colors.primaryDark }]}>
+              <Text style={[styles.chipText, { color: colors.text }]}>
                 {c}
               </Text>
             </View>
@@ -423,7 +423,7 @@ export function OutingDetailScreen() {
         )}
         {outing.womenOnly ? (
           <View style={[styles.chip, styles.chipWomen]}>
-            <Text style={[styles.chipText, { color: colors.primaryDark }]}>
+            <Text style={[styles.chipText, { color: colors.text }]}>
               Femmes uniquement
             </Text>
           </View>
@@ -1239,7 +1239,7 @@ const styles = StyleSheet.create({
   hostMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   unlockHint: {
     ...typography.small,
-    color: colors.primary,
+    color: colors.text,
     marginTop: 4,
     fontFamily: fonts.semiBold,
   },
@@ -1251,12 +1251,14 @@ const styles = StyleSheet.create({
   },
   chip: {
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.sm,
     paddingVertical: 4,
     borderRadius: 999,
   },
-  chipWomen: { backgroundColor: colors.primarySoft },
-  chipText: { ...typography.small, color: colors.textSecondary },
+  chipWomen: { backgroundColor: colors.chip },
+  chipText: { ...typography.small, color: colors.chipText },
   categoryDetail: {
     ...typography.caption,
     color: colors.textMuted,
@@ -1265,13 +1267,13 @@ const styles = StyleSheet.create({
   },
   inviteLine: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     marginBottom: spacing.sm,
   },
   title: { ...typography.title, color: colors.text },
   when: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     marginTop: spacing.sm,
     marginBottom: spacing.lg,
   },
@@ -1307,7 +1309,7 @@ const styles = StyleSheet.create({
   resetMsg: { marginBottom: spacing.md },
   resetMsgText: {
     ...typography.caption,
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   statusOk: {
@@ -1340,12 +1342,12 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
   },
   venueLink: {
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   venueAvisLink: {
     ...typography.caption,
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.semiBold,
     marginTop: spacing.xs,
   },
@@ -1408,15 +1410,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   partnerBadge: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.sm,
     paddingVertical: 2,
   },
   partnerBadgeText: {
     ...typography.small,
-    color: colors.primaryDark,
+    color: colors.textSecondary,
     fontFamily: fonts.semiBold,
   },
   guestName: {

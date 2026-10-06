@@ -81,7 +81,7 @@ export function RatingLine({
 const styles = StyleSheet.create({
   text: {
     ...typography.caption,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
     marginTop: 2,
   },
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   },
   underPhoto: {
     ...typography.small,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
     textAlign: 'center',
     marginTop: 6,

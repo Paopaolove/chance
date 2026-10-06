@@ -17,7 +17,7 @@ import { ALL_CATEGORIES, categoryLabels } from '../data/mockOutings';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { OutingCategory } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
-import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
+import { colors, fonts, radius, spacing, typography } from '../theme';
 import {
   DISPO_SLOT_OPTIONS,
   computeDispoExpiresAt,
@@ -282,8 +282,9 @@ export function DispoSoirScreen() {
           <Switch
             value={on}
             onValueChange={setOn}
-            trackColor={{ true: colors.primarySoft, false: colors.border }}
-            thumbColor={on ? colors.primary : colors.surface}
+            trackColor={{ true: colors.primary, false: colors.border }}
+            ios_backgroundColor={colors.border}
+            thumbColor={colors.white}
           />
         </View>
       </View>
@@ -500,7 +501,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.soft,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   label: { ...typography.bodyStrong, color: colors.text },
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: 'transparent',
+    borderColor: colors.chipBorder,
   },
   chipOn: {
     backgroundColor: colors.primary,
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.chipText,
     fontFamily: fonts.semiBold,
   },
   chipTextOn: { color: colors.white },
@@ -581,9 +581,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  quartierItemOn: { backgroundColor: colors.primarySoft },
+  quartierItemOn: { backgroundColor: colors.surface },
   quartierText: { ...typography.body, color: colors.text },
-  quartierTextOn: { color: colors.primaryDark, fontFamily: fonts.semiBold },
+  quartierTextOn: { color: colors.text, fontFamily: fonts.semiBold },
   cta: { marginTop: spacing.xxl },
   ctaSecondary: { marginTop: spacing.md },
   footerHint: {

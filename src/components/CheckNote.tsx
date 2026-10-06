@@ -22,7 +22,7 @@ export function CheckNote({ children, center, size = 16, style, textStyle }: Pro
       <Ionicons
         name="checkmark-circle"
         size={size}
-        color={colors.primary}
+        color={colors.text}
         accessibilityElementsHidden
         importantForAccessibility="no"
       />

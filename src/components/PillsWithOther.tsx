@@ -47,6 +47,13 @@ interface Props<T extends string | number> {
   look?: 'chip' | 'outline';
   /** Pastilles en ligne défilante (longues listes) ; le champ reste dessous, visible. */
   scroll?: boolean;
+  /**
+   * Une seule ligne défilante : pastilles + « Autre » + champ libre au bout,
+   * même niveau, toujours visible (filtres compacts d’Autour de toi).
+   */
+  inline?: boolean;
+  /** Pastilles plus basses (filtres). */
+  compact?: boolean;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -77,6 +84,8 @@ export function PillsWithOther<T extends string | number>({
   hintTone = 'muted',
   look = 'chip',
   scroll = false,
+  inline = false,
+  compact = false,
   accessibilityLabel,
   style,
 }: Props<T>) {
@@ -92,6 +101,7 @@ export function PillsWithOther<T extends string | number>({
       onPress={onPress}
       style={({ pressed }) => [
         styles.pill,
+        compact && styles.pillCompact,
         outline ? styles.pillOutline : styles.pillChip,
         on && styles.pillOn,
         pressed && styles.pressed,
@@ -117,7 +127,12 @@ export function PillsWithOther<T extends string | number>({
   );
 
   const otherUnit = (
-    <View style={[styles.otherUnit, !inputWidth && styles.otherUnitGrow]}>
+    <View
+      style={[
+        styles.otherUnit,
+        !inputWidth && !inline && styles.otherUnitGrow,
+      ]}
+    >
       {showOtherPill
         ? pill('__other', otherLabel, otherActive, () => {
             onPressOther?.();
@@ -130,7 +145,12 @@ export function PillsWithOther<T extends string | number>({
         ref={inputRef}
         style={[
           styles.input,
-          inputWidth ? { width: inputWidth } : styles.inputGrow,
+          compact && styles.inputCompact,
+          inputWidth
+            ? { width: inputWidth }
+            : inline
+              ? styles.inputInline
+              : styles.inputGrow,
           otherActive && styles.inputOn,
         ]}
         value={otherValue}
@@ -151,7 +171,18 @@ export function PillsWithOther<T extends string | number>({
 
   return (
     <View style={style}>
-      {scroll ? (
+      {inline ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollRow}
+          style={styles.inlineScroll}
+        >
+          {pills}
+          {otherUnit}
+        </ScrollView>
+      ) : scroll ? (
         <>
           <ScrollView
             horizontal
@@ -196,22 +227,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  pillChip: { backgroundColor: colors.chip, borderColor: 'transparent' },
-  pillOutline: { backgroundColor: 'transparent', borderColor: colors.border },
-  pillOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  pillCompact: { minHeight: 34, paddingHorizontal: spacing.md },
+  /** Inactive : fond blanc, bord #E4DDD2, texte #1C1917. */
+  pillChip: { backgroundColor: colors.chip, borderColor: colors.chipBorder },
+  pillOutline: { backgroundColor: colors.chip, borderColor: colors.chipBorder },
+  /** Active : fond vert, texte blanc. */
+  pillOn: { backgroundColor: colors.chipActive, borderColor: colors.chipActive },
   pressed: { opacity: 0.88 },
   pillText: {
     ...typography.caption,
     fontFamily: fonts.semiBold,
-    color: colors.textSecondary,
+    color: colors.chipText,
   },
-  /** Même rendu que Button ghost (écran Publier). */
+  /** Pastille plus grande (écran Publier), mêmes couleurs que les autres. */
   pillTextOutline: {
     ...typography.bodyStrong,
     fontFamily: fonts.semiBold,
-    color: colors.primary,
+    color: colors.chipText,
   },
-  pillTextOn: { color: colors.white },
+  pillTextOn: { color: colors.chipActiveText },
   otherUnit: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -222,8 +256,8 @@ const styles = StyleSheet.create({
     minHeight: 40,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
+    borderColor: colors.chipBorder,
+    borderRadius: radius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     ...typography.caption,
@@ -231,6 +265,9 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   inputGrow: { flex: 1, minWidth: 120 },
+  inputInline: { width: 140 },
+  inputCompact: { minHeight: 34, paddingVertical: 6 },
+  inlineScroll: { flexGrow: 0 },
   inputOn: { borderColor: colors.primary },
   suffix: { ...typography.caption, color: colors.textMuted },
   hint: {

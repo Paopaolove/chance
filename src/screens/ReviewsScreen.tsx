@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
   },
   stars: {
     fontSize: 18,
-    color: colors.primaryDark,
+    color: colors.text,
     letterSpacing: 2,
   },
   meta: {
@@ -367,7 +367,9 @@ const styles = StyleSheet.create({
   },
   replyBox: {
     marginTop: spacing.md,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
   },
@@ -380,7 +382,7 @@ const styles = StyleSheet.create({
   replyText: { ...typography.body, color: colors.text },
   replyForm: { marginTop: spacing.md, gap: spacing.sm },
   input: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
@@ -393,7 +395,7 @@ const styles = StyleSheet.create({
   hideBtn: { marginTop: spacing.md },
   hideText: {
     ...typography.caption,
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   waitingBox: { marginTop: spacing.sm },

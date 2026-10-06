@@ -28,7 +28,7 @@ import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-/** Override RN default blue (#007AFF) — vert Jaguar everywhere (gear, tint, links). */
+/** Remplace le bleu iOS par défaut : thème neutre, vert Jaguar réservé aux accents. */
 const chanceNavTheme: Theme = {
   ...DefaultTheme,
   colors: {
@@ -52,7 +52,7 @@ export function RootNavigator() {
       <Stack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.background },
-          headerTintColor: colors.primary,
+          headerTintColor: colors.text,
           headerTitleStyle: { fontWeight: '600', color: colors.text },
           headerBackTitle: 'Retour',
           contentStyle: { backgroundColor: colors.background },
@@ -74,7 +74,7 @@ export function RootNavigator() {
             <Stack.Screen
               name="OutingDetail"
               component={OutingDetailScreen}
-              options={{ title: 'Sortie' }}
+              options={{ title: 'Moment' }}
             />
             <Stack.Screen
               name="ConfirmSlot"
@@ -102,7 +102,7 @@ export function RootNavigator() {
               options={{
                 title: 'Dispo',
                 headerBackTitle: 'Retour',
-                headerTintColor: colors.primary,
+                headerTintColor: colors.text,
               }}
             />
             <Stack.Screen

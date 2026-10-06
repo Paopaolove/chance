@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
   moderation: {
     marginBottom: spacing.xl,
     padding: spacing.lg,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   },
   stats: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   statsNew: {
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   },
   stars: {
     fontSize: 18,
-    color: colors.primaryDark,
+    color: colors.text,
     letterSpacing: 2,
   },
   meta: {
@@ -481,7 +481,9 @@ const styles = StyleSheet.create({
   },
   replyBox: {
     marginTop: spacing.md,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
   },

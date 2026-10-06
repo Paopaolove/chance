@@ -89,7 +89,7 @@ export function MainTabs() {
           title: 'Demandes',
           tabBarBadge: requestsBadge,
           tabBarBadgeStyle: {
-            backgroundColor: colors.primary,
+            backgroundColor: colors.text,
             color: colors.white,
             fontSize: 11,
           },

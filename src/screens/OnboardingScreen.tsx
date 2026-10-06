@@ -34,7 +34,8 @@ import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 const { width } = Dimensions.get('window');
 
 /**
- * 3 slides avant le tunnel : fond blanc, grand titre à gauche, un mot en vert,
+ * 3 slides avant le tunnel : grand titre 34 à gauche (« partager. » / « Moment » en vert,
+ * slide 2 sans mot vert),
  * beaucoup d’air. Rien sur la caution / les 10 min / le joker ici (c’est dans
  * « Comment ça marche », plus loin dans le tunnel).
  */
@@ -62,15 +63,14 @@ const slides: {
     lines: [
       { text: 'Pas de fil sans fin, pas de swipe.' },
       { text: 'L’échange d’abord.', apart: true },
-      { text: 'Personne à convoiter.' },
       { text: 'Un moment à partager.' },
     ],
   },
   {
     key: '2',
-    titleBefore: 'Autour d’une ',
-    titleGreen: 'table',
-    titleAfter: '. Ou pas.',
+    titleBefore: 'Autour d’une table. Ou pas.',
+    titleGreen: '',
+    titleAfter: '',
     lines: [
       { lead: 'Sport.', text: 'Foot, course, salle.', icon: 'football-outline' },
       { lead: 'Culture.', text: 'Expo, théâtre, concert.', icon: 'ticket-outline' },
@@ -432,10 +432,9 @@ export function OnboardingScreen() {
               <Switch
                 value={womenOnlyPreference}
                 onValueChange={setWomenOnlyPreference}
-                trackColor={{ true: colors.primarySoft, false: colors.border }}
-                thumbColor={
-                  womenOnlyPreference ? colors.primary : colors.surface
-                }
+                trackColor={{ true: colors.primary, false: colors.border }}
+            ios_backgroundColor={colors.border}
+                thumbColor={colors.white}
               />
             </View>
           ) : null}
@@ -496,7 +495,12 @@ export function OnboardingScreen() {
               <Text style={styles.photoPlaceholder}>Ajouter une photo</Text>
             )}
           </Pressable>
-          <Button title="Choisir une photo" onPress={onPickPhoto} style={styles.cta} />
+          <Button
+            title={photoUri ? 'Changer la photo' : 'Choisir une photo'}
+            variant={photoUri ? 'secondary' : 'primary'}
+            onPress={onPickPhoto}
+            style={styles.cta}
+          />
           <Button
             title={photoUri ? 'Continuer' : 'Passer'}
             variant={photoUri ? 'primary' : 'ghost'}
@@ -856,7 +860,9 @@ export function OnboardingScreen() {
           >
             <Text style={styles.slideTitle} accessibilityRole="header">
               {item.titleBefore}
-              <Text style={styles.slideTitleGreen}>{item.titleGreen}</Text>
+              {item.titleGreen ? (
+                <Text style={styles.slideTitleGreen}>{item.titleGreen}</Text>
+              ) : null}
               {item.titleAfter}
             </Text>
             <View style={styles.slideLines}>
@@ -869,7 +875,7 @@ export function OnboardingScreen() {
                     <Ionicons
                       name={line.icon}
                       size={22}
-                      color={colors.primary}
+                      color={colors.text}
                       style={styles.slideLineIcon}
                     />
                   ) : null}
@@ -914,17 +920,15 @@ const styles = StyleSheet.create({
   slide: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.screen,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.block,
   },
   slideTitle: {
     ...typography.hero,
-    fontSize: 38,
-    lineHeight: 46,
     color: colors.text,
     textAlign: 'left',
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.block,
   },
   slideTitleGreen: {
     fontFamily: fonts.bold,
@@ -940,8 +944,6 @@ const styles = StyleSheet.create({
   slideLineIcon: { width: 24 },
   slideLine: {
     ...typography.body,
-    fontSize: 18,
-    lineHeight: 26,
     color: colors.textSecondary,
     textAlign: 'left',
     flexShrink: 1,
@@ -960,10 +962,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.text,
     opacity: 0.25,
   },
-  dotActive: { backgroundColor: colors.primary, width: 20, opacity: 1 },
+  dotActive: { backgroundColor: colors.text, width: 20, opacity: 1 },
   wrap: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: spacing.xl },
   wrapScroll: {
     paddingHorizontal: spacing.xl,
@@ -1013,14 +1015,16 @@ const styles = StyleSheet.create({
   },
   chip: {
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     borderRadius: radius.full,
   },
-  chipOn: { backgroundColor: colors.primary },
+  chipOn: { backgroundColor: colors.chipActive, borderColor: colors.chipActive },
   chipText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.chipText,
     fontFamily: fonts.semiBold,
   },
   chipTextOn: { color: colors.white },
@@ -1028,7 +1032,7 @@ const styles = StyleSheet.create({
   secondary: { marginTop: spacing.md },
   secondaryOutline: {
     marginTop: spacing.md,
-    borderColor: colors.primary,
+    borderColor: colors.border,
   },
   textLinkWrap: {
     marginTop: spacing.lg,
@@ -1037,7 +1041,7 @@ const styles = StyleSheet.create({
   },
   textLink: {
     ...typography.body,
-    color: colors.primary,
+    color: colors.text,
     textAlign: 'center',
     textDecorationLine: 'underline',
     fontFamily: fonts.medium,
@@ -1065,7 +1069,7 @@ const styles = StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: 'center',
@@ -1081,10 +1085,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   disclaimerBox: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.sm,
     marginBottom: spacing.xl,
@@ -1114,7 +1118,7 @@ const styles = StyleSheet.create({
     ...typography.subtitle,
     fontSize: 22,
     lineHeight: 30,
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.bold,
     minWidth: 28,
   },
@@ -1150,7 +1154,7 @@ const styles = StyleSheet.create({
   },
   accordionChevron: {
     ...typography.subtitle,
-    color: colors.primary,
+    color: colors.textSecondary,
   },
   rulesBox: {
     backgroundColor: colors.surface,
@@ -1173,6 +1177,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 6,
+    backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.border,
     alignItems: 'center',

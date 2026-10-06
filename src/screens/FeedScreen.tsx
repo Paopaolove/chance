@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DemoMenuModal } from '../components/DemoMenuModal';
-import { EmptyState } from '../components/EmptyState';
 import { OutingCard } from '../components/OutingCard';
 import { pinPartnerOutingsNearSoon } from '../utils/partners';
 import { PersonCard } from '../components/PersonCard';
@@ -25,14 +24,13 @@ import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { getTravelMinutes, isResolvableNeighborhood } from '../data/travelTime';
 import { Outing, OutingCategory, User } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
-import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
+import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatParisTime, parisYmd } from '../utils/parisTime';
 import {
   computeDispoExpiresAt,
   dispoSlotCreatePrefill,
 } from '../utils/dispo';
 import { clampInt } from '../utils/parseLooseNumber';
-import { CheckNote } from '../components/CheckNote';
 import { PillsWithOther } from '../components/PillsWithOther';
 import {
   formatYmdShort,
@@ -46,6 +44,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
 type FeedMode = 'sorties' | 'dispos';
 type BudgetFilter = number | 'all';
+type FilterPanel = 'quartier' | 'jour' | 'distance' | 'more' | null;
 
 const FILTERS: { id: FilterId; label: string }[] = [
   { id: 'all', label: 'Toutes' },
@@ -220,7 +219,8 @@ export function FeedScreen() {
   const [quartierFilter, setQuartierFilter] = useState<string>('all');
   /** Annonces: prefer alignment with my Dispo prefs when toggled. */
   const [alignDispo, setAlignDispo] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  /** Un seul panneau ouvert à la fois sous la ligne de filtres. */
+  const [openPanel, setOpenPanel] = useState<FilterPanel>(null);
   const [travelMaxMinutes, setTravelMaxMinutes] = useState(
     TRAVEL_DEFAULT_MINUTES,
   );
@@ -523,22 +523,21 @@ export function FeedScreen() {
     });
   };
 
-  const inviteBanner = (
-    <View style={[styles.banner, styles.bannerOff]}>
-      <Text style={styles.bannerTitle}>J’invite ce soir</Text>
-      <Text style={styles.bannerBody}>
-        Propose une table, un verre ou une sortie.
+  /** Entrées « J’invite » / « Je suis déjà sur place » : après la liste (la liste d’abord). */
+  const inviteFooter = (
+    <View style={styles.footerBlock}>
+      <Text style={styles.footerTitle}>J’invite ce soir</Text>
+      <Text style={styles.footerBody}>
+        Propose une table, un verre ou un moment.
       </Text>
-      <View style={styles.inviteCtaRow}>
+      <View style={styles.footerRow}>
         <Pressable
-          onPress={() =>
-            navigation.navigate('MainTabs', { screen: 'Create' })
-          }
-          style={styles.inviteCta}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Create' })}
+          style={({ pressed }) => [styles.primaryPill, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Inviter"
         >
-          <Text style={styles.inviteCtaText}>Inviter</Text>
+          <Text style={styles.primaryPillText}>Inviter</Text>
         </Pressable>
         <Pressable
           onPress={() =>
@@ -547,11 +546,11 @@ export function FeedScreen() {
               params: { urgentOnSite: true },
             })
           }
-          style={styles.urgentCta}
+          style={({ pressed }) => [styles.secondaryPill, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Je suis déjà sur place"
         >
-          <Text style={styles.urgentCtaText}>Je suis déjà sur place</Text>
+          <Text style={styles.secondaryPillText}>Je suis déjà sur place</Text>
         </Pressable>
       </View>
     </View>
@@ -570,38 +569,16 @@ export function FeedScreen() {
     });
   };
 
-  const dispoBanner = (
-    <View style={[styles.banner, isDispo ? styles.bannerOn : styles.bannerOff]}>
-      {isDispo ? (
-        <CheckNote
-          size={20}
-          style={styles.bannerCheckRow}
-          textStyle={[styles.bannerTitle, styles.bannerTitleOn]}
-        >
-          Dispo
-        </CheckNote>
-      ) : (
-        <Text style={styles.bannerTitle}>Dispo</Text>
-      )}
-      <Text style={[styles.bannerBody, isDispo && styles.bannerBodyOn]}>
-        {`Les autres peuvent te proposer une sortie.\nÇa s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.`}
-      </Text>
-      <View style={styles.dispoToggleRow}>
-        <View style={styles.dispoToggleCopy}>
-          <Text style={[styles.dispoToggleLabel, isDispo && styles.bannerTitleOn]}>
-            Je suis dispo
-          </Text>
-          <Text style={styles.dispoToggleHint}>
-            {isDispo ? 'Visible' : 'Invisible pour l’instant'}
-          </Text>
-        </View>
-        <Switch
-          value={isDispo}
-          onValueChange={onToggleDispo}
-          trackColor={{ true: colors.primarySoft, false: colors.border }}
-          thumbColor={isDispo ? colors.primary : colors.surface}
-          accessibilityLabel="Je suis dispo"
-        />
+  /** Dispo : une ligne compacte (interrupteur + réglages). */
+  const dispoRow = (
+    <View style={styles.dispoRow}>
+      <View style={styles.dispoRowCopy}>
+        <Text style={styles.dispoRowLabel}>Je suis dispo</Text>
+        <Text style={styles.dispoRowHint} numberOfLines={2}>
+          {isDispo
+            ? 'Visible jusqu’à la fin du créneau, minuit, ou ta prochaine table.'
+            : 'Invisible pour l’instant.'}
+        </Text>
       </View>
       <Pressable
         onPress={() => navigation.navigate('DispoSoir')}
@@ -609,91 +586,154 @@ export function FeedScreen() {
         accessibilityRole="button"
         accessibilityLabel="Réglages Dispo"
       >
-        <Text style={[styles.bannerCta, isDispo && styles.bannerCtaOn]}>
-          Réglages →
-        </Text>
+        <Text style={styles.textLink}>Réglages</Text>
       </Pressable>
+      <Switch
+        value={isDispo}
+        onValueChange={onToggleDispo}
+        trackColor={{ true: colors.primary, false: colors.border }}
+        ios_backgroundColor={colors.border}
+        thumbColor={colors.white}
+        accessibilityLabel="Je suis dispo"
+      />
     </View>
   );
 
-  const filtersActive =
+  /** Filtres derrière l’engrenage (catégorie, budget, aligné à ma dispo). */
+  const moreFiltersActive =
+    categoryFilter !== 'all' ||
+    categoryText.trim() !== '' ||
     budgetFilter !== 'all' ||
-    alignDispo ||
-    (mode === 'dispos' && quartierFilter !== 'all') ||
-    (mode === 'sorties' &&
-      (annoncesQuartier.trim() !== '' ||
-        whenDay !== 'today' ||
-        whenOtherDate.trim() !== '' ||
-        whenFromTime.trim() !== '')) ||
-    travelMaxMinutes !== TRAVEL_DEFAULT_MINUTES;
+    alignDispo;
 
-  const categoryChips = (
-    <View style={styles.categoryRow}>
+  const togglePanel = (p: FilterPanel) =>
+    setOpenPanel((cur) => (cur === p ? null : p));
+
+  const quartierChipLabel =
+    mode === 'sorties'
+      ? annoncesQuartier.trim() || 'Quartier'
+      : quartierFilter === 'all'
+        ? 'Quartier'
+        : quartierFilter;
+  const jourChipLabel =
+    (whenDay === 'other'
+      ? whenOtherParsed.ok
+        ? formatYmdShort(whenOtherParsed.ymd)
+        : 'Autre jour'
+      : WHEN_DAY_OPTIONS.find((d) => d.id === whenDay)?.label ?? 'Jour') +
+    (appliedWhenFromTime ? ` · ${appliedWhenFromTime}` : '');
+  const distanceChipLabel = `${travelMaxMinutes} min`;
+
+  const filterChip = (
+    panel: Exclude<FilterPanel, 'more'>,
+    label: string,
+    a11y: string,
+  ) => {
+    const on = openPanel === panel;
+    return (
+      <Pressable
+        key={panel}
+        onPress={() => togglePanel(panel)}
+        style={[styles.chip, on && styles.chipSelected]}
+        accessibilityRole="button"
+        accessibilityLabel={a11y}
+        accessibilityState={{ selected: on, expanded: on }}
+      >
+        <Text
+          style={[styles.chipText, on && styles.chipTextSelected]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Ionicons
+          name={on ? 'chevron-up' : 'chevron-down'}
+          size={14}
+          color={on ? colors.white : colors.text}
+        />
+      </Pressable>
+    );
+  };
+
+  /** UNE ligne : quartier · jour · distance … engrenage. */
+  const filterRow = (
+    <View style={styles.filterRow}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filters}
         style={styles.filtersScrollFlex}
+        keyboardShouldPersistTaps="handled"
       >
-        {FILTERS.map((f) => {
-          const selected = categoryFilter === f.id;
-          return (
-            <Pressable
-              key={f.id}
-              onPress={() => setCategoryFilter(f.id)}
-              style={[styles.chip, selected && styles.chipSelected]}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-            >
-              <Text
-                style={[styles.chipText, selected && styles.chipTextSelected]}
-              >
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {filterChip('quartier', quartierChipLabel, 'Filtre quartier')}
+        {mode === 'sorties'
+          ? filterChip('jour', jourChipLabel, 'Filtre jour et heure')
+          : null}
+        {filterChip('distance', distanceChipLabel, 'Filtre distance en minutes')}
       </ScrollView>
       <Pressable
-        onPress={() => setShowFilters((v) => !v)}
+        onPress={() => togglePanel('more')}
         style={[
-          styles.chip,
-          styles.filtresChip,
-          (showFilters || filtersActive) && styles.chipSelected,
+          styles.gear,
+          (openPanel === 'more' || moreFiltersActive) && styles.chipSelected,
         ]}
         accessibilityRole="button"
-        accessibilityLabel="Filtres"
-        accessibilityState={{ selected: showFilters }}
+        accessibilityLabel="Autres filtres"
+        accessibilityState={{ selected: openPanel === 'more', expanded: openPanel === 'more' }}
       >
         <Ionicons
           name="settings-outline"
           size={18}
           color={
-            showFilters || filtersActive ? colors.white : colors.primary
+            openPanel === 'more' || moreFiltersActive
+              ? colors.white
+              : colors.primary
           }
         />
       </Pressable>
     </View>
   );
 
-  const categoryFree = (
-    <View style={styles.categoryFreeRow}>
+  const categoryChips = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filters}
+      style={styles.panelRow}
+      keyboardShouldPersistTaps="handled"
+    >
+      {FILTERS.map((f) => {
+        const selected = categoryFilter === f.id;
+        return (
+          <Pressable
+            key={f.id}
+            onPress={() => setCategoryFilter(f.id)}
+            style={[styles.chip, selected && styles.chipSelected]}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+          >
+            <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+              {f.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+      {/* Champ libre au même niveau que les pastilles (règle « Autre ») */}
       <TextInput
         selectionColor={colors.primary}
         cursorColor={colors.primary}
         style={[
-          styles.categoryFreeInput,
-          categoryText.trim() !== '' && styles.categoryFreeInputOn,
+          styles.inlineInput,
+          categoryText.trim() !== '' && styles.inlineInputOn,
         ]}
         value={categoryText}
         onChangeText={(t) => setCategoryText(t.trimStart().slice(0, 40))}
-        placeholder="Autre : précise (ex. padel, expo, karaoké)"
+        placeholder="Autre : padel, karaoké…"
         placeholderTextColor={colors.textMuted}
         autoCorrect={false}
         returnKeyType="search"
         accessibilityLabel="Autre catégorie : précise une activité"
       />
-    </View>
+    </ScrollView>
   );
 
   const budgetOtherParsed = parseFreeInt(budgetOther, BUDGET_FREE_MIN, BUDGET_FREE_MAX);
@@ -708,114 +748,97 @@ export function FeedScreen() {
   const dispoQuartierOther =
     quartierFilter !== 'all' && !quartierOptions.includes(quartierFilter);
 
-  const extraFiltersPanel = showFilters ? (
-    <View style={styles.filtersPanel}>
-      {mode === 'sorties' && isDispo ? (
-        <View style={styles.alignRow}>
-          <Pressable
-            onPress={() => setAlignDispo((v) => !v)}
-            style={[styles.chip, alignDispo && styles.chipSelected]}
-            accessibilityRole="button"
-            accessibilityState={{ selected: alignDispo }}
-          >
-            <Text
-              style={[styles.chipText, alignDispo && styles.chipTextSelected]}
-            >
-              Aligné à ma dispo
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-      <Text style={styles.quartierFreeLabel}>Budget max</Text>
-      <PillsWithOther
-        options={BUDGET_FILTERS}
-        selected={budgetFilter}
-        onSelect={(id) => {
-          setBudgetFilter(id);
-          setBudgetOther('');
-        }}
-        otherActive={budgetOther.trim() !== ''}
-        otherValue={budgetOther}
-        onChangeOther={(t) => {
-          const cleaned = t.replace(/[^0-9]/g, '').slice(0, 3);
-          setBudgetOther(cleaned);
-          if (!cleaned) {
-            setBudgetFilter('all');
-            return;
+  let panel: React.ReactNode = null;
+  if (openPanel === 'quartier') {
+    panel =
+      mode === 'sorties' ? (
+        <PillsWithOther
+          inline
+          compact
+          options={[
+            { id: '', label: 'Chez moi' },
+            ...PARIS_NEIGHBORHOODS.map((q) => ({ id: q as string, label: q })),
+          ]}
+          selected={quartierInList ? annoncesQuartier : annoncesQuartier.trim() === '' ? '' : null}
+          onSelect={(id) =>
+            setAnnoncesQuartier((prev) => (prev === id ? '' : id))
           }
-          const res = parseFreeInt(cleaned, BUDGET_FREE_MIN, BUDGET_FREE_MAX);
-          if (res.ok) setBudgetFilter(res.value);
-        }}
-        placeholder="ex. 30"
-        keyboardType="number-pad"
-        suffix="€"
-        maxLength={3}
-        inputWidth={72}
-        hint={freeIntHint(budgetOtherParsed, BUDGET_FREE_MIN, BUDGET_FREE_MAX, '€')}
-        accessibilityLabel="Autre budget maximum en euros"
-        style={styles.group}
-      />
-      {mode === 'sorties' ? (
-        <>
-          <Text style={styles.quartierFreeLabel}>Quartier</Text>
-          <PillsWithOther
-            scroll
-            options={[
-              { id: '', label: 'Chez moi' },
-              ...PARIS_NEIGHBORHOODS.map((q) => ({ id: q as string, label: q })),
-            ]}
-            selected={quartierInList ? annoncesQuartier : annoncesQuartier.trim() === '' ? '' : null}
-            onSelect={(id) =>
-              setAnnoncesQuartier((prev) => (prev === id ? '' : id))
+          otherActive={annoncesQuartier.trim() !== '' && !quartierInList}
+          otherValue={quartierInList ? '' : annoncesQuartier}
+          onChangeOther={(t) => setAnnoncesQuartier(t.trimStart())}
+          placeholder="ex. Batignolles"
+          maxLength={40}
+          accessibilityLabel="Autre quartier d’origine"
+        />
+      ) : (
+        <PillsWithOther
+          inline
+          compact
+          options={quartierOptions.map((q) => ({
+            id: q,
+            label: q === 'all' ? 'Tous' : q,
+          }))}
+          selected={dispoQuartierOther ? null : quartierFilter}
+          onSelect={(id) => setQuartierFilter(id)}
+          otherActive={dispoQuartierOther}
+          otherValue={dispoQuartierOther ? quartierFilter : ''}
+          onChangeOther={(t) => {
+            const trimmed = t.trimStart();
+            setQuartierFilter(trimmed === '' ? 'all' : trimmed);
+          }}
+          placeholder="ex. Batignolles"
+          maxLength={40}
+          accessibilityLabel="Filtrer par autre quartier"
+        />
+      );
+  } else if (openPanel === 'jour' && mode === 'sorties') {
+    panel = (
+      <>
+        <PillsWithOther
+          inline
+          compact
+          options={WHEN_DAY_OPTIONS}
+          selected={whenDay === 'other' ? null : whenDay}
+          onSelect={(id) => {
+            setWhenDay(id);
+            setWhenOtherDate('');
+          }}
+          otherActive={whenDay === 'other'}
+          otherValue={whenOtherDate}
+          onPressOther={() => setWhenDay('other')}
+          onChangeOther={(t) => {
+            const cleaned = t.replace(/[^0-9/.\- ]/g, '').slice(0, 10);
+            setWhenOtherDate(cleaned);
+            if (cleaned.trim()) {
+              setWhenDay('other');
+            } else if (whenDay === 'other') {
+              setWhenDay('today');
             }
-            otherActive={annoncesQuartier.trim() !== '' && !quartierInList}
-            otherValue={quartierInList ? '' : annoncesQuartier}
-            onChangeOther={(t) => setAnnoncesQuartier(t.trimStart())}
-            placeholder="ex. Batignolles"
-            maxLength={40}
-            accessibilityLabel="Autre quartier d’origine"
-            style={styles.group}
-          />
-          <Text style={styles.quartierFreeLabel}>Jour</Text>
-          <PillsWithOther
-            options={WHEN_DAY_OPTIONS}
-            selected={whenDay === 'other' ? null : whenDay}
-            onSelect={(id) => {
-              setWhenDay(id);
-              setWhenOtherDate('');
-            }}
-            otherActive={whenDay === 'other'}
-            otherValue={whenOtherDate}
-            onPressOther={() => setWhenDay('other')}
-            onChangeOther={(t) => {
-              const cleaned = t.replace(/[^0-9/.\- ]/g, '').slice(0, 10);
-              setWhenOtherDate(cleaned);
-              if (cleaned.trim()) {
-                setWhenDay('other');
-              } else if (whenDay === 'other') {
-                setWhenDay('today');
-              }
-            }}
-            placeholder="ex. 12/10"
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
-            inputWidth={104}
-            hint={
-              whenDay === 'other'
-                ? whenOtherParsed.ok
-                  ? `Le ${formatYmdShort(whenOtherParsed.ymd)}`
-                  : freeDateHint(whenOtherParsed) ??
-                    'Écris une date JJ/MM (ex. 12/10).'
-                : null
-            }
-            accessibilityLabel="Autre jour, date JJ/MM"
-            style={styles.group}
-          />
-          <Text style={styles.quartierFreeLabel}>Heure : à partir de …</Text>
+          }}
+          placeholder="ex. 12/10"
+          keyboardType="numbers-and-punctuation"
+          maxLength={10}
+          inputWidth={96}
+          hint={
+            whenDay === 'other'
+              ? whenOtherParsed.ok
+                ? `Le ${formatYmdShort(whenOtherParsed.ymd)}`
+                : freeDateHint(whenOtherParsed) ??
+                  'Écris une date JJ/MM (ex. 12/10).'
+              : null
+          }
+          accessibilityLabel="Autre jour, date JJ/MM"
+        />
+        <View style={styles.inlineField}>
+          <Text style={styles.panelLabel}>À partir de</Text>
           <TextInput
             selectionColor={colors.primary}
             cursorColor={colors.primary}
-            style={styles.quartierFreeInput}
+            style={[
+              styles.inlineInput,
+              styles.timeInput,
+              whenFromTime.trim() !== '' && styles.inlineInputOn,
+            ]}
             value={whenFromTime}
             onChangeText={(t) => {
               // Allow typing HH:MM; soft-normalize digits and separators
@@ -829,39 +852,20 @@ export function FeedScreen() {
             autoCorrect={false}
             accessibilityLabel="Heure minimum à partir de"
           />
-        </>
-      ) : null}
-      {mode === 'dispos' ? (
-        <>
-          <Text style={styles.quartierFreeLabel}>Quartier</Text>
-          <PillsWithOther
-            scroll
-            options={quartierOptions.map((q) => ({
-              id: q,
-              label: q === 'all' ? 'Tous' : q,
-            }))}
-            selected={dispoQuartierOther ? null : quartierFilter}
-            onSelect={(id) => setQuartierFilter(id)}
-            otherActive={dispoQuartierOther}
-            otherValue={dispoQuartierOther ? quartierFilter : ''}
-            onChangeOther={(t) => {
-              const trimmed = t.trimStart();
-              setQuartierFilter(trimmed === '' ? 'all' : trimmed);
-            }}
-            placeholder="ex. Batignolles"
-            maxLength={40}
-            accessibilityLabel="Filtrer par autre quartier"
-            style={styles.group}
-          />
-        </>
-      ) : null}
-      <View style={styles.travelBlock}>
-        <Text style={styles.travelLabel}>
+        </View>
+      </>
+    );
+  } else if (openPanel === 'distance') {
+    panel = (
+      <>
+        <Text style={styles.panelLabel}>
           {mode === 'sorties' && annoncesQuartier.trim()
             ? `Moins de ${travelMaxMinutes} min depuis ${annoncesQuartier.trim()}`
             : `Moins de ${travelMaxMinutes} min`}
         </Text>
         <PillsWithOther
+          inline
+          compact
           options={TRAVEL_SHORTCUTS.map((m) => ({ id: m as number, label: `${m} min` }))}
           selected={travelMaxMinutes}
           onSelect={(m) => {
@@ -907,20 +911,81 @@ export function FeedScreen() {
           thumbTintColor={colors.primary}
           accessibilityLabel="Temps de trajet maximum"
         />
-      </View>
-    </View>
-  ) : null;
+      </>
+    );
+  } else if (openPanel === 'more') {
+    panel = (
+      <>
+        <Text style={styles.panelLabel}>Catégorie</Text>
+        {categoryChips}
+        <Text style={styles.panelLabel}>Budget max</Text>
+        <PillsWithOther
+          inline
+          compact
+          options={BUDGET_FILTERS}
+          selected={budgetFilter}
+          onSelect={(id) => {
+            setBudgetFilter(id);
+            setBudgetOther('');
+          }}
+          otherActive={budgetOther.trim() !== ''}
+          otherValue={budgetOther}
+          onChangeOther={(t) => {
+            const cleaned = t.replace(/[^0-9]/g, '').slice(0, 3);
+            setBudgetOther(cleaned);
+            if (!cleaned) {
+              setBudgetFilter('all');
+              return;
+            }
+            const res = parseFreeInt(cleaned, BUDGET_FREE_MIN, BUDGET_FREE_MAX);
+            if (res.ok) setBudgetFilter(res.value);
+          }}
+          placeholder="ex. 30"
+          keyboardType="number-pad"
+          suffix="€"
+          maxLength={3}
+          inputWidth={72}
+          hint={freeIntHint(budgetOtherParsed, BUDGET_FREE_MIN, BUDGET_FREE_MAX, '€')}
+          accessibilityLabel="Autre budget maximum en euros"
+        />
+        {mode === 'sorties' && isDispo ? (
+          <View style={styles.alignRow}>
+            <Pressable
+              onPress={() => setAlignDispo((v) => !v)}
+              style={[styles.chip, alignDispo && styles.chipSelected]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: alignDispo }}
+            >
+              <Text
+                style={[styles.chipText, alignDispo && styles.chipTextSelected]}
+              >
+                Aligné à ma dispo
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </>
+    );
+  }
+
+  const filtersPanel = panel ? <View style={styles.panel}>{panel}</View> : null;
 
   const listHeader = (
-    <View>
+    <View style={styles.listHeader}>
+      {/* Segment Annonces / Dispo : la pastille choisie reste verte */}
       <View style={styles.segment}>
         {(['sorties', 'dispos'] as FeedMode[]).map((m) => {
           const selected = mode === m;
           return (
             <Pressable
               key={m}
-              onPress={() => setMode(m)}
+              onPress={() => {
+                setMode(m);
+                setOpenPanel((cur) => (cur === 'jour' ? null : cur));
+              }}
               style={[styles.segmentItem, selected && styles.segmentItemOn]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
             >
               <Text
                 style={[styles.segmentText, selected && styles.segmentTextOn]}
@@ -931,10 +996,24 @@ export function FeedScreen() {
           );
         })}
       </View>
-      {mode === 'sorties' ? inviteBanner : dispoBanner}
-      {categoryChips}
-      {categoryFree}
-      {extraFiltersPanel}
+      {mode === 'dispos' ? dispoRow : null}
+      {filterRow}
+      {filtersPanel}
+    </View>
+  );
+
+  const emptyMoments = (hint?: string) => (
+    <View style={styles.empty}>
+      <Text style={styles.emptyTitle}>Encore peu de moments ici.</Text>
+      {hint ? <Text style={styles.emptyHint}>{hint}</Text> : null}
+      <Pressable
+        onPress={() => navigation.navigate('MainTabs', { screen: 'Create' })}
+        hitSlop={12}
+        accessibilityRole="link"
+        accessibilityLabel="Propose le premier"
+      >
+        <Text style={styles.emptyLink}>Propose le premier.</Text>
+      </Pressable>
     </View>
   );
 
@@ -945,11 +1024,7 @@ export function FeedScreen() {
           <Text style={styles.brand}>Moment</Text>
         </Pressable>
         <Text style={styles.title}>Autour de toi</Text>
-        <Text style={styles.sub}>
-          {filterOriginNeighborhood
-            ? `Depuis ${filterOriginNeighborhood} · Moins de ${travelMaxMinutes} min`
-            : `Paris intramuros · Moins de ${travelMaxMinutes} min`}
-        </Text>
+        <Text style={styles.sub}>Des moments, pas des profils.</Text>
       </View>
 
       {mode === 'sorties' ? (
@@ -957,27 +1032,14 @@ export function FeedScreen() {
           data={filteredOutings}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={listHeader}
-          ListEmptyComponent={
-            <EmptyState
-              title="Encore peu de sorties ici."
-              subtitle="Crée la première, ou passe en Dispo."
-              actionLabel="Créer la première"
-              onAction={() =>
-                navigation.navigate('MainTabs', { screen: 'Create' })
-              }
-              secondaryActionLabel={
-                categoryFilter === 'all' ? 'Dispo' : 'Voir toutes'
-              }
-              onSecondaryAction={() => {
-                if (categoryFilter === 'all') {
-                  navigation.navigate('DispoSoir');
-                } else {
-                  setCategoryFilter('all');
-                }
-              }}
-            />
-          }
+          ListEmptyComponent={emptyMoments(
+            categoryFilter !== 'all' || categoryText.trim() !== ''
+              ? 'Élargis la catégorie ou la distance.'
+              : undefined,
+          )}
+          ListFooterComponent={inviteFooter}
           renderItem={({ item }) => (
             <OutingCard
               outing={item}
@@ -993,15 +1055,11 @@ export function FeedScreen() {
           data={filteredPeople}
           keyExtractor={(item) => item.person.id}
           contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
           ListHeaderComponent={listHeader}
-          ListEmptyComponent={
-            <EmptyState
-              title="Personne n’est dispo."
-              subtitle="Active Dispo (créneau, catégorie, quartier) ou change de filtre."
-              actionLabel="Dispo"
-              onAction={() => navigation.navigate('DispoSoir')}
-            />
-          }
+          ListEmptyComponent={emptyMoments(
+            'Personne n’est dispo pour l’instant. Active Dispo ou change de filtre.',
+          )}
           renderItem={({ item }) => (
             <PersonCard
               person={item.person}
@@ -1021,9 +1079,9 @@ export function FeedScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.screen,
     paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.lg,
   },
   brand: {
     ...typography.caption,
@@ -1031,221 +1089,191 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
   },
   title: { ...typography.title, color: colors.text, marginTop: 2 },
-  sub: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  sub: { ...typography.caption, color: colors.textSecondary, marginTop: 4 },
+  listHeader: { marginBottom: spacing.lg },
+  /** Annonces / Dispo : pastille active verte + texte blanc, l’autre blanche + liseré. */
   segment: {
     flexDirection: 'row',
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radius.full,
-    padding: 4,
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   segmentItem: {
     flex: 1,
-    paddingVertical: 12,
+    minHeight: 44,
     borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.chip,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 44,
   },
   segmentItemOn: {
-    backgroundColor: colors.surface,
-    ...shadows.soft,
+    backgroundColor: colors.chipActive,
+    borderColor: colors.chipActive,
   },
   segmentText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.chipText,
     fontFamily: fonts.semiBold,
   },
-  segmentTextOn: { color: colors.text },
-  banner: {
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
-    ...shadows.soft,
-  },
-  bannerOff: {
-    backgroundColor: colors.primarySoft,
-  },
-  /** Dispo active : fond blanc + liseré, coche — pas de vert plein. */
-  bannerOn: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  bannerCheckRow: { marginBottom: 6 },
-  bannerTitle: {
-    ...typography.subtitle,
-    fontFamily: fonts.semiBold,
-    color: colors.primaryDark,
-    marginBottom: 6,
-  },
-  bannerTitleOn: { color: colors.text, marginBottom: 0 },
-  bannerBody: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  bannerBodyOn: { color: colors.textSecondary },
-  bannerCta: {
-    ...typography.bodyStrong,
-    color: colors.primary,
-  },
-  bannerCtaOn: { color: colors.primary },
-  inviteCtaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  inviteCta: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.full,
-  },
-  inviteCtaText: {
-    ...typography.bodyStrong,
-    fontFamily: fonts.semiBold,
-    color: colors.white,
-  },
-  urgentCta: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primarySoft,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  urgentCtaText: {
-    ...typography.bodyStrong,
-    fontFamily: fonts.semiBold,
-    color: colors.primaryDark,
-  },
-  dispoToggleRow: {
+  segmentTextOn: { color: colors.chipActiveText },
+  dispoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.sm,
   },
-  dispoToggleCopy: { flex: 1 },
-  dispoToggleLabel: {
-    ...typography.bodyStrong,
-    color: colors.primaryDark,
-  },
-  dispoToggleHint: {
+  dispoRowCopy: { flex: 1 },
+  dispoRowLabel: { ...typography.bodyStrong, color: colors.text },
+  dispoRowHint: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  textLink: {
     ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    textDecorationLine: 'underline',
   },
-  categoryRow: {
+  filterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.sm,
     gap: spacing.sm,
   },
   filtersScrollFlex: { flexGrow: 1, flexShrink: 1 },
-  filtersScroll: { flexGrow: 0, marginBottom: spacing.sm },
   filters: {
     gap: spacing.sm,
     alignItems: 'center',
-    paddingBottom: 4,
   },
-  filtersPanel: {
-    marginBottom: spacing.sm,
-  },
-  group: { marginBottom: spacing.sm },
-  alignRow: { flexDirection: 'row', marginBottom: spacing.sm },
-  categoryFreeRow: {
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  categoryFreeLabel: {
-    ...typography.caption,
-    fontFamily: fonts.semiBold,
-    color: colors.textSecondary,
-  },
-  categoryFreeInput: {
-    flex: 1,
-    minHeight: 40,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    ...typography.caption,
-    fontFamily: fonts.semiBold,
-    color: colors.text,
-  },
-  categoryFreeInputOn: { borderColor: colors.primary },
-  chip: {
+    justifyContent: 'center',
+    gap: 4,
     backgroundColor: colors.chip,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    minHeight: 36,
     borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: 'transparent',
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  filtresChip: {
-    flexShrink: 0,
+    borderColor: colors.chipBorder,
   },
   chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.chipActive,
+    borderColor: colors.chipActive,
   },
   chipText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.chipText,
     fontFamily: fonts.semiBold,
+    maxWidth: 160,
   },
-  chipTextSelected: { color: colors.white },
+  chipTextSelected: { color: colors.chipActiveText },
+  gear: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.chip,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  panel: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing.sm,
+  },
+  panelRow: { flexGrow: 0 },
+  panelLabel: {
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.textSecondary,
+  },
+  inlineField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  inlineInput: {
+    minHeight: 36,
+    width: 170,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+  },
+  inlineInputOn: { borderColor: colors.primary },
+  timeInput: { width: 84 },
+  alignRow: { flexDirection: 'row' },
+  travelSlider: { width: '100%', height: 36 },
   list: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.screen,
     paddingBottom: spacing.xxxl,
     flexGrow: 1,
   },
-  quartierFreeLabel: {
-    ...typography.caption,
+  empty: {
+    paddingVertical: spacing.block,
+    alignItems: 'flex-start',
+  },
+  emptyTitle: { ...typography.subtitle, color: colors.text },
+  emptyHint: {
+    ...typography.body,
     color: colors.textSecondary,
     marginTop: spacing.sm,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs,
   },
-  quartierFreeInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    ...typography.body,
-    color: colors.text,
-    marginBottom: spacing.sm,
-  },
-  travelBlock: {
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-  },
-  travelLabel: {
+  emptyLink: {
     ...typography.bodyStrong,
     color: colors.text,
-    marginBottom: spacing.sm,
+    textDecorationLine: 'underline',
+    marginTop: spacing.md,
   },
-  travelSlider: {
-    width: '100%',
-    height: 40,
-    marginTop: spacing.xs,
+  footerBlock: {
+    marginTop: spacing.block,
+    paddingTop: spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
+  footerTitle: { ...typography.bodyStrong, color: colors.text },
+  footerBody: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: 4,
+    marginBottom: spacing.md,
+  },
+  footerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  primaryPill: {
+    minHeight: 44,
+    paddingHorizontal: spacing.xl,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryPillText: {
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.white,
+  },
+  secondaryPill: {
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryPillText: {
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+  },
+  pressed: { opacity: 0.88 },
 });

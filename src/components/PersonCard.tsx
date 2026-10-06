@@ -1,9 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { categoryLabels } from '../data/mockOutings';
 import { User } from '../data/types';
-import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
+import { colors, fonts, radius, spacing, typography } from '../theme';
 import { dispoSlotLabel } from '../utils/dispo';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hostPhotoSize } from '../utils/subscription';
@@ -30,14 +29,30 @@ export function PersonCard({ person, onPropose }: Props) {
 
   const openPerson = () => openProfile(person.id);
 
+  // Une seule pastille : l’envie (1re catégorie, « +N » si plusieurs).
+  const cats = person.dispoCategories ?? [];
+  const firstCat =
+    cats[0] === 'autre' && person.dispoCategoryDetail?.trim()
+      ? person.dispoCategoryDetail.trim()
+      : cats[0]
+        ? categoryLabels[cats[0]]
+        : null;
+  const pillLabel = firstCat
+    ? cats.length > 1
+      ? `${firstCat} +${cats.length - 1}`
+      : firstCat
+    : 'Dispo';
+  const placeLine = [slot, quartier].filter(Boolean).join(' · ');
+
   return (
     <View style={styles.card}>
       <View style={styles.mainRow}>
+        {/* Photo → profil (Pressable séparé) */}
         <Pressable
           onPress={openPerson}
           accessibilityRole="button"
           accessibilityLabel={`Voir le profil de ${person.firstName}`}
-          hitSlop={12}
+          hitSlop={8}
           style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
           <Avatar
@@ -46,6 +61,7 @@ export function PersonCard({ person, onPropose }: Props) {
             seed={person.id}
             size={photoSize}
           />
+          {/* Note sous la photo */}
           <RatingLine
             userId={person.id}
             firstName={person.firstName}
@@ -55,56 +71,40 @@ export function PersonCard({ person, onPropose }: Props) {
         </Pressable>
 
         <View style={styles.mainText}>
+          {/* Prénom → profil (Pressable séparé) */}
           <Pressable
             onPress={openPerson}
             accessibilityRole="button"
             accessibilityLabel={`Voir le profil de ${person.firstName}`}
-            style={({ pressed }) => pressed && styles.pressed}
+            hitSlop={{ top: 8, bottom: 4 }}
+            style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
           >
             <Text style={styles.name} numberOfLines={1}>
               {person.firstName}
             </Text>
-            <Text style={styles.meta}>
-              {slot ? `${slot} · ` : ''}
-              {quartier}
-            </Text>
-            {person.dispoTopic ? (
-              <Text style={styles.topic} numberOfLines={2}>
-                {person.dispoTopic}
-              </Text>
-            ) : null}
-            {person.dispoCategories?.length ? (
-              <View style={styles.chips}>
-                {person.dispoCategories.map((cat) => (
-                  <View key={cat} style={[styles.chip, styles.envieChip]}>
-                    <Text style={[styles.chipText, styles.envieText]}>
-                      {categoryLabels[cat]}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-            <View style={styles.chips}>
-              <View style={[styles.chip, styles.dispoPill]}>
-                <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
-                <Text style={[styles.chipText, styles.dispoPillText]}>
-                  Dispo
-                </Text>
-              </View>
-            </View>
           </Pressable>
-
-          {onPropose ? (
-            <Pressable
-              onPress={onPropose}
-              style={styles.cta}
-              accessibilityRole="button"
-            >
-              <Text style={styles.ctaText}>Proposer une sortie</Text>
-            </Pressable>
+          {placeLine ? (
+            <Text style={styles.meta} numberOfLines={1}>
+              {placeLine}
+            </Text>
           ) : null}
+          <View style={styles.pill}>
+            <Text style={styles.pillText} numberOfLines={1}>
+              {pillLabel}
+            </Text>
+          </View>
         </View>
       </View>
+
+      {onPropose ? (
+        <Pressable
+          onPress={onPropose}
+          style={({ pressed }) => [styles.cta, pressed && styles.pressed]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.ctaText}>Proposer un moment</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -114,91 +114,65 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     padding: spacing.xl,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    ...shadows.card,
   },
-  pressed: { opacity: 0.94 },
+  pressed: { opacity: 0.92 },
   mainRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
+    gap: spacing.lg,
   },
-  photoCol: {
-    alignItems: 'center',
-    width: 72,
-  },
-  mainText: { flex: 1 },
+  photoCol: { alignItems: 'center', width: 72 },
+  mainText: { flex: 1, minWidth: 0 },
+  nameTap: { alignSelf: 'flex-start', maxWidth: '100%' },
   name: {
     ...typography.subtitle,
     fontFamily: fonts.semiBold,
     fontSize: 18,
     lineHeight: 24,
     color: colors.text,
-    marginBottom: 2,
   },
   meta: {
     ...typography.caption,
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  topic: {
-    ...typography.body,
-    color: colors.text,
-    marginBottom: spacing.sm,
-    fontFamily: fonts.medium,
-  },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.full,
-    minHeight: 32,
-    justifyContent: 'center',
-  },
-  chipText: {
-    ...typography.small,
-    color: colors.textSecondary,
-  },
-  envieChip: {
-    backgroundColor: colors.primarySoft,
-  },
-  envieText: {
-    color: colors.primaryDark,
-    fontFamily: fonts.medium,
-  },
-  /** Confirmation sobre : coche + texte foncé sur fond blanc, liseré léger (pas de vert plein). */
-  dispoPill: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dispoPillText: {
-    color: colors.text,
-    fontFamily: fonts.semiBold,
-  },
-  cta: {
     marginTop: spacing.xs,
+  },
+  /** Pastille neutre : blanc + liseré #E4DDD2, texte #1C1917. */
+  pill: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.primarySoft,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
+    backgroundColor: colors.chip,
+    maxWidth: '100%',
+  },
+  pillText: {
+    ...typography.small,
+    fontFamily: fonts.semiBold,
+    color: colors.chipText,
+  },
+  /** Bouton secondaire (pilule contour) : un seul bouton vert par écran. */
+  cta: {
+    marginTop: spacing.lg,
+    alignSelf: 'stretch',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: radius.full,
     minHeight: 44,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   ctaText: {
     ...typography.caption,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
 });

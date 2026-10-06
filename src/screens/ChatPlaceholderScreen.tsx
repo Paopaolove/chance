@@ -499,7 +499,9 @@ const styles = StyleSheet.create({
   },
   body: { ...typography.body, color: colors.textSecondary },
   lockCard: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.xl,
     alignItems: 'center',
@@ -537,7 +539,9 @@ const styles = StyleSheet.create({
   threadContent: { paddingBottom: spacing.md, gap: spacing.sm },
   bubbleSystem: {
     alignSelf: 'center',
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -560,7 +564,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   bubbleMe: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.text,
     alignSelf: 'flex-end',
   },
   senderName: {
@@ -627,7 +631,7 @@ const styles = StyleSheet.create({
   },
   lateChipText: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
   },
   lateCancel: {
     ...typography.caption,

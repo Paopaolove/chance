@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   },
   photoLink: {
     ...typography.bodyStrong,
-    color: colors.primary,
+    color: colors.text,
   },
   label: {
     ...typography.caption,
@@ -259,14 +259,16 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     borderRadius: radius.full,
   },
-  chipOn: { backgroundColor: colors.primary },
+  chipOn: { backgroundColor: colors.chipActive, borderColor: colors.chipActive },
   chipText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.chipText,
     fontFamily: fonts.semiBold,
   },
   chipTextOn: { color: colors.white },

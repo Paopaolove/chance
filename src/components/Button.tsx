@@ -45,7 +45,7 @@ export function Button({
           color={
             variant === 'primary' || variant === 'danger'
               ? colors.white
-              : colors.primary
+              : colors.text
           }
         />
       ) : (
@@ -80,21 +80,22 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
   },
   labelOnDark: { color: colors.white },
-  labelSecondary: { color: colors.primaryDark },
-  labelGhost: { color: colors.primary },
+  labelSecondary: { color: colors.text },
+  labelGhost: { color: colors.text },
 });
 
 const variantStyles = StyleSheet.create({
   primary: { backgroundColor: colors.primary },
+  /** Secondaire = pilule contour #E4DDD2, texte #1C1917 (le vert reste au bouton principal). */
   secondary: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.primarySoft,
+    borderColor: colors.chipBorder,
   },
   ghost: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.chipBorder,
   },
   danger: { backgroundColor: colors.danger },
 });

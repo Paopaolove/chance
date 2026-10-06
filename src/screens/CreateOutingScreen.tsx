@@ -741,7 +741,7 @@ export function CreateOutingScreen() {
                   <Text
                     style={{
                       color:
-                        q === neighborhood ? colors.primary : colors.text,
+                        colors.text,
                       fontFamily:
                         q === neighborhood ? fonts.semiBold : fonts.regular,
                     }}
@@ -993,8 +993,9 @@ export function CreateOutingScreen() {
           <Switch
             value={flexibleSlot}
             onValueChange={setFlexibleSlot}
-            trackColor={{ true: colors.primarySoft, false: colors.border }}
-            thumbColor={flexibleSlot ? colors.primary : colors.surface}
+            trackColor={{ true: colors.primary, false: colors.border }}
+            ios_backgroundColor={colors.border}
+            thumbColor={colors.white}
           />
         </View>
 
@@ -1115,10 +1116,9 @@ export function CreateOutingScreen() {
             <Switch
               value={ticketsAlreadyBought}
               onValueChange={setTicketsAlreadyBought}
-              trackColor={{ true: colors.primarySoft, false: colors.border }}
-              thumbColor={
-                ticketsAlreadyBought ? colors.primary : colors.surface
-              }
+              trackColor={{ true: colors.primary, false: colors.border }}
+            ios_backgroundColor={colors.border}
+              thumbColor={colors.white}
             />
           </View>
         ) : null}
@@ -1168,8 +1168,9 @@ export function CreateOutingScreen() {
             <Switch
               value={womenOnly}
               onValueChange={setWomenOnly}
-              trackColor={{ true: colors.primarySoft, false: colors.border }}
-              thumbColor={womenOnly ? colors.primary : colors.surface}
+              trackColor={{ true: colors.primary, false: colors.border }}
+            ios_backgroundColor={colors.border}
+              thumbColor={colors.white}
             />
           </View>
         ) : null}
@@ -1559,20 +1560,20 @@ function PartnerCreateForm() {
 
 const styles = StyleSheet.create({
   dispoBannerLink: {
-    color: colors.primary,
+    color: colors.text,
     textDecorationLine: 'underline',
   },
   partnerInfo: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    borderLeftWidth: 4,
-    borderLeftColor: colors.primary,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   partnerInfoTitle: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     marginBottom: 4,
   },
   partnerInfoBody: {
@@ -1580,27 +1581,29 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   previewChip: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     borderRadius: radius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },
   previewChipText: {
     ...typography.small,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   urgentBanner: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
   },
   urgentBannerTitle: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     marginBottom: 4,
   },
   urgentBannerBody: {
@@ -1610,19 +1613,19 @@ const styles = StyleSheet.create({
   },
   urgentBannerLink: {
     ...typography.bodyStrong,
-    color: colors.primary,
+    color: colors.text,
   },
   urgentEntry: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     padding: spacing.lg,
     marginBottom: spacing.lg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
   },
   urgentEntryTitle: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
   },
   urgentEntryBody: {
     ...typography.caption,
@@ -1631,7 +1634,9 @@ const styles = StyleSheet.create({
   },
   nowPill: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
@@ -1639,11 +1644,11 @@ const styles = StyleSheet.create({
   },
   nowPillText: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   dispoBanner: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
@@ -1653,7 +1658,7 @@ const styles = StyleSheet.create({
   },
   dispoBannerTitle: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     marginBottom: 4,
   },
   dispoBannerBody: {
@@ -1791,7 +1796,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  quartierItemOn: { backgroundColor: colors.primarySoft },
+  quartierItemOn: { backgroundColor: colors.surface },
   quartierText: { ...typography.body, color: colors.text },
-  quartierTextOn: { color: colors.primaryDark, fontFamily: fonts.semiBold },
+  quartierTextOn: { color: colors.text, fontFamily: fonts.semiBold },
 });

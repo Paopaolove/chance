@@ -218,9 +218,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.chip,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.chipBorder,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.caption, color: colors.text },
+  chipText: { ...typography.caption, color: colors.chipText },
   chipTextActive: { color: colors.white },
 });

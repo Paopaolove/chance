@@ -16,7 +16,7 @@ import { mergeProfileTags } from '../data/interests';
 import { categoryLabels } from '../data/mockOutings';
 import { describeDepositForfeitMoment, pricing } from '../data/pricing';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
-import { colors, fonts, radius, shadows, spacing, typography } from '../theme';
+import { colors, fonts, radius, spacing, typography } from '../theme';
 import {
   dispoSlotCreatePrefill,
   dispoSlotLabel,
@@ -594,7 +594,7 @@ export function ProfileScreen() {
             rateSectionY.current = e.nativeEvent.layout.y;
           }}
         >
-          <Text style={styles.cardLabel}>Mes sorties</Text>
+          <Text style={styles.cardLabel}>Mes moments</Text>
           <Text style={styles.cardHint}>
             Après une sortie terminée, note la personne et le lieu
             séparément (commentaires optionnels). Une fois notée, elle
@@ -607,7 +607,7 @@ export function ProfileScreen() {
             if (!toRate.length && !rated.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
-                  Aucune sortie pour l’instant.
+                  Aucun moment pour l’instant.
                 </Text>
               );
             }
@@ -763,23 +763,25 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   personLinkText: {
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   jokerBanner: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
     padding: spacing.md,
     marginBottom: spacing.md,
   },
-  jokerText: { ...typography.caption, color: colors.primaryDark, fontFamily: fonts.semiBold },
+  jokerText: { ...typography.caption, color: colors.text, fontFamily: fonts.semiBold },
   banBanner: {
-    backgroundColor: colors.dangerSoft,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.danger,
     borderRadius: 16,
     padding: spacing.lg,
     marginBottom: spacing.md,
@@ -826,7 +828,7 @@ const styles = StyleSheet.create({
   },
   photoLink: {
     ...typography.bodyStrong,
-    color: colors.primary,
+    color: colors.text,
     marginTop: 4,
   },
   title: { ...typography.title, color: colors.text, marginTop: spacing.sm },
@@ -843,15 +845,16 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   ctaCard: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.lg,
     padding: spacing.xl,
     marginBottom: spacing.md,
-    ...shadows.soft,
   },
   ctaTitle: {
     ...typography.subtitle,
-    color: colors.primaryDark,
+    color: colors.text,
     marginBottom: 6,
   },
   ctaBody: {
@@ -859,7 +862,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.md,
   },
-  ctaLink: { ...typography.bodyStrong, color: colors.primary },
+  ctaLink: { ...typography.bodyStrong, color: colors.text },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -867,7 +870,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    ...shadows.soft,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -875,10 +877,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardLabel: { ...typography.caption, color: colors.textMuted },
-  partnerCard: { borderLeftWidth: 4, borderLeftColor: colors.primary },
+  partnerCard: { borderColor: colors.border },
   editLink: {
     ...typography.caption,
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   cardValue: {
@@ -911,18 +913,20 @@ const styles = StyleSheet.create({
   },
   chip: {
     backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
     borderRadius: radius.full,
   },
-  chipText: { ...typography.small, color: colors.textSecondary },
-  customChip: { backgroundColor: colors.primarySoft },
+  chipText: { ...typography.small, color: colors.chipText },
+  customChip: { backgroundColor: colors.chip },
   customChipText: {
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.medium,
   },
-  envieChip: { backgroundColor: colors.primarySoft },
-  envieText: { color: colors.primaryDark },
+  envieChip: { backgroundColor: colors.chip },
+  envieText: { color: colors.text },
   bullet: {
     ...typography.body,
     color: colors.textSecondary,

@@ -9,14 +9,6 @@ import {
 } from 'react-native';
 import { colors, fonts } from '../theme';
 
-const AVATAR_COLORS = [
-  '#E3EDE8',
-  '#E4EFE7',
-  '#E8EFEA',
-  '#EEF1EC',
-  '#E4EAE7',
-  '#E6F0ED',
-];
 
 interface Props {
   name: string;
@@ -28,12 +20,8 @@ interface Props {
 
 export function Avatar({ name, photoUri, size = 48, seed, style }: Props) {
   const initial = (name || '?').charAt(0).toUpperCase();
-  const colorKey = seed ?? name;
-  const colorIndex =
-    Math.abs(
-      colorKey.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0),
-    ) % AVATAR_COLORS.length;
-  const avatarBg = AVATAR_COLORS[colorIndex];
+  // Initiale sur fond blanc + liseré (plus de verts pâles) ; `seed` gardé pour l’API.
+  void seed;
   const fontSize = Math.round(size * 0.38);
 
   if (photoUri) {
@@ -61,7 +49,6 @@ export function Avatar({ name, photoUri, size = 48, seed, style }: Props) {
           width: size,
           height: size,
           borderRadius: size / 2,
-          backgroundColor: avatarBg,
         },
         style,
       ]}
@@ -78,6 +65,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.chip,
   },
   fallback: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },

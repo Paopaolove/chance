@@ -91,7 +91,7 @@ export function ImprevuScreen() {
         <View style={styles.otherText}>
           <Text style={styles.otherName}>{otherName}</Text>
           <Text style={styles.otherMeta}>
-            {outing?.title ?? 'Sortie'}
+            {outing?.title ?? 'Moment'}
           </Text>
         </View>
       </Pressable>
@@ -279,12 +279,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   motiveChipOn: {
-    backgroundColor: colors.primarySoft,
-    borderColor: colors.primary,
+    backgroundColor: colors.chipActive,
+    borderColor: colors.chipActive,
   },
   motiveText: { ...typography.body, color: colors.text },
   motiveTextOn: {
-    color: colors.primaryDark,
+    color: colors.chipActiveText,
     fontFamily: fonts.semiBold,
   },
   input: {

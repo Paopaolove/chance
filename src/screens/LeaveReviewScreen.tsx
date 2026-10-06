@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   personBlock: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   personLink: {
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
     textDecorationLine: 'underline',
   },
@@ -474,9 +474,11 @@ const styles = StyleSheet.create({
   },
   starBtn: { padding: spacing.xs },
   star: { fontSize: 36, color: colors.border },
-  starOn: { color: colors.primary },
+  starOn: { color: colors.text },
   motiveBox: {
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.md,
     padding: spacing.md,
     marginBottom: spacing.lg,
@@ -490,7 +492,7 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.chipBorder,
     borderRadius: radius.full,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,

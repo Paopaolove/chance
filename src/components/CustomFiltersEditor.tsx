@@ -143,10 +143,12 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   addBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     minHeight: 48,
     justifyContent: 'center',
   },
@@ -154,7 +156,7 @@ const styles = StyleSheet.create({
   addDisabled: { opacity: 0.45 },
   addText: {
     ...typography.caption,
-    color: colors.white,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   chips: {
@@ -167,7 +169,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.chipBorder,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     borderRadius: radius.full,
@@ -175,12 +179,12 @@ const styles = StyleSheet.create({
   },
   chipText: {
     ...typography.caption,
-    color: colors.primaryDark,
+    color: colors.text,
     fontFamily: fonts.semiBold,
   },
   chipX: {
     ...typography.bodyStrong,
-    color: colors.primaryDark,
+    color: colors.text,
     lineHeight: 18,
   },
   counter: {

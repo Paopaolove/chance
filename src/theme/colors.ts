@@ -1,23 +1,24 @@
 export const colors = {
-  /** Fond app — blanc pur (plus de crème) ; cartes séparées par un liseré `border` */
-  background: '#FFFFFF',
+  /** Fond d’écran — papier #F4F1EA ; cartes, champs et pastilles en blanc + liseré `border` */
+  background: '#F4F1EA',
   surface: '#FFFFFF',
-  /** Surfaces secondaires — vert très pâle (palette vert Jaguar) */
-  surfaceMuted: '#EDF2EE',
-  /** Vert Jaguar — CTA, logo, engrenage, liens, accents « Moment » */
-  primary: '#1B4D3E',
-  primaryDark: '#143D32',
-  /** Fond de pastille / aperçu — vert Jaguar très pâle */
-  primarySoft: '#E3EDE8',
+  /** Surfaces secondaires — blanc + liseré `border` (un blanc, un noir, un vert) */
+  surfaceMuted: '#FFFFFF',
+  /** Vert #3D5C45 — uniquement : bouton principal, mot accent, onglet actif, engrenage, pastille active */
+  primary: '#3D5C45',
+  primaryDark: '#2C4534',
+  /** Ancien vert pâle → blanc (le vert est réservé : CTA, mot accent, onglet actif, engrenage, pastille active) */
+  primarySoft: '#FFFFFF',
+  /** Texte principal — encre #1C1917 */
   text: '#1C1917',
-  /** Secondary labels — darkened for white contrast (lot 8) */
-  textSecondary: '#57534E',
-  /** Muted / captions — was too pale (#A8A29E) on white */
-  textMuted: '#78716C',
-  /** Bordures — gris-vert neutre */
-  border: '#D8E2DC',
+  /** Texte secondaire — #6F675E */
+  textSecondary: '#6F675E',
+  /** Légendes / placeholders — même #6F675E (contraste ≥ 4.5 sur blanc) */
+  textMuted: '#6F675E',
+  /** Bordures / liserés 1px — #E4DDD2 (cartes, champs, pastilles) */
+  border: '#E4DDD2',
   /**
-   * Pas de token « success » : une confirmation = coche vert Jaguar + texte foncé
+   * Pas de token « success » : une confirmation = coche + texte foncé
    * sur fond blanc (CheckNote). Le vert plein reste réservé au CTA.
    */
   /** Avertissement — texte + liseré #A15C07, sur fond blanc */
@@ -26,11 +27,16 @@ export const colors = {
   warningSoft: '#FFFFFF',
   /** Erreur / danger — countdown 10 min, no-show, clôturer, erreurs */
   danger: '#9B2C2C',
-  dangerSoft: '#F6E7E7',
-  /** Chips non sélectionnées — vert très pâle */
-  chip: '#E8EFEA',
+  dangerSoft: '#FFFFFF',
+  /** Pastille inactive : fond blanc, bord #E4DDD2, texte #1C1917 */
+  chip: '#FFFFFF',
+  chipBorder: '#E4DDD2',
+  chipText: '#1C1917',
+  /** Pastille active : fond vert #3D5C45, texte blanc */
+  chipActive: '#3D5C45',
+  chipActiveText: '#FFFFFF',
   overlay: 'rgba(28, 25, 23, 0.45)',
-  tabInactive: '#78716C',
+  tabInactive: '#6F675E',
   white: '#FFFFFF',
 } as const;
 
