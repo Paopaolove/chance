@@ -125,15 +125,15 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
               {partner ? (
                 // Partenaire : geste / remise / places offertes — jamais de €.
                 partnerChips.map((c) => (
-                  <View key={c} style={[styles.chip, styles.chipOrange]}>
-                    <Text style={[styles.chipText, styles.chipOrangeText]}>
+                  <View key={c} style={[styles.chip, styles.chipAccent]}>
+                    <Text style={[styles.chipText, styles.chipAccentText]}>
                       {c}
                     </Text>
                   </View>
                 ))
               ) : (
-                <View style={[styles.chip, styles.chipOrange]}>
-                  <Text style={[styles.chipText, styles.chipOrangeText]}>
+                <View style={[styles.chip, styles.chipAccent]}>
+                  <Text style={[styles.chipText, styles.chipAccentText]}>
                     {isFree
                       ? 'Gratuit'
                       : `J'invite jusqu'à ${outing.budgetMaxEuros} €`}
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadows.card,
   },
-  /** Liseré orange discret — pas une carte pub. */
+  /** Liseré vert discret — pas une carte pub. */
   cardPartner: {
     borderLeftWidth: 4,
     borderLeftColor: colors.primary,
@@ -230,9 +230,9 @@ const styles = StyleSheet.create({
     minHeight: 32,
     justifyContent: 'center',
   },
-  chipOrange: { backgroundColor: colors.primarySoft },
+  chipAccent: { backgroundColor: colors.primarySoft },
   chipUrgent: { backgroundColor: colors.primarySoft },
   chipText: { ...typography.small, color: colors.textSecondary },
-  chipOrangeText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
+  chipAccentText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
   chipUrgentText: { color: colors.primaryDark, fontFamily: fonts.semiBold },
 });

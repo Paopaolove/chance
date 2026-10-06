@@ -28,7 +28,7 @@ import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-/** Override RN default blue (#007AFF) — orange 70s everywhere (gear, tint, links). */
+/** Override RN default blue (#007AFF) — vert Jaguar everywhere (gear, tint, links). */
 const chanceNavTheme: Theme = {
   ...DefaultTheme,
   colors: {
