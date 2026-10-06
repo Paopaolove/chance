@@ -31,8 +31,16 @@ import {
   computeDispoExpiresAt,
   dispoSlotCreatePrefill,
 } from '../utils/dispo';
-import { clampInt, parseLooseInt } from '../utils/parseLooseNumber';
+import { clampInt } from '../utils/parseLooseNumber';
 import { CheckNote } from '../components/CheckNote';
+import { PillsWithOther } from '../components/PillsWithOther';
+import {
+  formatYmdShort,
+  freeDateHint,
+  freeIntHint,
+  parseFreeDate,
+  parseFreeInt,
+} from '../utils/freeDate';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type FilterId = 'all' | OutingCategory;
@@ -63,22 +71,23 @@ const TRAVEL_DEFAULT_MINUTES = 30;
 const BUDGET_FREE_MIN = 5;
 const BUDGET_FREE_MAX = 200;
 
-type WhenDay = 'today' | 'tomorrow' | 'dayAfter';
+type WhenDay = 'today' | 'tomorrow' | 'dayAfter' | 'other';
 
-const WHEN_DAY_OPTIONS: { id: WhenDay; label: string }[] = [
+const WHEN_DAY_OPTIONS: { id: Exclude<WhenDay, 'other'>; label: string }[] = [
   { id: 'today', label: 'Aujourd’hui' },
   { id: 'tomorrow', label: 'Demain' },
   { id: 'dayAfter', label: 'Après-demain' },
 ];
 
-function clampBudgetEuros(n: number): number {
-  return clampInt(n, BUDGET_FREE_MIN, BUDGET_FREE_MAX);
-}
-
 /** Paris calendar Y-M-D for today / tomorrow / day-after (noon UTC anchors). */
-function targetParisYmd(whenDay: WhenDay, nowMs = Date.now()): string {
+function targetParisYmd(
+  whenDay: WhenDay,
+  nowMs = Date.now(),
+  otherYmd?: string | null,
+): string {
   const today = parisYmd(nowMs);
   if (!today) return '';
+  if (whenDay === 'other') return otherYmd || today;
   if (whenDay === 'today') return today;
   const [y, m, day] = today.split('-').map(Number);
   const offset = whenDay === 'tomorrow' ? 1 : 2;
@@ -106,12 +115,13 @@ function outingMatchesWhen(
   whenDay: WhenDay,
   whenFromTime: string,
   nowMs = Date.now(),
-  opts?: { urgentOnSite?: boolean },
+  opts?: { urgentOnSite?: boolean; otherYmd?: string | null },
 ): boolean {
-  const target = targetParisYmd(whenDay, nowMs);
+  const target = targetParisYmd(whenDay, nowMs, opts?.otherYmd);
   if (!target || parisYmd(startsAt) !== target) return false;
+  const isToday = target === parisYmd(nowMs);
 
-  if (opts?.urgentOnSite && whenDay === 'today') return true;
+  if (opts?.urgentOnSite && isToday) return true;
 
   const outingHhMm = normalizeHhMm(formatParisTime(startsAt));
   if (!outingHhMm) return false;
@@ -120,12 +130,26 @@ function outingMatchesWhen(
   let threshold: string;
   if (free) {
     threshold = free;
-  } else if (whenDay === 'today') {
+  } else if (isToday) {
     threshold = normalizeHhMm(formatParisTime(new Date(nowMs).toISOString())) ?? '00:00';
   } else {
     threshold = '00:00';
   }
   return outingHhMm >= threshold;
+}
+
+/** Champ libre catégorie (« Autre : padel, expo… ») — recherche souple. */
+function normalizeFree(t: string): string {
+  return t
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function textMatchesFree(parts: (string | undefined | null)[], needle: string): boolean {
+  if (!needle) return true;
+  return normalizeFree(parts.filter(Boolean).join(' ')).includes(needle);
 }
 
 type OutingWithTravel = Outing & { travelMinutes: number; matchScore: number };
@@ -189,7 +213,10 @@ export function FeedScreen() {
   };
   const [mode, setMode] = useState<FeedMode>('sorties');
   const [categoryFilter, setCategoryFilter] = useState<FilterId>('all');
+  /** Catégorie « Autre » libre : précision (ex. padel, expo) combinée à la pastille. */
+  const [categoryText, setCategoryText] = useState('');
   const [budgetFilter, setBudgetFilter] = useState<BudgetFilter>('all');
+  const [budgetOther, setBudgetOther] = useState('');
   const [quartierFilter, setQuartierFilter] = useState<string>('all');
   /** Annonces: prefer alignment with my Dispo prefs when toggled. */
   const [alignDispo, setAlignDispo] = useState(false);
@@ -202,6 +229,10 @@ export function FeedScreen() {
   const [whenDay, setWhenDay] = useState<WhenDay>('today');
   /** « HH:MM » or empty (= now if today, start of day otherwise). */
   const [whenFromTime, setWhenFromTime] = useState('');
+  /** Jour « Autre » : JJ/MM libre. */
+  const [whenOtherDate, setWhenOtherDate] = useState('');
+  /** Durée « Autre » : minutes libres. */
+  const [travelOther, setTravelOther] = useState('');
 
   const clampTravelMinutes = (n: number) =>
     clampInt(n, TRAVEL_MIN_MINUTES, TRAVEL_MAX_MINUTES);
@@ -239,6 +270,25 @@ export function FeedScreen() {
     }
     return lastValidWhenFromRef.current;
   }, [whenFromTime]);
+
+  const whenOtherParsed = useMemo(
+    () => parseFreeDate(whenOtherDate),
+    [whenOtherDate],
+  );
+  /** Dernière date libre valide (évite de vider la liste pendant la frappe). */
+  const lastValidOtherYmdRef = useRef<string | null>(null);
+  const whenOtherYmd = useMemo(() => {
+    if (whenOtherParsed.ok) {
+      lastValidOtherYmdRef.current = whenOtherParsed.ymd;
+      return whenOtherParsed.ymd;
+    }
+    if (!whenOtherDate.trim()) lastValidOtherYmdRef.current = null;
+    return lastValidOtherYmdRef.current;
+  }, [whenOtherParsed, whenOtherDate]);
+  const categoryNeedle = useMemo(
+    () => (categoryText.trim().length >= 2 ? normalizeFree(categoryText) : ''),
+    [categoryText],
+  );
 
   const myDispoPrefs = {
     categories: user?.dispoCategories,
@@ -280,11 +330,27 @@ export function FeedScreen() {
     list = list.filter((o) =>
       outingMatchesWhen(o.startsAt, whenDay, appliedWhenFromTime, Date.now(), {
         urgentOnSite: o.urgentOnSite,
+        otherYmd: whenOtherYmd,
       }),
     );
 
     if (categoryFilter !== 'all') {
       list = list.filter((o) => o.category === categoryFilter);
+    }
+    if (categoryNeedle) {
+      list = list.filter((o) =>
+        textMatchesFree(
+          [
+            categoryLabels[o.category],
+            o.categoryDetail,
+            o.title,
+            o.venueName,
+            o.description,
+            o.topic,
+          ],
+          categoryNeedle,
+        ),
+      );
     }
     // Invitation model: do NOT hide outings when invite cap > guest budget
     // preference (ex. 40 EUR invite stays visible under a 25 EUR filter).
@@ -328,7 +394,9 @@ export function FeedScreen() {
     travelMaxMinutes,
     filterOriginNeighborhood,
     whenDay,
+    whenOtherYmd,
     appliedWhenFromTime,
+    categoryNeedle,
     alignDispo,
     isDispo,
     myDispoPrefs.categories,
@@ -361,6 +429,20 @@ export function FeedScreen() {
         x.person.dispoCategories?.includes(categoryFilter),
       );
     }
+    if (categoryNeedle) {
+      list = list.filter((x) =>
+        textMatchesFree(
+          [
+            ...(x.person.dispoCategories ?? []).map((c) => categoryLabels[c]),
+            x.person.dispoCategoryDetail,
+            x.person.dispoTopic,
+            ...(x.person.interests ?? []),
+            ...(x.person.customFilters ?? []),
+          ],
+          categoryNeedle,
+        ),
+      );
+    }
     if (budgetFilter !== 'all') {
       list = list.filter((x) => {
         const b = x.person.dispoBudgetMax;
@@ -386,6 +468,7 @@ export function FeedScreen() {
   }, [
     peopleDispo,
     categoryFilter,
+    categoryNeedle,
     budgetFilter,
     quartierFilter,
     travelMaxMinutes,
@@ -540,6 +623,7 @@ export function FeedScreen() {
     (mode === 'sorties' &&
       (annoncesQuartier.trim() !== '' ||
         whenDay !== 'today' ||
+        whenOtherDate.trim() !== '' ||
         whenFromTime.trim() !== '')) ||
     travelMaxMinutes !== TRAVEL_DEFAULT_MINUTES;
 
@@ -592,18 +676,45 @@ export function FeedScreen() {
     </View>
   );
 
+  const categoryFree = (
+    <View style={styles.categoryFreeRow}>
+      <TextInput
+        style={[
+          styles.categoryFreeInput,
+          categoryText.trim() !== '' && styles.categoryFreeInputOn,
+        ]}
+        value={categoryText}
+        onChangeText={(t) => setCategoryText(t.trimStart().slice(0, 40))}
+        placeholder="Autre : précise (ex. padel, expo, karaoké)"
+        placeholderTextColor={colors.textMuted}
+        autoCorrect={false}
+        returnKeyType="search"
+        accessibilityLabel="Autre catégorie : précise une activité"
+      />
+    </View>
+  );
+
+  const budgetOtherParsed = parseFreeInt(budgetOther, BUDGET_FREE_MIN, BUDGET_FREE_MAX);
+  const travelOtherParsed = parseFreeInt(
+    travelOther,
+    TRAVEL_MIN_MINUTES,
+    TRAVEL_MAX_MINUTES,
+  );
+  const quartierInList = (PARIS_NEIGHBORHOODS as readonly string[]).includes(
+    annoncesQuartier,
+  );
+  const dispoQuartierOther =
+    quartierFilter !== 'all' && !quartierOptions.includes(quartierFilter);
+
   const extraFiltersPanel = showFilters ? (
     <View style={styles.filtersPanel}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filters}
-        style={styles.filtersScroll}
-      >
-        {mode === 'sorties' && isDispo ? (
+      {mode === 'sorties' && isDispo ? (
+        <View style={styles.alignRow}>
           <Pressable
             onPress={() => setAlignDispo((v) => !v)}
             style={[styles.chip, alignDispo && styles.chipSelected]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: alignDispo }}
           >
             <Text
               style={[styles.chipText, alignDispo && styles.chipTextSelected]}
@@ -611,146 +722,94 @@ export function FeedScreen() {
               Aligné à ma dispo
             </Text>
           </Pressable>
-        ) : null}
-        {BUDGET_FILTERS.map((f) => {
-          const selected = budgetFilter === f.id;
-          return (
-            <Pressable
-              key={String(f.id)}
-              onPress={() => setBudgetFilter(f.id)}
-              style={[styles.chip, selected && styles.chipSelected]}
-            >
-              <Text
-                style={[styles.chipText, selected && styles.chipTextSelected]}
-              >
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-      <Text style={styles.quartierFreeLabel}>Budget max libre</Text>
-      <View style={styles.budgetFreeRow}>
-        <Text style={styles.travelInputPrefix}>max</Text>
-        <TextInput
-          style={styles.budgetFreeInput}
-          value={budgetFilter === 'all' ? '' : String(budgetFilter)}
-          onChangeText={(t) => {
-            if (t.trim() === '') {
-              setBudgetFilter('all');
-              return;
-            }
-            const n = parseLooseInt(t);
-            if (n != null) {
-              setBudgetFilter(clampBudgetEuros(n));
-            }
-          }}
-          placeholder="_"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="decimal-pad"
-          maxLength={5}
-          selectTextOnFocus
-          accessibilityLabel="Budget maximum en euros"
-        />
-        <Text style={styles.travelInputSuffix}>€</Text>
-      </View>
+        </View>
+      ) : null}
+      <Text style={styles.quartierFreeLabel}>Budget max</Text>
+      <PillsWithOther
+        options={BUDGET_FILTERS}
+        selected={budgetFilter}
+        onSelect={(id) => {
+          setBudgetFilter(id);
+          setBudgetOther('');
+        }}
+        otherActive={budgetOther.trim() !== ''}
+        otherValue={budgetOther}
+        onChangeOther={(t) => {
+          const cleaned = t.replace(/[^0-9]/g, '').slice(0, 3);
+          setBudgetOther(cleaned);
+          if (!cleaned) {
+            setBudgetFilter('all');
+            return;
+          }
+          const res = parseFreeInt(cleaned, BUDGET_FREE_MIN, BUDGET_FREE_MAX);
+          if (res.ok) setBudgetFilter(res.value);
+        }}
+        placeholder="ex. 30"
+        keyboardType="number-pad"
+        suffix="€"
+        maxLength={3}
+        inputWidth={72}
+        hint={freeIntHint(budgetOtherParsed, BUDGET_FREE_MIN, BUDGET_FREE_MAX, '€')}
+        accessibilityLabel="Autre budget maximum en euros"
+        style={styles.group}
+      />
       {mode === 'sorties' ? (
         <>
           <Text style={styles.quartierFreeLabel}>Quartier</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}
-            style={styles.filtersScroll}
-          >
-            <Pressable
-              onPress={() => setAnnoncesQuartier('')}
-              style={[
-                styles.chip,
-                annoncesQuartier.trim() === '' && styles.chipSelected,
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: annoncesQuartier.trim() === '' }}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  annoncesQuartier.trim() === '' && styles.chipTextSelected,
-                ]}
-              >
-                Chez moi
-              </Text>
-            </Pressable>
-            {PARIS_NEIGHBORHOODS.map((q) => {
-              const selected = annoncesQuartier === q;
-              return (
-                <Pressable
-                  key={q}
-                  onPress={() =>
-                    setAnnoncesQuartier((prev) => (prev === q ? '' : q))
-                  }
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selected && styles.chipTextSelected,
-                    ]}
-                  >
-                    {q}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <Text style={styles.quartierFreeLabel}>Autre quartier</Text>
-          <TextInput
-            style={styles.quartierFreeInput}
-            value={
-              (PARIS_NEIGHBORHOODS as readonly string[]).includes(
-                annoncesQuartier,
-              )
-                ? ''
-                : annoncesQuartier
+          <PillsWithOther
+            scroll
+            options={[
+              { id: '', label: 'Chez moi' },
+              ...PARIS_NEIGHBORHOODS.map((q) => ({ id: q as string, label: q })),
+            ]}
+            selected={quartierInList ? annoncesQuartier : annoncesQuartier.trim() === '' ? '' : null}
+            onSelect={(id) =>
+              setAnnoncesQuartier((prev) => (prev === id ? '' : id))
             }
-            onChangeText={(t) => setAnnoncesQuartier(t.trimStart())}
-            placeholder="Écris un quartier…"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-            accessibilityLabel="Quartier d’origine saisi"
+            otherActive={annoncesQuartier.trim() !== '' && !quartierInList}
+            otherValue={quartierInList ? '' : annoncesQuartier}
+            onChangeOther={(t) => setAnnoncesQuartier(t.trimStart())}
+            placeholder="ex. Batignolles"
+            maxLength={40}
+            accessibilityLabel="Autre quartier d’origine"
+            style={styles.group}
           />
-          <Text style={styles.quartierFreeLabel}>Quand</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}
-            style={styles.filtersScroll}
-          >
-            {WHEN_DAY_OPTIONS.map((opt) => {
-              const selected = whenDay === opt.id;
-              return (
-                <Pressable
-                  key={opt.id}
-                  onPress={() => setWhenDay(opt.id)}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selected && styles.chipTextSelected,
-                    ]}
-                  >
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <Text style={styles.quartierFreeLabel}>à partir de …</Text>
+          <Text style={styles.quartierFreeLabel}>Jour</Text>
+          <PillsWithOther
+            options={WHEN_DAY_OPTIONS}
+            selected={whenDay === 'other' ? null : whenDay}
+            onSelect={(id) => {
+              setWhenDay(id);
+              setWhenOtherDate('');
+            }}
+            otherActive={whenDay === 'other'}
+            otherValue={whenOtherDate}
+            onPressOther={() => setWhenDay('other')}
+            onChangeOther={(t) => {
+              const cleaned = t.replace(/[^0-9/.\- ]/g, '').slice(0, 10);
+              setWhenOtherDate(cleaned);
+              if (cleaned.trim()) {
+                setWhenDay('other');
+              } else if (whenDay === 'other') {
+                setWhenDay('today');
+              }
+            }}
+            placeholder="ex. 12/10"
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            inputWidth={104}
+            hint={
+              whenDay === 'other'
+                ? whenOtherParsed.ok
+                  ? `Le ${formatYmdShort(whenOtherParsed.ymd)}`
+                  : freeDateHint(whenOtherParsed) ??
+                    'Écris une date JJ/MM (ex. 12/10).'
+                : null
+            }
+            accessibilityLabel="Autre jour, date JJ/MM"
+            style={styles.group}
+          />
+          <Text style={styles.quartierFreeLabel}>Heure : à partir de …</Text>
           <TextInput
             style={styles.quartierFreeInput}
             value={whenFromTime}
@@ -770,49 +829,25 @@ export function FeedScreen() {
       ) : null}
       {mode === 'dispos' ? (
         <>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}
-            style={styles.filtersScroll}
-          >
-            {quartierOptions.map((q) => {
-              const selected = quartierFilter === q;
-              const label = q === 'all' ? 'Quartier' : q;
-              return (
-                <Pressable
-                  key={q}
-                  onPress={() => setQuartierFilter(q)}
-                  style={[styles.chip, selected && styles.chipSelected]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      selected && styles.chipTextSelected,
-                    ]}
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <Text style={styles.quartierFreeLabel}>Autre quartier</Text>
-          <TextInput
-            style={styles.quartierFreeInput}
-            value={
-              quartierFilter === 'all' || quartierOptions.includes(quartierFilter)
-                ? ''
-                : quartierFilter
-            }
-            onChangeText={(t) => {
+          <Text style={styles.quartierFreeLabel}>Quartier</Text>
+          <PillsWithOther
+            scroll
+            options={quartierOptions.map((q) => ({
+              id: q,
+              label: q === 'all' ? 'Tous' : q,
+            }))}
+            selected={dispoQuartierOther ? null : quartierFilter}
+            onSelect={(id) => setQuartierFilter(id)}
+            otherActive={dispoQuartierOther}
+            otherValue={dispoQuartierOther ? quartierFilter : ''}
+            onChangeOther={(t) => {
               const trimmed = t.trimStart();
               setQuartierFilter(trimmed === '' ? 'all' : trimmed);
             }}
-            placeholder="Écris un quartier…"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-            accessibilityLabel="Filtrer par quartier saisi"
+            placeholder="ex. Batignolles"
+            maxLength={40}
+            accessibilityLabel="Filtrer par autre quartier"
+            style={styles.group}
           />
         </>
       ) : null}
@@ -822,66 +857,52 @@ export function FeedScreen() {
             ? `Moins de ${travelMaxMinutes} min depuis ${annoncesQuartier.trim()}`
             : `Moins de ${travelMaxMinutes} min`}
         </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filters}
-          style={styles.filtersScroll}
-        >
-          {TRAVEL_SHORTCUTS.map((m) => {
-            const selected = travelMaxMinutes === m;
-            return (
-              <Pressable
-                key={m}
-                onPress={() => setTravelMaxMinutes(m)}
-                style={[styles.chip, selected && styles.chipSelected]}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    selected && styles.chipTextSelected,
-                  ]}
-                >
-                  {m} min
-                </Text>
-              </Pressable>
+        <PillsWithOther
+          options={TRAVEL_SHORTCUTS.map((m) => ({ id: m as number, label: `${m} min` }))}
+          selected={travelMaxMinutes}
+          onSelect={(m) => {
+            setTravelMaxMinutes(m);
+            setTravelOther('');
+          }}
+          otherActive={travelOther.trim() !== ''}
+          otherValue={travelOther}
+          onChangeOther={(t) => {
+            const cleaned = t.replace(/[^0-9]/g, '').slice(0, 3);
+            setTravelOther(cleaned);
+            const res = parseFreeInt(cleaned, TRAVEL_MIN_MINUTES, TRAVEL_MAX_MINUTES);
+            if (res.ok) setTravelMaxMinutes(res.value);
+          }}
+          placeholder="ex. 20"
+          keyboardType="number-pad"
+          suffix="min"
+          maxLength={3}
+          inputWidth={64}
+          hint={freeIntHint(
+            travelOtherParsed,
+            TRAVEL_MIN_MINUTES,
+            TRAVEL_MAX_MINUTES,
+            'min',
+          )}
+          accessibilityLabel="Autre durée de trajet en minutes"
+        />
+        <Slider
+          style={styles.travelSlider}
+          minimumValue={TRAVEL_MIN_MINUTES}
+          maximumValue={TRAVEL_MAX_MINUTES}
+          step={5}
+          value={travelMaxMinutes}
+          onValueChange={(v) => {
+            const n = clampTravelMinutes(v);
+            setTravelMaxMinutes(n);
+            setTravelOther(
+              (TRAVEL_SHORTCUTS as readonly number[]).includes(n) ? '' : String(n),
             );
-          })}
-        </ScrollView>
-        <View style={styles.travelSliderRow}>
-          <Slider
-            style={styles.travelSlider}
-            minimumValue={TRAVEL_MIN_MINUTES}
-            maximumValue={TRAVEL_MAX_MINUTES}
-            step={5}
-            value={travelMaxMinutes}
-            onValueChange={(v) => setTravelMaxMinutes(clampTravelMinutes(v))}
-            minimumTrackTintColor={colors.primary}
-            maximumTrackTintColor={colors.border}
-            thumbTintColor={colors.primary}
-          />
-          <View style={styles.travelInputWrap}>
-            <Text style={styles.travelInputPrefix}>max</Text>
-            <TextInput
-              style={styles.travelInput}
-              value={String(travelMaxMinutes)}
-              onChangeText={(t) => {
-                if (t.trim() === '') return;
-                const n = parseLooseInt(t);
-                if (n != null) {
-                  setTravelMaxMinutes(clampTravelMinutes(n));
-                }
-              }}
-              keyboardType="decimal-pad"
-              maxLength={4}
-              selectTextOnFocus
-              accessibilityLabel="Temps de trajet maximum en minutes"
-            />
-            <Text style={styles.travelInputSuffix}>min</Text>
-          </View>
-        </View>
+          }}
+          minimumTrackTintColor={colors.primary}
+          maximumTrackTintColor={colors.border}
+          thumbTintColor={colors.primary}
+          accessibilityLabel="Temps de trajet maximum"
+        />
       </View>
     </View>
   ) : null;
@@ -908,6 +929,7 @@ export function FeedScreen() {
       </View>
       {mode === 'sorties' ? inviteBanner : dispoBanner}
       {categoryChips}
+      {categoryFree}
       {extraFiltersPanel}
     </View>
   );
@@ -1129,6 +1151,33 @@ const styles = StyleSheet.create({
   filtersPanel: {
     marginBottom: spacing.sm,
   },
+  group: { marginBottom: spacing.sm },
+  alignRow: { flexDirection: 'row', marginBottom: spacing.sm },
+  categoryFreeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  categoryFreeLabel: {
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.textSecondary,
+  },
+  categoryFreeInput: {
+    flex: 1,
+    minHeight: 40,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+  },
+  categoryFreeInputOn: { borderColor: colors.primary },
   chip: {
     backgroundColor: colors.chip,
     paddingHorizontal: spacing.md,
@@ -1190,60 +1239,9 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.sm,
   },
-  travelSliderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
   travelSlider: {
-    flex: 1,
+    width: '100%',
     height: 40,
-  },
-  travelInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flexShrink: 0,
-  },
-  travelInputPrefix: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  travelInput: {
-    width: 44,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    ...typography.caption,
-    fontFamily: fonts.semiBold,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  travelInputSuffix: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
-  budgetFreeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs,
-  },
-  budgetFreeInput: {
-    width: 56,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    ...typography.caption,
-    fontFamily: fonts.semiBold,
-    color: colors.text,
-    textAlign: 'center',
+    marginTop: spacing.xs,
   },
 });

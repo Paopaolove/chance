@@ -45,6 +45,15 @@ import {
   partnerOfferChips,
 } from '../utils/partners';
 import { CheckNote } from '../components/CheckNote';
+import { PillsWithOther } from '../components/PillsWithOther';
+import {
+  formatYmdShort,
+  freeDateHint,
+  freeIntHint,
+  parseFreeDate,
+  parseFreeInt,
+  ymdToFr,
+} from '../utils/freeDate';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type CreateRoute = RouteProp<MainTabParamList, 'Create'>;
@@ -154,6 +163,77 @@ function isDateStrBeforeParisToday(dateStr: string): boolean {
   return !!today && ymd < today;
 }
 
+const DAY_PILLS: { id: 0 | 1 | 2; label: string }[] = [
+  { id: 0, label: 'Aujourd’hui' },
+  { id: 1, label: 'Demain' },
+  { id: 2, label: 'Après-demain' },
+];
+
+function dateStrForOffset(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return formatDateInput(d);
+}
+
+/**
+ * Jour : Aujourd’hui / Demain / Après-demain / Autre (date libre JJ/MM).
+ * `dateStr` reste au format JJ/MM/AAAA (buildStartsAt inchangé).
+ */
+function DayPills({
+  dateStr,
+  onChangeDateStr,
+}: {
+  dateStr: string;
+  onChangeDateStr: (next: string) => void;
+}) {
+  const [otherText, setOtherText] = useState('');
+  const matched = DAY_PILLS.find((p) => dateStrForOffset(p.id) === dateStr.trim());
+  const parsedOther = parseFreeDate(otherText);
+
+  // Remise à zéro externe (publication, préremplissage) → vider « Autre ».
+  useEffect(() => {
+    if (!otherText.trim()) return;
+    const res = parseFreeDate(otherText);
+    const expected = res.ok ? ymdToFr(res.ymd) : otherText;
+    if (dateStr !== expected) setOtherText('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateStr]);
+
+  const otherActive = otherText.trim() !== '' || !matched;
+  const otherValue = otherText !== '' ? otherText : matched ? '' : dateStr;
+  const hint = otherText.trim()
+    ? parsedOther.ok
+      ? `Le ${formatYmdShort(parsedOther.ymd)}`
+      : freeDateHint(parsedOther)
+    : null;
+
+  return (
+    <PillsWithOther
+      look="outline"
+      options={DAY_PILLS}
+      selected={matched?.id ?? null}
+      onSelect={(id) => {
+        setOtherText('');
+        onChangeDateStr(dateStrForOffset(id));
+      }}
+      otherActive={otherActive}
+      otherValue={otherValue}
+      onChangeOther={(t) => {
+        const cleaned = t.replace(/[^0-9/.\- ]/g, '').slice(0, 10);
+        setOtherText(cleaned);
+        const res = parseFreeDate(cleaned);
+        onChangeDateStr(res.ok ? ymdToFr(res.ymd) : cleaned);
+      }}
+      placeholder="ex. 12/10"
+      keyboardType="numbers-and-punctuation"
+      maxLength={10}
+      inputWidth={104}
+      hint={hint}
+      accessibilityLabel="Autre jour, date JJ/MM"
+    />
+  );
+}
+
 function defaultDateTime(
   fromDispo: boolean,
   timeLabel?: string,
@@ -223,6 +303,8 @@ export function CreateOutingScreen() {
     }
     return BUDGET_DEFAULT_EUROS;
   });
+  /** Plafond « Autre » : montant libre (vide = pastille). */
+  const [budgetOther, setBudgetOther] = useState('');
   const [message, setMessage] = useState('');
   const [topic, setTopic] = useState(prefill?.topic ?? '');
   const [excludedTopics, setExcludedTopics] = useState(
@@ -298,13 +380,6 @@ export function CreateOutingScreen() {
     return `${lieu} · ${heure}`;
   }, [venueName, timeStr]);
 
-  const applyShortcut = (offsetDays: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    d.setHours(20, 0, 0, 0);
-    setDateStr(formatDateInput(d));
-    setTimeStr('20:00');
-  };
 
   const enterUrgentMode = () => {
     setUrgentMode(true);
@@ -382,6 +457,17 @@ export function CreateOutingScreen() {
       return;
     }
 
+    if (
+      isPaidInviteCategory(category) &&
+      budgetOther.trim() &&
+      !parseFreeInt(budgetOther, BUDGET_MIN_EUROS, BUDGET_MAX_EUROS).ok
+    ) {
+      Alert.alert(
+        'Montant',
+        `Indique un montant entier entre ${BUDGET_MIN_EUROS} et ${BUDGET_MAX_EUROS} €.`,
+      );
+      return;
+    }
     if (isPaidInviteCategory(category) && Math.round(budgetMaxEuros) <= 0) {
       Alert.alert(
         'Budget',
@@ -401,7 +487,7 @@ export function CreateOutingScreen() {
     if (!when) {
       Alert.alert(
         'Date / heure',
-        'Indique une date (JJ/MM/AAAA) et une heure (HH:mm) valides.',
+        'Indique un jour (JJ/MM) et une heure (HH:mm) valides.',
       );
       return;
     }
@@ -499,6 +585,7 @@ export function CreateOutingScreen() {
     setFromDispoBanner(false);
     setCapacity(1);
     setBudgetMaxEuros(BUDGET_DEFAULT_EUROS);
+    setBudgetOther('');
     setCategoryDetail('');
     const next = defaultDateTime(false);
     setDateStr(next.dateStr);
@@ -619,15 +706,24 @@ export function CreateOutingScreen() {
           />
 
           <Text style={styles.label}>Quartier *</Text>
-          <Pressable
+          <TextInput
             style={styles.input}
-            onPress={() => setShowQuartiers((v) => !v)}
-          >
-            <Text style={{ color: colors.text }}>{neighborhood}</Text>
-          </Pressable>
+            value={neighborhood}
+            onChangeText={(t) => {
+              setNeighborhood(t);
+              setShowQuartiers(true);
+            }}
+            onFocus={() => setShowQuartiers(true)}
+            placeholder="Choisis ou écris un quartier (ex. Batignolles)"
+            placeholderTextColor={colors.textMuted}
+            autoCorrect={false}
+            accessibilityLabel="Quartier, choix ou saisie libre"
+          />
           {showQuartiers ? (
             <View style={styles.quartierList}>
-              {PARIS_NEIGHBORHOODS.map((q) => (
+              {PARIS_NEIGHBORHOODS.filter((q) =>
+                q.toLowerCase().includes(neighborhood.trim().toLowerCase()),
+              ).map((q) => (
                 <Pressable
                   key={q}
                   onPress={() => {
@@ -728,54 +824,48 @@ export function CreateOutingScreen() {
         </Pressable>
 
         <Text style={styles.label}>Catégorie *</Text>
-        <View style={styles.row}>
-          {categories.map((c) => (
-            <Button
-              key={c.id}
-              title={c.label}
-              variant={category === c.id ? 'primary' : 'ghost'}
-              onPress={() => {
-                // Détail libre propre à Autre / Sport : pas de report de l’un à l’autre.
-                if (c.id !== category) setCategoryDetail('');
-                setCategory(c.id);
-                if (!isPaidInviteCategory(c.id)) {
-                  setBudgetMaxEuros(0);
-                } else if (budgetMaxEuros <= 0) {
-                  setBudgetMaxEuros(BUDGET_DEFAULT_EUROS);
-                }
-              }}
-              style={styles.chip}
-            />
-          ))}
-        </View>
-        {category === 'autre' ? (
-          <>
-            <Text style={styles.label}>Précise la sortie</Text>
-            <TextInput
-              style={styles.input}
-              value={categoryDetail}
-              onChangeText={setCategoryDetail}
-              placeholder="Ex. balade, promenade de chien, café, atelier…"
-              placeholderTextColor={colors.textMuted}
-              autoCorrect={false}
-              accessibilityLabel="Précise la sortie"
-            />
-          </>
-        ) : null}
-        {category === 'sport' ? (
-          <>
-            <Text style={styles.label}>Quel sport ? (optionnel)</Text>
-            <TextInput
-              style={styles.input}
-              value={categoryDetail}
-              onChangeText={setCategoryDetail}
-              placeholder="Ex. padel, footing, foot, escalade…"
-              placeholderTextColor={colors.textMuted}
-              autoCorrect={false}
-              accessibilityLabel="Quel sport ?"
-            />
-          </>
-        ) : null}
+        <PillsWithOther
+          look="outline"
+          showOtherPill={false}
+          options={categories}
+          selected={category}
+          onSelect={(id) => {
+            // Détail libre propre à Autre / Sport : pas de report de l’un à l’autre.
+            if (id !== category) setCategoryDetail('');
+            setCategory(id);
+            if (!isPaidInviteCategory(id)) {
+              setBudgetMaxEuros(0);
+            } else if (budgetMaxEuros <= 0) {
+              setBudgetMaxEuros(BUDGET_DEFAULT_EUROS);
+            }
+          }}
+          otherActive={false}
+          otherValue={category === 'autre' || category === 'sport' ? categoryDetail : ''}
+          onChangeOther={(t) => {
+            // Écrire ici = « Autre » (sauf Sport : précision du sport).
+            if (category !== 'autre' && category !== 'sport') {
+              setCategory('autre');
+              setBudgetMaxEuros(0);
+            }
+            setCategoryDetail(t);
+          }}
+          placeholder={
+            category === 'sport'
+              ? 'Quel sport ? (ex. padel, footing)'
+              : category === 'autre'
+                ? 'Précise la sortie (ex. balade, café, atelier)'
+                : 'Autre : précise (ex. balade, atelier)'
+          }
+          maxLength={60}
+          accessibilityLabel={
+            category === 'sport' ? 'Quel sport ?' : 'Autre : précise la sortie'
+          }
+          hint={
+            category === 'autre' && !categoryDetail.trim()
+              ? 'Obligatoire pour Autre.'
+              : null
+          }
+        />
 
         <Text style={styles.label}>Lieu *</Text>
         <TextInput
@@ -841,17 +931,8 @@ export function CreateOutingScreen() {
           </View>
         ) : null}
 
-        <Text style={styles.label}>Date *</Text>
-        <TextInput
-          style={styles.input}
-          value={dateStr}
-          onChangeText={setDateStr}
-          placeholder="JJ/MM/AAAA"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="numbers-and-punctuation"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <Text style={styles.label}>Jour *</Text>
+        <DayPills dateStr={dateStr} onChangeDateStr={setDateStr} />
 
         <Text style={styles.label}>Heure *</Text>
         <TextInput
@@ -864,24 +945,9 @@ export function CreateOutingScreen() {
           autoCapitalize="none"
           autoCorrect={false}
         />
-
-        <View style={[styles.row, { marginTop: spacing.sm }]}>
-          <Button
-            title="Ce soir 20h"
-            variant="ghost"
-            onPress={() => applyShortcut(0)}
-            style={styles.chip}
-          />
-          <Button
-            title="Demain 20h"
-            variant="ghost"
-            onPress={() => applyShortcut(1)}
-            style={styles.chip}
-          />
-        </View>
         {!startsAtDate ? (
           <Text style={styles.fieldError}>
-            Date ou heure invalide — format JJ/MM/AAAA et HH:mm.
+            Jour ou heure invalide : JJ/MM et HH:mm.
           </Text>
         ) : null}
 
@@ -921,46 +987,50 @@ export function CreateOutingScreen() {
             <Text style={styles.inviteHint}>
               J'invite jusqu'à ce montant, réglé sur place.
             </Text>
-            <View style={styles.row}>
-              {BUDGET_PRESETS.map((b) => (
-                <Button
-                  key={b}
-                  title={`${b} €`}
-                  variant={
-                    Math.round(budgetMaxEuros) === b ? 'primary' : 'ghost'
-                  }
-                  onPress={() => setBudgetMaxEuros(b)}
-                  style={styles.chip}
-                />
-              ))}
-            </View>
-            <View style={styles.budgetCard}>
-              <View style={styles.budgetMontantRow}>
-                <Text style={styles.budgetMontantLabel}>Montant libre</Text>
-                <TextInput
-                  style={styles.budgetMontantInput}
-                  value={String(Math.round(budgetMaxEuros))}
-                  onChangeText={(t) => {
-                    if (t.trim() === '') return;
-                    const n = parseLooseInt(t);
-                    if (n != null) {
-                      setBudgetMaxEuros(clampCreateBudget(n));
-                    }
-                  }}
-                  keyboardType="decimal-pad"
-                  maxLength={5}
-                  selectTextOnFocus
-                  accessibilityLabel="Montant budget en euros"
-                />
-                <Text style={styles.budgetMontantSuffix}>€</Text>
-              </View>
+            <PillsWithOther
+              look="outline"
+              options={BUDGET_PRESETS.map((b) => ({ id: b as number, label: `${b} €` }))}
+              selected={Math.round(budgetMaxEuros)}
+              onSelect={(b) => {
+                setBudgetMaxEuros(b);
+                setBudgetOther('');
+              }}
+              otherActive={budgetOther.trim() !== ''}
+              otherValue={budgetOther}
+              onChangeOther={(t) => {
+                const cleaned = t.replace(/[^0-9]/g, '').slice(0, 3);
+                setBudgetOther(cleaned);
+                const res = parseFreeInt(cleaned, BUDGET_MIN_EUROS, BUDGET_MAX_EUROS);
+                if (res.ok) setBudgetMaxEuros(res.value);
+              }}
+              placeholder="ex. 25"
+              keyboardType="number-pad"
+              suffix="€"
+              maxLength={3}
+              inputWidth={72}
+              hint={freeIntHint(
+                parseFreeInt(budgetOther, BUDGET_MIN_EUROS, BUDGET_MAX_EUROS),
+                BUDGET_MIN_EUROS,
+                BUDGET_MAX_EUROS,
+                '€',
+              )}
+              hintTone="error"
+              accessibilityLabel="Autre montant en euros"
+            />
+            <View style={[styles.budgetCard, { marginTop: spacing.sm }]}>
               <Slider
                 style={styles.slider}
                 minimumValue={BUDGET_MIN_EUROS}
                 maximumValue={BUDGET_MAX_EUROS}
                 step={1}
                 value={Math.max(BUDGET_MIN_EUROS, budgetMaxEuros)}
-                onValueChange={(v) => setBudgetMaxEuros(clampCreateBudget(v))}
+                onValueChange={(v) => {
+                  const n = clampCreateBudget(v);
+                  setBudgetMaxEuros(n);
+                  setBudgetOther(
+                    (BUDGET_PRESETS as readonly number[]).includes(n) ? '' : String(n),
+                  );
+                }}
                 minimumTrackTintColor={colors.primary}
                 maximumTrackTintColor={colors.border}
                 thumbTintColor={colors.primary}
@@ -1143,13 +1213,6 @@ function PartnerCreateForm() {
     ? [`${PARTNER_CULTURE_CAPACITY} places offertes`]
     : partnerOfferChips(offer);
 
-  const applyShortcut = (offsetDays: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    d.setHours(20, 0, 0, 0);
-    setDateStr(formatDateInput(d));
-    setTimeStr('20:00');
-  };
 
   const onPublish = () => {
     if (!exactAddress.trim() || !message.trim()) {
@@ -1161,7 +1224,7 @@ function PartnerCreateForm() {
       return;
     }
     if (!startsAt) {
-      Alert.alert('Date / heure', 'Format JJ/MM/AAAA et HH:mm.');
+      Alert.alert('Date / heure', 'Format JJ/MM et HH:mm.');
       return;
     }
     if (isStartsAtPast(startsAt.toISOString()) || isDateStrBeforeParisToday(dateStr)) {
@@ -1267,17 +1330,8 @@ function PartnerCreateForm() {
           </>
         ) : null}
 
-        <Text style={styles.label}>Date *</Text>
-        <TextInput
-          style={styles.input}
-          value={dateStr}
-          onChangeText={setDateStr}
-          placeholder="JJ/MM/AAAA"
-          placeholderTextColor={colors.textMuted}
-          keyboardType="numbers-and-punctuation"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <Text style={styles.label}>Jour *</Text>
+        <DayPills dateStr={dateStr} onChangeDateStr={setDateStr} />
         <Text style={styles.label}>Heure *</Text>
         <TextInput
           style={styles.input}
@@ -1289,13 +1343,9 @@ function PartnerCreateForm() {
           autoCapitalize="none"
           autoCorrect={false}
         />
-        <View style={[styles.row, { marginTop: spacing.sm }]}>
-          <Button title="Ce soir 20h" variant="ghost" onPress={() => applyShortcut(0)} style={styles.chip} />
-          <Button title="Demain 20h" variant="ghost" onPress={() => applyShortcut(1)} style={styles.chip} />
-        </View>
         {!startsAt ? (
           <Text style={styles.fieldError}>
-            Date ou heure invalide — format JJ/MM/AAAA et HH:mm.
+            Jour ou heure invalide : JJ/MM et HH:mm.
           </Text>
         ) : null}
 
@@ -1334,76 +1384,75 @@ function PartnerCreateForm() {
         ) : (
           <>
             <Text style={styles.label}>Geste offert (optionnel)</Text>
-            <View style={styles.row}>
-              {PARTNER_GESTURES.map((g) => (
-                <Button
-                  key={g.id}
-                  title={g.label}
-                  variant={gesture === g.id ? 'primary' : 'ghost'}
-                  onPress={() =>
-                    setGesture((cur) => (cur === g.id ? undefined : g.id))
-                  }
-                  style={styles.chip}
-                />
-              ))}
-            </View>
-            {gesture === 'autre' ? (
-              <TextInput
-                style={[styles.input, { marginTop: spacing.sm }]}
-                value={gestureOther}
-                onChangeText={setGestureOther}
-                placeholder="Ex. une coupe de crémant"
-                placeholderTextColor={colors.textMuted}
-                maxLength={60}
-              />
-            ) : null}
+            <PillsWithOther
+              look="outline"
+              options={PARTNER_GESTURES.filter((g) => g.id !== 'autre')}
+              selected={gesture === 'autre' ? null : gesture ?? null}
+              onSelect={(id) => {
+                setGestureOther('');
+                setGesture((cur) => (cur === id ? undefined : id));
+              }}
+              otherActive={gesture === 'autre'}
+              otherValue={gestureOther}
+              onPressOther={() => setGesture('autre')}
+              onChangeOther={(t) => {
+                setGestureOther(t);
+                if (t.trim()) setGesture('autre');
+                else if (gesture === 'autre') setGesture(undefined);
+              }}
+              placeholder="ex. une coupe de crémant"
+              maxLength={60}
+              accessibilityLabel="Autre geste offert"
+            />
 
             <Text style={styles.label}>Remise (optionnel)</Text>
-            <View style={styles.row}>
-              {PARTNER_DISCOUNT_PRESETS.map((pct) => {
-                const on = discountMode === 'preset' && discountPreset === pct;
-                return (
-                  <Button
-                    key={pct}
-                    title={`−${pct} %`}
-                    variant={on ? 'primary' : 'ghost'}
-                    onPress={() => {
-                      if (on) {
-                        setDiscountMode('none');
-                      } else {
-                        setDiscountMode('preset');
-                        setDiscountPreset(pct);
-                      }
-                    }}
-                    style={styles.chip}
-                  />
-                );
-              })}
-              <Button
-                title="Autre %"
-                variant={discountMode === 'other' ? 'primary' : 'ghost'}
-                onPress={() =>
-                  setDiscountMode((m) => (m === 'other' ? 'none' : 'other'))
+            <PillsWithOther
+              look="outline"
+              options={PARTNER_DISCOUNT_PRESETS.map((pct) => ({
+                id: pct as number,
+                label: `−${pct} %`,
+              }))}
+              selected={discountMode === 'preset' ? discountPreset : null}
+              onSelect={(pct) => {
+                setDiscountOther('');
+                if (discountMode === 'preset' && discountPreset === pct) {
+                  setDiscountMode('none');
+                } else {
+                  setDiscountMode('preset');
+                  setDiscountPreset(pct);
                 }
-                style={styles.chip}
-              />
-            </View>
-            {discountMode === 'other' ? (
-              <View style={[styles.budgetMontantRow, { marginTop: spacing.sm }]}>
-                <Text style={styles.budgetMontantLabel}>Remise libre</Text>
-                <TextInput
-                  style={styles.budgetMontantInput}
-                  value={discountOther}
-                  onChangeText={setDiscountOther}
-                  keyboardType="number-pad"
-                  maxLength={2}
-                  placeholder="15"
-                  placeholderTextColor={colors.textMuted}
-                  accessibilityLabel="Remise en pourcentage"
-                />
-                <Text style={styles.budgetMontantSuffix}>%</Text>
-              </View>
-            ) : null}
+              }}
+              otherActive={discountMode === 'other'}
+              otherValue={discountOther}
+              onPressOther={() => setDiscountMode('other')}
+              onChangeOther={(t) => {
+                const cleaned = t.replace(/[^0-9]/g, '').slice(0, 2);
+                setDiscountOther(cleaned);
+                if (cleaned) setDiscountMode('other');
+                else if (discountMode === 'other') setDiscountMode('none');
+              }}
+              placeholder="ex. 15"
+              keyboardType="number-pad"
+              suffix="%"
+              maxLength={2}
+              inputWidth={64}
+              hint={
+                discountMode === 'other'
+                  ? freeIntHint(
+                      parseFreeInt(
+                        discountOther,
+                        PARTNER_DISCOUNT_MIN,
+                        PARTNER_DISCOUNT_MAX,
+                      ),
+                      PARTNER_DISCOUNT_MIN,
+                      PARTNER_DISCOUNT_MAX,
+                      '%',
+                    )
+                  : null
+              }
+              hintTone="error"
+              accessibilityLabel="Autre remise en pourcentage"
+            />
             <Text style={styles.privacyHint}>
               Au moins un geste OU une remise — cumulables. Pas de montant
               « J’invite jusqu’à » pour un lieu : chacun règle sa part sur place.
@@ -1639,33 +1688,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     marginBottom: spacing.sm,
-  },
-  budgetMontantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  budgetMontantLabel: {
-    ...typography.bodyStrong,
-    color: colors.textSecondary,
-  },
-  budgetMontantInput: {
-    minWidth: 56,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    ...typography.bodyStrong,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  budgetMontantSuffix: {
-    ...typography.bodyStrong,
-    color: colors.text,
   },
   slider: { width: '100%', height: 40 },
   budgetEnds: {

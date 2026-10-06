@@ -368,11 +368,12 @@ export function ChatPlaceholderScreen() {
               ))}
             </View>
             <View style={styles.lateCustomRow}>
+              <Text style={styles.lateOtherLabel}>Autre</Text>
               <TextInput
                 style={styles.lateCustomInput}
                 value={lateCustom}
-                onChangeText={setLateCustom}
-                placeholder="Minutes exactes"
+                onChangeText={(t) => setLateCustom(t.replace(/[^0-9]/g, ''))}
+                placeholder="minutes (ex. 25)"
                 placeholderTextColor={colors.textMuted}
                 keyboardType="number-pad"
                 returnKeyType="done"
@@ -435,6 +436,11 @@ export function ChatPlaceholderScreen() {
 }
 
 const styles = StyleSheet.create({
+  lateOtherLabel: {
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.textSecondary,
+  },
   flex: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   wrap: {

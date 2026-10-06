@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -100,6 +100,7 @@ export function DispoSoirScreen() {
     user?.dispoNeighborhood ?? user?.neighborhood ?? 'Le Marais',
   );
   const [showQuartiers, setShowQuartiers] = useState(false);
+  const freeDateRef = useRef<TextInput>(null);
   const [topic, setTopic] = useState(user?.dispoTopic ?? '');
   const [exclusions, setExclusions] = useState(
     (user?.dispoExclusions ?? []).join(', '),
@@ -304,11 +305,26 @@ export function DispoSoirScreen() {
             </Pressable>
           );
         })}
+        <Pressable
+          onPress={() => {
+            setUseFree(true);
+            freeDateRef.current?.focus();
+          }}
+          style={[styles.chip, useFree && styles.chipOn]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: useFree }}
+          accessibilityLabel="Autre créneau : jour et heure libres"
+        >
+          <Text style={[styles.chipText, useFree && styles.chipTextOn]}>
+            Autre
+          </Text>
+        </Pressable>
       </View>
 
-      <Text style={styles.sectionHint}>Ou jour et heure libres</Text>
+      <Text style={styles.sectionHint}>Autre : jour et heure libres</Text>
       <Text style={styles.freeLabel}>Jour</Text>
       <TextInput
+        ref={freeDateRef}
         style={[styles.input, useFree && styles.inputOn]}
         value={freeDate}
         onChangeText={onFreeDateChange}
@@ -355,20 +371,26 @@ export function DispoSoirScreen() {
         })}
       </View>
       {hint ? <Text style={styles.error}>{hint}</Text> : null}
-      {categories.includes('autre') ? (
-        <>
-          <Text style={styles.sectionHint}>Précise la sortie</Text>
-          <TextInput
-            style={styles.input}
-            value={categoryDetail}
-            onChangeText={setCategoryDetail}
-            placeholder="Ex. balade, promenade de chien, café, atelier…"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
-            accessibilityLabel="Précise la sortie"
-          />
-        </>
-      ) : null}
+      {/* Champ libre « Autre » toujours visible : écrire coche Autre. */}
+      <TextInput
+        style={[
+          styles.input,
+          styles.categoryFree,
+          categories.includes('autre') && categoryDetail.trim() !== '' && styles.inputOn,
+        ]}
+        value={categoryDetail}
+        onChangeText={(t) => {
+          setCategoryDetail(t);
+          if (t.trim() && !categories.includes('autre')) {
+            setCategories((prev) => [...prev, 'autre']);
+          }
+        }}
+        placeholder="Autre : précise (ex. balade, café, atelier)"
+        placeholderTextColor={colors.textMuted}
+        autoCorrect={false}
+        maxLength={60}
+        accessibilityLabel="Autre : précise la sortie"
+      />
 
       <Text style={styles.section}>Quartier *</Text>
       <Text style={styles.sectionHint}>
@@ -450,6 +472,7 @@ export function DispoSoirScreen() {
 }
 
 const styles = StyleSheet.create({
+  categoryFree: { marginTop: spacing.sm },
   scroll: { flex: 1, backgroundColor: colors.background },
   wrap: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   title: { ...typography.title, color: colors.text, marginBottom: spacing.md },

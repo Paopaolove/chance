@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { CustomFiltersEditor } from '../components/CustomFiltersEditor';
+import { PillsWithOther } from '../components/PillsWithOther';
 import { useChance } from '../data/ChanceContext';
 import {
   INTEREST_SUGGESTIONS,
@@ -772,42 +773,29 @@ export function OnboardingScreen() {
           <Text style={styles.hint}>
             Pas de GPS continu. Choisis un quartier ou écris le tien.
           </Text>
-          <View style={styles.chips}>
-            {PARIS_NEIGHBORHOODS.map((q) => {
-              const selected = neighborhood === q;
-              return (
-                <Pressable
-                  key={q}
-                  onPress={() => {
-                    setNeighborhood(q);
-                    setError('');
-                  }}
-                  style={[styles.chip, selected && styles.chipOn]}
-                >
-                  <Text
-                    style={[styles.chipText, selected && styles.chipTextOn]}
-                  >
-                    {q}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={styles.label}>Autre quartier</Text>
-          <TextInput
-            style={styles.input}
-            value={
+          <PillsWithOther
+            options={PARIS_NEIGHBORHOODS.map((q) => ({ id: q as string, label: q }))}
+            selected={neighborhood}
+            onSelect={(q) => {
+              setNeighborhood(q);
+              setError('');
+            }}
+            otherActive={
+              neighborhood.trim() !== '' &&
+              !(PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
+            }
+            otherValue={
               (PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
                 ? ''
                 : neighborhood
             }
-            onChangeText={(t) => {
+            onChangeOther={(t) => {
               setNeighborhood(t);
               setError('');
             }}
-            placeholder="Écris ton quartier…"
-            placeholderTextColor={colors.textMuted}
-            autoCorrect={false}
+            placeholder="ex. Batignolles"
+            maxLength={40}
+            accessibilityLabel="Autre quartier"
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button

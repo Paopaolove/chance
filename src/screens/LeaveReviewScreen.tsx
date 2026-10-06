@@ -251,7 +251,10 @@ export function LeaveReviewScreen() {
             {LOW_STAR_MOTIVES.map((m) => (
               <Pressable
                 key={m.kind}
-                onPress={() => setLowStarKind(m.kind)}
+                onPress={() => {
+                  setLowStarKind(m.kind);
+                  if (m.kind !== 'autre') setLowStarOther('');
+                }}
                 style={[
                   styles.chip,
                   lowStarKind === m.kind && styles.chipOn,
@@ -269,16 +272,19 @@ export function LeaveReviewScreen() {
                 </Text>
               </Pressable>
             ))}
-            {lowStarKind === 'autre' ? (
-              <TextInput
-                style={styles.inputOneLine}
-                placeholder="Précise en une ligne…"
-                placeholderTextColor={colors.textMuted}
-                value={lowStarOther}
-                onChangeText={setLowStarOther}
-                maxLength={120}
-              />
-            ) : null}
+            {/* Champ libre « Autre » toujours visible : écrire sélectionne Autre. */}
+            <TextInput
+              style={styles.inputOneLine}
+              placeholder="Autre : précise en une ligne"
+              placeholderTextColor={colors.textMuted}
+              value={lowStarOther}
+              onChangeText={(t) => {
+                setLowStarOther(t);
+                if (t.trim()) setLowStarKind('autre');
+              }}
+              maxLength={120}
+              accessibilityLabel="Autre motif, en une ligne"
+            />
           </View>
         ) : null}
 
