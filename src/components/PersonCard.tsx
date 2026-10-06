@@ -36,7 +36,7 @@ export function PersonCard({ person, onPropose }: Props) {
         <Pressable
           onPress={openPerson}
           accessibilityRole="button"
-          accessibilityLabel={`Profil de ${person.firstName}`}
+          accessibilityLabel={`Voir le profil de ${person.firstName}`}
           hitSlop={12}
           style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
@@ -58,7 +58,7 @@ export function PersonCard({ person, onPropose }: Props) {
           <Pressable
             onPress={openPerson}
             accessibilityRole="button"
-            accessibilityLabel={`Profil de ${person.firstName}`}
+            accessibilityLabel={`Voir le profil de ${person.firstName}`}
             style={({ pressed }) => pressed && styles.pressed}
           >
             <Text style={styles.name} numberOfLines={1}>

@@ -244,8 +244,9 @@ export function ConfirmSlotScreen() {
           <Pressable
             style={styles.hostRow}
             onPress={() => openProfile(outing.hostId)}
+            hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={`Profil de ${outing.hostName}`}
+            accessibilityLabel={`Voir le profil de ${outing.hostName}`}
           >
             <Avatar
               name={outing.hostName}
@@ -288,8 +289,9 @@ export function ConfirmSlotScreen() {
         <Pressable
           style={styles.hostRow}
           onPress={() => openProfile(outing.hostId)}
+          hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel={`Profil de ${outing.hostName}`}
+          accessibilityLabel={`Voir le profil de ${outing.hostName}`}
         >
           <Avatar
             name={outing.hostName}

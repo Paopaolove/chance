@@ -46,6 +46,7 @@ import {
 } from '../utils/partners';
 import { CheckNote } from '../components/CheckNote';
 import { PillsWithOther } from '../components/PillsWithOther';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 import {
   formatYmdShort,
   freeDateHint,
@@ -261,6 +262,7 @@ function defaultDateTime(
 
 export function CreateOutingScreen() {
   const navigation = useNavigation<Nav>();
+  const openProfile = useOpenUserProfile();
   const route = useRoute<CreateRoute>();
   const prefill = route.params;
   const { createOuting, getActiveOutingForUser, closeOuting, state } =
@@ -798,11 +800,25 @@ export function CreateOutingScreen() {
         </Text>
         {fromDispoBanner ? (
           <View style={styles.dispoBanner}>
-            <Text style={styles.dispoBannerTitle}>
-              {inviteeName
-                ? `Proposition pour ${inviteeName}`
-                : 'Depuis Dispo'}
-            </Text>
+            {inviteeName && inviteeUserId ? (
+              <Pressable
+                onPress={() => openProfile(inviteeUserId)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Voir le profil de ${inviteeName}`}
+              >
+                <Text style={styles.dispoBannerTitle}>
+                  Proposition pour{' '}
+                  <Text style={styles.dispoBannerLink}>{inviteeName}</Text>
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.dispoBannerTitle}>
+                {inviteeName
+                  ? `Proposition pour ${inviteeName}`
+                  : 'Depuis Dispo'}
+              </Text>
+            )}
             <Text style={styles.dispoBannerBody}>
               {inviteeName
                 ? `Destinataire conservé : ${inviteeName}. Prérempli depuis sa dispo — tu lui proposes cette sortie.`
@@ -1510,6 +1526,10 @@ function PartnerCreateForm() {
 }
 
 const styles = StyleSheet.create({
+  dispoBannerLink: {
+    color: colors.primary,
+    textDecorationLine: 'underline',
+  },
   partnerInfo: {
     backgroundColor: colors.primarySoft,
     borderRadius: radius.md,

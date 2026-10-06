@@ -50,7 +50,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
         <Pressable
           onPress={openHost}
           accessibilityRole="button"
-          accessibilityLabel={`Profil de ${outing.hostName}`}
+          accessibilityLabel={`Voir le profil de ${outing.hostName}`}
           hitSlop={12}
           style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
         >
@@ -72,7 +72,7 @@ export function OutingCard({ outing, onPress, travelMinutes }: Props) {
           <Pressable
             onPress={openHost}
             accessibilityRole="button"
-            accessibilityLabel={`Profil de ${outing.hostName}`}
+            accessibilityLabel={`Voir le profil de ${outing.hostName}`}
             style={({ pressed }) => pressed && styles.pressed}
           >
             {partner ? (

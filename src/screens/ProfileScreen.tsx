@@ -29,6 +29,7 @@ import {
   trialDaysRemaining,
 } from '../utils/subscription';
 import { pickProfilePhoto } from '../utils/pickProfilePhoto';
+import { useOpenUserProfile } from '../utils/openUserProfile';
 import {
   PARTNER_CULTURE_MAX_SAME_EVENING,
   PARTNER_KIND_LABELS,
@@ -43,6 +44,7 @@ type ProfileRoute = RouteProp<MainTabParamList, 'Profile'>;
 
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
+  const openProfile = useOpenUserProfile();
   const route = useRoute<ProfileRoute>();
   const scrollRef = useRef<ScrollView>(null);
   const rateSectionY = useRef(0);
@@ -620,9 +622,25 @@ export function ProfileScreen() {
                         style={{ marginTop: spacing.md }}
                       >
                         <Text style={styles.cardValue}>{item.outing.title}</Text>
-                        <Text style={styles.cardHint}>
-                          Noter {item.toUserName}
-                        </Text>
+                        <Pressable
+                          onPress={() => openProfile(item.toUserId)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Voir le profil de ${item.toUserName}`}
+                          style={styles.personLinkRow}
+                        >
+                          <Avatar
+                            name={item.toUserName}
+                            seed={item.toUserId}
+                            size={28}
+                          />
+                          <Text style={styles.cardHint}>
+                            Noter{' '}
+                            <Text style={styles.personLinkText}>
+                              {item.toUserName}
+                            </Text>
+                          </Text>
+                        </Pressable>
                         <Button
                           title="Noter la sortie"
                           variant="secondary"
@@ -690,6 +708,25 @@ export function ProfileScreen() {
                           {formatOutingWhen(item.outing.startsAt)} ·{' '}
                           {item.outing.venueName || item.outing.neighborhood}
                         </Text>
+                        <Pressable
+                          onPress={() => openProfile(item.toUserId)}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Voir le profil de ${item.toUserName}`}
+                          style={styles.personLinkRow}
+                        >
+                          <Avatar
+                            name={item.toUserName}
+                            seed={item.toUserId}
+                            size={28}
+                          />
+                          <Text style={styles.cardHint}>
+                            avec{' '}
+                            <Text style={styles.personLinkText}>
+                              {item.toUserName}
+                            </Text>
+                          </Text>
+                        </Pressable>
                         <GivenReviewSummary
                           review={item.review}
                           onPressVoirAvis={() =>
@@ -718,6 +755,17 @@ export function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  personLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    alignSelf: 'flex-start',
+  },
+  personLinkText: {
+    color: colors.primary,
+    fontFamily: fonts.semiBold,
+  },
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },

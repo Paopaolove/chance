@@ -197,8 +197,9 @@ export function OutingDetailScreen() {
             <Pressable
               key={r.id}
               onPress={() => openProfile(r.reporterId)}
+              hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={`Profil de ${r.reporterName}`}
+              accessibilityLabel={`Voir le profil de ${r.reporterName}`}
             >
               <Text style={styles.lateBannerText}>
                 ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, { orMore: r.orMore })})
@@ -215,8 +216,9 @@ export function OutingDetailScreen() {
           <View style={styles.imprevuCard}>
             <Pressable
               onPress={() => openProfile(pending.reporterId)}
+              hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel={`Profil de ${pending.reporterName}`}
+              accessibilityLabel={`Voir le profil de ${pending.reporterName}`}
             >
               <Text style={styles.imprevuTitle}>
                 {pending.reporterName} signale un imprévu.
@@ -340,8 +342,9 @@ export function OutingDetailScreen() {
       <Pressable
         style={styles.hostBlock}
         onPress={() => openProfile(outing.hostId)}
+        hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`Profil de ${outing.hostName}`}
+        accessibilityLabel={`Voir le profil de ${outing.hostName}`}
       >
         <Avatar
           name={outing.hostName}
@@ -385,8 +388,9 @@ export function OutingDetailScreen() {
 
       <Pressable
         onPress={() => openProfile(outing.hostId)}
+        hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`Profil de ${outing.hostName}`}
+        accessibilityLabel={`Voir le profil de ${outing.hostName}`}
       >
         <Text style={styles.inviteLine}>
           {partner
@@ -547,8 +551,9 @@ export function OutingDetailScreen() {
                 key={r.id}
                 style={styles.guestRow}
                 onPress={() => openProfile(r.userId)}
+                hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel={`Profil de ${r.userName}`}
+                accessibilityLabel={`Voir le profil de ${r.userName}`}
               >
                 <Avatar
                   name={r.userName}
@@ -682,6 +687,17 @@ export function OutingDetailScreen() {
             .filter((r) => r.outingId === outing.id && r.status === 'confirmed')
             .map((r) => (
               <View key={r.id} style={{ marginTop: spacing.md }}>
+                {/* Prénom / photo → profil (présence, chat) */}
+                <Pressable
+                  style={styles.presenceProfileRow}
+                  onPress={() => openProfile(r.userId)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Voir le profil de ${r.userName}`}
+                >
+                  <Avatar name={r.userName} seed={r.userId} size={32} />
+                  <Text style={styles.guestName}>{r.userName}</Text>
+                </Pressable>
                 <Button
                   title={`Chat avec ${r.userName}`}
                   variant="secondary"
@@ -1197,6 +1213,13 @@ export function OutingDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  presenceProfileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+    alignSelf: 'flex-start',
+  },
   scroll: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center' },

@@ -169,7 +169,7 @@ export function RequestsScreen() {
             style={styles.profileHit}
             onPress={() => openProfile(r.userId)}
             accessibilityRole="button"
-            accessibilityLabel={`Profil de ${r.userName}`}
+            accessibilityLabel={`Voir le profil de ${r.userName}`}
             hitSlop={8}
           >
             <Avatar name={r.userName} seed={r.userId} size={36} />
@@ -297,7 +297,7 @@ export function RequestsScreen() {
             style={styles.profileHit}
             onPress={() => openProfile(outing.hostId)}
             accessibilityRole="button"
-            accessibilityLabel={`Profil de ${outing.hostName}`}
+            accessibilityLabel={`Voir le profil de ${outing.hostName}`}
             hitSlop={8}
           >
             <Avatar name={outing.hostName} seed={outing.hostId} size={36} />

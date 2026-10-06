@@ -115,8 +115,9 @@ export function ChatPlaceholderScreen() {
       <Pressable
         style={styles.profileHeader}
         onPress={() => openProfile(otherUserId)}
+        hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`Profil de ${otherName}`}
+        accessibilityLabel={`Voir le profil de ${otherName}`}
       >
         <Avatar
           name={otherName}
@@ -289,8 +290,9 @@ export function ChatPlaceholderScreen() {
               <Pressable
                 key={r.id}
                 onPress={() => openProfile(r.reporterId)}
+                hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel={`Profil de ${r.reporterName}`}
+                accessibilityLabel={`Voir le profil de ${r.reporterName}`}
               >
                 <Text style={styles.lateBannerText}>
                   ⏱ {r.reporterName} a un retard ({lateLabel(r.minutes, {
@@ -328,8 +330,9 @@ export function ChatPlaceholderScreen() {
                   m.senderId ? (
                     <Pressable
                       onPress={() => openProfile(m.senderId!)}
+                      hitSlop={8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Profil de ${m.senderName}`}
+                      accessibilityLabel={`Voir le profil de ${m.senderName}`}
                     >
                       <Text style={styles.senderName}>{m.senderName}</Text>
                     </Pressable>

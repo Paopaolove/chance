@@ -78,8 +78,9 @@ export function ImprevuScreen() {
       <Pressable
         style={styles.otherRow}
         onPress={() => openProfile(otherUserId)}
+        hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={`Profil de ${otherName}`}
+        accessibilityLabel={`Voir le profil de ${otherName}`}
       >
         <Avatar
           name={otherName}

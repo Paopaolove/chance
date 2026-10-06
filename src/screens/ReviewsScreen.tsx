@@ -17,6 +17,7 @@ import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatRatingAverage } from '../utils/format';
 import { useOpenUserProfile } from '../utils/openUserProfile';
+import { Avatar } from '../components/Avatar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'Reviews'>;
@@ -82,6 +83,16 @@ export function ReviewsScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      <Pressable
+        style={styles.subjectRow}
+        onPress={() => openProfile(userId)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Voir le profil de ${userName}`}
+      >
+        <Avatar name={userName} seed={userId} size={40} />
+        <Text style={styles.subjectName}>{userName}</Text>
+      </Pressable>
       {isNew ? (
         <Text style={[styles.header, styles.headerNew]}>
           {`${userName} vient d’arriver. Donne-lui son `}
@@ -135,7 +146,7 @@ export function ReviewsScreen() {
               <Pressable
                 onPress={() => openProfile(review.fromUserId)}
                 accessibilityRole="button"
-                accessibilityLabel={`Profil de ${fromName}`}
+                accessibilityLabel={`Voir le profil de ${fromName}`}
                 hitSlop={8}
               >
                 <Text style={styles.meta}>
@@ -274,6 +285,17 @@ export function ReviewsScreen() {
 }
 
 const styles = StyleSheet.create({
+  subjectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    alignSelf: 'flex-start',
+  },
+  subjectName: {
+    ...typography.subtitle,
+    color: colors.text,
+  },
   scroll: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   header: {

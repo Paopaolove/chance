@@ -300,7 +300,7 @@ export function HostProfileScreen() {
                   )
                 }
                 accessibilityRole="button"
-                accessibilityLabel={`Profil de ${fromName}`}
+                accessibilityLabel={`Voir le profil de ${fromName}`}
                 hitSlop={8}
               >
                 <Text style={styles.meta}>

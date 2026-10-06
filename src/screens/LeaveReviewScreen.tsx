@@ -201,7 +201,7 @@ export function LeaveReviewScreen() {
         <Pressable
           onPress={() => openProfile(toUserId)}
           accessibilityRole="button"
-          accessibilityLabel={`Profil de ${toUserName}`}
+          accessibilityLabel={`Voir le profil de ${toUserName}`}
           hitSlop={8}
         >
           <Text style={styles.personHint}>
