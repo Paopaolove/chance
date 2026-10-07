@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { useFirstMomentGate } from '../components/FirstMomentSheet';
 import { DEPOSIT_EUROS, useChance } from '../data/ChanceContext';
 import { mockHosts } from '../data/mockOutings';
 import { RootStackParamList } from '../navigation/types';
@@ -42,6 +43,7 @@ export function ConfirmSlotScreen() {
   const [done, setDone] = useState(false);
   const [expired, setExpired] = useState(false);
   const [noSpot, setNoSpot] = useState(false);
+  const { requireBeforeMoment, sheet: firstMomentSheet } = useFirstMomentGate();
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -181,7 +183,11 @@ export function ConfirmSlotScreen() {
 
   const gate = canConfirmOuting();
 
-  const onConfirm = () => {
+  // Pas de téléphone (plus demandé à l’entrée) → on le demande ici, sans la
+  // photo, puis on confirme. Rien ne change sur la caution / les 10 min.
+  const onConfirm = () => requireBeforeMoment(submitConfirm, 'phoneOnly');
+
+  const submitConfirm = () => {
     if (!gate.ok) {
       navigation.navigate('Paywall', {
         returnToConfirmRequestId: request.id,
@@ -285,6 +291,7 @@ export function ConfirmSlotScreen() {
 
   return (
     <SafeAreaView style={styles.wrap}>
+      {firstMomentSheet}
       <View style={styles.centerBlock}>
         <Pressable
           style={styles.hostRow}

@@ -20,6 +20,8 @@ import {
   AppToast,
   ChatMessage,
   DispoProfileUpdate,
+  EntryIntent,
+  Gender,
   LateReport,
   ImprevuMotive,
   ImprevuReport,
@@ -187,6 +189,23 @@ const DEMO_PARTNER_DEFAULTS: Record<
     venueName: 'Ma salle (démo)',
     phrase: 'Salle de spectacle — places offertes les soirs de première.',
   },
+};
+
+/** Profil → Modifier, feuille « premier moment », option femmes. */
+export type ProfileUpdate = {
+  bio?: string;
+  interests?: string[];
+  customFilters?: string[];
+  neighborhood?: string;
+  firstName?: string;
+  age?: number;
+  photoUri?: string | null;
+  /** Demandés plus tard (plus à l’entrée). */
+  gender?: Gender | null;
+  genderDetail?: string | null;
+  phone?: string | null;
+  womenOnlyPreference?: boolean;
+  momentPromptSeen?: boolean;
 };
 
 function reducer(state: AppState, action: AppAction): AppState {
@@ -742,7 +761,22 @@ function reducer(state: AppState, action: AppAction): AppState {
         ...(p.womenOnlyPreference !== undefined
           ? { womenOnlyPreference: p.womenOnlyPreference }
           : {}),
+        ...clearOrSet('gender', p.gender),
+        ...clearOrSet('genderDetail', p.genderDetail),
+        ...(p.phone !== undefined
+          ? { phone: p.phone?.trim() ? p.phone.trim() : undefined }
+          : {}),
+        ...(p.momentPromptSeen !== undefined
+          ? { momentPromptSeen: p.momentPromptSeen }
+          : {}),
       };
+      // « Femmes uniquement » n’a de sens que pour un profil femme.
+      if (next.gender !== 'femme' && next.womenOnlyPreference) {
+        next = { ...next, womenOnlyPreference: false };
+      }
+      if (next.gender !== 'autre' && next.genderDetail) {
+        next = { ...next, genderDetail: undefined };
+      }
       if (p.dispoSoir === true && !next.dispoExpiresAt) {
         next = {
           ...next,
@@ -1864,15 +1898,7 @@ interface ChanceContextValue {
   expireRequestIfNeeded: (requestId: string) => void;
   setDispoSoir: (value: boolean) => void;
   setDispoProfile: (update: DispoProfileUpdate) => void;
-  updateProfile: (update: {
-    bio?: string;
-    interests?: string[];
-    customFilters?: string[];
-    neighborhood?: string;
-    firstName?: string;
-    age?: number;
-    photoUri?: string | null;
-  }) => void;
+  updateProfile: (update: ProfileUpdate) => void;
   setPlan: (
     plan: PlanId,
     opts?: {
@@ -2272,34 +2298,39 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const now = new Date();
       const trial = new Date(now);
       trial.setMonth(trial.getMonth() + 1);
+      const entryIntent: EntryIntent = input.entryIntent ?? 'feed';
+      const dispoSoir = !!input.dispoSoir;
+      // Tunnel court : genre, téléphone, photo, intérêts peuvent manquer —
+      // demandés plus tard (Profil, premier moment, option femmes).
+      const phone = input.phone?.trim() || undefined;
       const user: User = {
         id: uid('user'),
         firstName: input.firstName.trim() || 'Toi',
         age: input.age,
         gender: input.gender,
-        bio: input.bio.trim(),
+        bio: (input.bio ?? '').trim(),
         neighborhood: input.neighborhood.trim(),
         plan: 'essai',
         planInterval: null,
         outingCredits: 0,
         trialEndsAt: trial.toISOString(),
-        dispoSoir: !!input.dispoSoir,
-        interests: input.interests,
+        dispoSoir,
+        interests: input.interests ?? [],
         customFilters: input.customFilters ?? [],
         photoUri: input.photoUri,
-        dispoCategories: input.dispoSoir ? [...ALL_CATEGORIES] : [],
-        dispoSlot: input.dispoSoir ? 'soir' : undefined,
-        dispoNeighborhood: input.dispoSoir
+        dispoCategories: dispoSoir ? [...ALL_CATEGORIES] : [],
+        dispoSlot: dispoSoir ? 'soir' : undefined,
+        dispoNeighborhood: dispoSoir
           ? input.neighborhood.trim()
           : undefined,
         dispoBudgetMax: undefined,
-        dispoExpiresAt: input.dispoSoir
+        dispoExpiresAt: dispoSoir
           ? computeDispoExpiresAt('soir', now).toISOString()
           : undefined,
-        phone: input.phone.trim(),
+        phone,
         authProvider: input.authProvider,
         womenOnlyPreference:
-          input.gender === 'femme' ? input.womenOnlyPreference : false,
+          input.gender === 'femme' ? !!input.womenOnlyPreference : false,
         registered: true,
         email: input.email?.trim() || undefined,
         notificationsGranted: false,
@@ -2309,7 +2340,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       dispatch({
         type: 'COMPLETE_ONBOARDING',
         payload: user,
-        entryIntent: input.entryIntent,
+        entryIntent,
       });
     }, []);
 
@@ -3056,15 +3087,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   }, [state.currentUser?.dispoSoir, state.currentUser?.dispoExpiresAt]);
 
   const updateProfile = useCallback(
-    (update: {
-      bio?: string;
-      interests?: string[];
-      customFilters?: string[];
-      neighborhood?: string;
-      firstName?: string;
-      age?: number;
-      photoUri?: string | null;
-    }) => {
+    (update: ProfileUpdate) => {
       dispatch({ type: 'SET_DISPO_PROFILE', payload: update });
     },
     [],

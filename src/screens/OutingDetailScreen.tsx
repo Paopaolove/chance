@@ -45,6 +45,7 @@ import { makeVenueKey } from '../utils/venue';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 import { CheckNote } from '../components/CheckNote';
+import { useFirstMomentGate } from '../components/FirstMomentSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'OutingDetail'>;
@@ -83,6 +84,7 @@ export function OutingDetailScreen() {
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
   const [suggestedDate, setSuggestedDate] = useState('');
   const [joinedId, setJoinedId] = useState<string | null>(null);
+  const { requireBeforeMoment, sheet: firstMomentSheet } = useFirstMomentGate();
 
   const myRequest = useMemo(() => {
     if (!outing || !state.currentUser) return undefined;
@@ -139,15 +141,41 @@ export function OutingDetailScreen() {
         )
       : undefined;
 
+  // Premier moment : téléphone (et photo proposée) avant la 1re demande.
+  // « Femmes uniquement » sans genre femme : on explique d’abord, sans feuille.
   const onJoin = () => {
+    if (outing.womenOnly && state.currentUser?.gender !== 'femme') {
+      submitJoin();
+      return;
+    }
+    requireBeforeMoment(submitJoin);
+  };
+
+  const submitJoin = () => {
     const result = joinOuting(
       outing.id,
       message,
       suggestedDate.trim() || undefined,
     );
     if (!result.ok) {
+      if (result.reason === 'women_only' && !state.currentUser?.gender) {
+        // Genre plus demandé à l’entrée : genre inconnu = pas d’accès aux
+        // moments « Femmes uniquement » tant qu’il n’est pas renseigné.
+        Alert.alert(
+          'Réservé aux femmes',
+          'Ce moment est réservé aux profils femme. Indique ton genre dans ton profil pour le rejoindre.',
+          [
+            { text: 'Plus tard', style: 'cancel' },
+            {
+              text: 'Compléter mon profil',
+              onPress: () => navigation.navigate('EditProfile'),
+            },
+          ],
+        );
+        return;
+      }
       const messages: Record<string, string> = {
-        women_only: 'Cette sortie est réservée aux femmes.',
+        women_only: 'Ce moment est réservé aux femmes.',
         full: 'Plus de place disponible.',
         already_requested: 'Tu as déjà une demande en cours.',
         own_outing: 'C’est ta propre sortie.',
@@ -191,6 +219,7 @@ export function OutingDetailScreen() {
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
     >
+      {firstMomentSheet}
       {lateFromOthers.length ? (
         <View style={styles.lateBanner}>
           {lateFromOthers.map((r) => (

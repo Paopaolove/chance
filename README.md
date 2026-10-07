@@ -90,7 +90,11 @@ Prérequis : Node 18+, compte Expo Go à jour.
 
 ## Ce qui fonctionne (démo)
 
-- Onboarding 3 écrans + création d’un profil local
+- Onboarding : 3 slides, puis 4 étapes (compte → prénom + âge → quartier → règles) et l’app
+  - Photo, téléphone, genre, intérêts : plus à l’entrée. Carte « Complète ton profil » dans Profil ;
+    téléphone demandé (photo proposée une fois) avant le premier moment publié / demandé / confirmé ;
+    genre demandé au moment d’activer « Femmes uniquement ». Genre non renseigné = les moments
+    « Femmes uniquement » ne sont ni visibles ni rejoignables.
 - Fil **Autour de toi** avec ~8 sorties Paris (Marais, Oberkampf, Bastille, Montmartre, Latin, Canal, Opéra, Belleville)
 - Détail sortie, rejoindre, demandes hôte / invité
 - Acceptation → **confirmation en 10 minutes** (compte à rebours) sinon place libérée
@@ -150,7 +154,7 @@ depuis l’UI tant que le Context n’a pas délégué (évite double source de 
 
 ## Parcours démo suggéré
 
-1. Complète l’onboarding (3 slides) et crée un profil local
+1. Complète l’onboarding (3 slides + compte, prénom et âge, quartier, règles)
 2. Parcours le fil **Autour de toi**, ouvre une sortie → **Rejoindre**
 3. Onglet **Demandes** → **Simuler acceptation hôte (démo)** → confirme en 10 min
 4. Onglet **Créer** → publie une sortie (une demande « Juliette » arrive automatiquement)

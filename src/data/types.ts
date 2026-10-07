@@ -99,7 +99,14 @@ export interface User {
   firstName: string;
   /** Real age collected at onboarding / edit (18+). Never silently defaulted. */
   age: number;
-  gender: Gender;
+  /**
+   * Plus demandé à l’entrée : undefined tant que la personne ne l’a pas
+   * indiqué (Profil, ou option « Femmes uniquement »). Un genre inconnu ne
+   * voit pas / ne rejoint pas les moments réservés aux femmes.
+   */
+  gender?: Gender;
+  /** Précision libre quand gender === 'autre' (pastille « Autre » + champ). */
+  genderDetail?: string;
   bio: string;
   neighborhood: string;
   plan: PlanId;
@@ -130,10 +137,20 @@ export interface User {
   dispoExclusions?: string[];
   /** ISO — auto-off Dispo (slot end or Paris midnight of that day). */
   dispoExpiresAt?: string;
-  phone: string;
+  /**
+   * Plus demandé à l’entrée : undefined / '' tant que non renseigné. Demandé
+   * avant le premier moment (publier / demander à rejoindre / confirmer) ou
+   * dans Profil → Modifier.
+   */
+  phone?: string;
   authProvider: AuthProvider;
   /** Women only: prefer femmes-uniquement for listings / requests. */
   womenOnlyPreference: boolean;
+  /**
+   * Feuille « Avant ton premier moment » déjà vue (photo proposée une fois,
+   * jamais imposée). Le téléphone, lui, reste demandé tant qu’il manque.
+   */
+  momentPromptSeen?: boolean;
   registered: boolean;
   email?: string;
   notificationsGranted: boolean;
@@ -215,7 +232,8 @@ export interface Outing {
   hostId: string;
   hostName: string;
   hostAge: number;
-  hostGender: Gender;
+  /** Genre de l’hôte s’il l’a renseigné (optionnel depuis le tunnel court). */
+  hostGender?: Gender;
   title: string;
   description: string;
   category: OutingCategory;
@@ -312,7 +330,8 @@ export interface Request {
   userId: string;
   userName: string;
   userAge: number;
-  userGender: Gender;
+  /** Genre de l’invité s’il l’a renseigné (optionnel depuis le tunnel court). */
+  userGender?: Gender;
   message: string;
   /** Optional alternate date/slot suggested by the guest (kept for the host). */
   suggestedDate?: string;
@@ -516,24 +535,36 @@ export type DispoProfileUpdate = {
   age?: number;
   photoUri?: string | null;
   womenOnlyPreference?: boolean;
+  /** null = effacer. Passer à un genre ≠ femme coupe womenOnlyPreference. */
+  gender?: Gender | null;
+  genderDetail?: string | null;
+  /** '' ou null = effacer. */
+  phone?: string | null;
+  momentPromptSeen?: boolean;
 };
 
+/**
+ * Tunnel court (3 slides → compte → prénom + âge → quartier → règles).
+ * Photo, téléphone, genre, intérêts ne sont plus demandés à l’entrée : ils
+ * restent optionnels ici pour ne rien casser (démo / tests).
+ */
 export type OnboardingInput = {
   firstName: string;
   /** Required, 18–99 — no silent default. */
   age: number;
-  gender: Gender;
   neighborhood: string;
-  bio: string;
-  interests: string[];
+  authProvider: AuthProvider;
+  email?: string;
+  gender?: Gender;
+  bio?: string;
+  interests?: string[];
   /** Free-text centres d'intérêt / filtres descriptifs. */
   customFilters?: string[];
   photoUri?: string;
-  phone: string;
-  authProvider: AuthProvider;
-  email?: string;
-  womenOnlyPreference: boolean;
-  entryIntent: EntryIntent;
+  phone?: string;
+  womenOnlyPreference?: boolean;
+  /** Défaut 'feed' (Autour de toi). */
+  entryIntent?: EntryIntent;
   /** If entryIntent is dispo, mark user dispo immediately. */
   dispoSoir?: boolean;
 };

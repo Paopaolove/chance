@@ -9,6 +9,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { genderLabel } from '../components/GenderPills';
 import { GivenReviewSummary } from '../components/GivenReviewSummary';
 import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
@@ -90,7 +91,46 @@ export function ProfileScreen() {
     year: 'numeric',
   });
 
-  const profileIncomplete = !user.bio.trim() || !user.firstName.trim();
+  // Ce qu’on ne demande plus à l’entrée : rappel doux, jamais bloquant.
+  const missingItems: { key: string; label: string; hint: string }[] = [
+    !user.photoUri
+      ? {
+          key: 'photo',
+          label: 'Une photo',
+          hint: 'Pour qu’on te reconnaisse sur place.',
+        }
+      : null,
+    !user.phone?.trim()
+      ? {
+          key: 'phone',
+          label: 'Ton téléphone',
+          hint: 'Demandé avant ton premier moment.',
+        }
+      : null,
+    !user.gender
+      ? {
+          key: 'gender',
+          label: 'Ton genre',
+          hint: 'Utile pour les moments « Femmes uniquement ».',
+        }
+      : null,
+    !(user.interests?.length || user.customFilters?.length)
+      ? {
+          key: 'interests',
+          label: 'Tes centres d’intérêt',
+          hint: 'De quoi lancer la conversation.',
+        }
+      : null,
+    !user.bio.trim()
+      ? { key: 'bio', label: 'Une bio', hint: 'Deux lignes suffisent.' }
+      : null,
+  ].filter((x): x is { key: string; label: string; hint: string } => !!x);
+  const profileIncomplete = missingItems.length > 0;
+  const subParts = [
+    `${user.age} ans`,
+    genderLabel(user.gender, user.genderDetail),
+    user.neighborhood,
+  ].filter(Boolean);
   const displayTags = mergeProfileTags(user.interests, user.customFilters);
 
   const onPickPhoto = async () => {
@@ -208,22 +248,33 @@ export function ProfileScreen() {
             = sorties honorées, pas le nombre d’avis.
           </Text>
           <Text style={styles.sub}>
-            {user.age} ans · {user.gender} · {user.neighborhood}
+            {subParts.join(' · ')}
           </Text>
         </View>
 
         {profileIncomplete ? (
-          <Pressable
-            style={styles.ctaCard}
-            onPress={() => navigation.navigate('EditProfile')}
-          >
+          <View style={styles.ctaCard}>
             <Text style={styles.ctaTitle}>Complète ton profil</Text>
             <Text style={styles.ctaBody}>
-              Bio et centres d’intérêt aident les autres à te connaître avant
-              une sortie.
+              Rien d’obligatoire tout de suite. Ça aide les autres à te
+              connaître avant un moment.
             </Text>
-            <Text style={styles.ctaLink}>Compléter →</Text>
-          </Pressable>
+            {missingItems.map((item, i) => (
+              <Pressable
+                key={item.key}
+                style={[styles.missingRow, i > 0 && styles.missingRowBorder]}
+                onPress={() => navigation.navigate('EditProfile')}
+                accessibilityRole="button"
+                accessibilityLabel={`Ajouter : ${item.label}`}
+              >
+                <View style={styles.missingText}>
+                  <Text style={styles.missingLabel}>{item.label}</Text>
+                  <Text style={styles.missingHint}>{item.hint}</Text>
+                </View>
+                <Text style={styles.ctaLink}>Ajouter</Text>
+              </Pressable>
+            ))}
+          </View>
         ) : null}
 
         <View style={styles.card}>
@@ -457,7 +508,9 @@ export function ProfileScreen() {
           {user.email ? (
             <Text style={styles.cardHint}>{user.email}</Text>
           ) : null}
-          <Text style={styles.cardHint}>Tél. {user.phone}</Text>
+          <Text style={styles.cardHint}>
+            {user.phone?.trim() ? `Tél. ${user.phone}` : 'Tél. pas encore renseigné'}
+          </Text>
           {user.gender === 'femme' && user.womenOnlyPreference ? (
             <Text style={styles.cardHint}>Préférence : Femmes uniquement</Text>
           ) : null}
@@ -863,6 +916,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   ctaLink: { ...typography.bodyStrong, color: colors.text },
+  missingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  missingRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  missingText: { flex: 1 },
+  missingLabel: { ...typography.bodyStrong, color: colors.text },
+  missingHint: { ...typography.caption, color: colors.textSecondary },
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

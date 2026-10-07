@@ -21,7 +21,7 @@ import {
   budgetChipLabel,
 } from '../data/mockOutings';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
-import { OutingCategory, PartnerGesture } from '../data/types';
+import { Gender, OutingCategory, PartnerGesture } from '../data/types';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import {
@@ -45,6 +45,8 @@ import {
   partnerOfferChips,
 } from '../utils/partners';
 import { CheckNote } from '../components/CheckNote';
+import { useFirstMomentGate } from '../components/FirstMomentSheet';
+import { GenderPills } from '../components/GenderPills';
 import { PillsWithOther } from '../components/PillsWithOther';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import {
@@ -265,9 +267,15 @@ export function CreateOutingScreen() {
   const openProfile = useOpenUserProfile();
   const route = useRoute<CreateRoute>();
   const prefill = route.params;
-  const { createOuting, getActiveOutingForUser, closeOuting, state } =
-    useChance();
+  const {
+    createOuting,
+    getActiveOutingForUser,
+    closeOuting,
+    state,
+    updateProfile,
+  } = useChance();
   const active = getActiveOutingForUser();
+  const { requireBeforeMoment, sheet: firstMomentSheet } = useFirstMomentGate();
 
   const initial = defaultDateTime(
     !!prefill?.fromDispo,
@@ -366,6 +374,38 @@ export function CreateOutingScreen() {
     !!state.currentUser?.womenOnlyPreference &&
       state.currentUser?.gender === 'femme',
   );
+  /**
+   * Option femmes : le genre n’est plus demandé à l’entrée. Genre inconnu →
+   * l’option reste visible ; l’activer ouvre les pastilles Femme / Homme /
+   * Autre ici même, puis active si Femme. Genre ≠ femme connu → option
+   * masquée (comme avant), sauf si on vient de répondre ici.
+   */
+  const [askingGender, setAskingGender] = useState(false);
+  const showWomenOnlyOption =
+    canWomenOnly || !state.currentUser?.gender || askingGender;
+  const onToggleWomenOnly = (next: boolean) => {
+    if (!next) {
+      setWomenOnly(false);
+      return;
+    }
+    if (canWomenOnly) {
+      setWomenOnly(true);
+      return;
+    }
+    setAskingGender(true);
+  };
+  const onPickGender = (g: Gender, detail: string) => {
+    updateProfile({
+      gender: g,
+      genderDetail: g === 'autre' ? detail : null,
+    });
+    if (g === 'femme') {
+      setWomenOnly(true);
+      setAskingGender(false);
+    } else {
+      setWomenOnly(false);
+    }
+  };
   const [showQuartiers, setShowQuartiers] = useState(false);
 
   const startsAtDate = useMemo(
@@ -405,6 +445,11 @@ export function CreateOutingScreen() {
       Alert.alert('Message', 'Ajoute un court message pour les invités.');
       return;
     }
+    // Premier moment : téléphone (et photo proposée) si pas encore donnés.
+    requireBeforeMoment(submitUrgent);
+  };
+
+  const submitUrgent = () => {
     const result = createOuting({
       title: `${venueName.trim()} · Maintenant`,
       description: message.trim(),
@@ -513,6 +558,11 @@ export function CreateOutingScreen() {
       return;
     }
 
+    // Premier moment : téléphone (et photo proposée) si pas encore donnés.
+    requireBeforeMoment(() => submitPublish(when));
+  };
+
+  const submitPublish = (when: Date) => {
     const parsedTime = parseTimeInput(timeStr)!;
     const title = `${venueName.trim()} · ${formatHeureLabel(
       parsedTime.h,
@@ -676,6 +726,7 @@ export function CreateOutingScreen() {
   if (urgentMode) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
+        {firstMomentSheet}
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
@@ -795,6 +846,7 @@ export function CreateOutingScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+        {firstMomentSheet}
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -1157,7 +1209,7 @@ export function CreateOutingScreen() {
           placeholderTextColor={colors.textMuted}
         />
 
-        {canWomenOnly ? (
+        {showWomenOnlyOption ? (
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.switchLabel}>Femmes uniquement</Text>
@@ -1166,12 +1218,35 @@ export function CreateOutingScreen() {
               </Text>
             </View>
             <Switch
-              value={womenOnly}
-              onValueChange={setWomenOnly}
+              value={womenOnly && canWomenOnly}
+              onValueChange={onToggleWomenOnly}
               trackColor={{ true: colors.primary, false: colors.border }}
-            ios_backgroundColor={colors.border}
+              ios_backgroundColor={colors.border}
               thumbColor={colors.white}
+              accessibilityLabel="Femmes uniquement"
             />
+          </View>
+        ) : null}
+        {askingGender ? (
+          <View style={styles.genderAsk}>
+            <Text style={styles.genderAskTitle}>Tu es…</Text>
+            <Text style={styles.switchHint}>
+              Cette option est réservée aux profils femme. On l’enregistre dans
+              ton profil.
+            </Text>
+            <GenderPills
+              gender={me?.gender}
+              detail={me?.genderDetail ?? ''}
+              onChange={onPickGender}
+              compact
+              style={styles.genderAskPills}
+            />
+            {me?.gender && me.gender !== 'femme' ? (
+              <Text style={styles.genderAskNote}>
+                C’est noté. « Femmes uniquement » reste réservé aux profils
+                femme.
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -1761,6 +1836,25 @@ const styles = StyleSheet.create({
   },
   switchLabel: { ...typography.bodyStrong, color: colors.text },
   switchHint: { ...typography.caption, color: colors.textMuted },
+  genderAsk: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+  },
+  genderAskTitle: {
+    ...typography.bodyStrong,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  genderAskPills: { marginTop: spacing.md },
+  genderAskNote: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+  },
   cta: { marginTop: spacing.xxl },
   blocked: { padding: spacing.xl },
   blockedTitle: {

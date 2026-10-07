@@ -3,33 +3,23 @@ import React, { useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
-import { CustomFiltersEditor } from '../components/CustomFiltersEditor';
 import { PillsWithOther } from '../components/PillsWithOther';
 import { useChance } from '../data/ChanceContext';
-import {
-  INTEREST_SUGGESTIONS,
-  SUGGESTED_INTERESTS_MAX,
-  SUGGESTED_INTERESTS_MIN,
-  isValidFrPhone,
-} from '../data/interests';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
-import { AuthProvider, EntryIntent, Gender } from '../data/types';
+import { AuthProvider } from '../data/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { AGE_REQUIRED_HINT, AGE_UNDERAGE_HINT, parseAdultAge } from '../utils/age';
-import { pickProfilePhoto } from '../utils/pickProfilePhoto';
 
 const { width } = Dimensions.get('window');
 
@@ -91,25 +81,60 @@ const slides: {
   },
 ];
 
-const genders: { id: Gender; label: string }[] = [
-  { id: 'femme', label: 'Femme' },
-  { id: 'homme', label: 'Homme' },
-  { id: 'autre', label: 'Autre' },
-];
+/**
+ * Tunnel court après les slides : 4 étapes, rien de plus.
+ * 1. Compte (Apple / Google / e-mail, démo) → 2. Prénom + âge →
+ * 3. Quartier → 4. Règles (« Comment ça marche ») → l’app (Autour de toi).
+ * Photo, téléphone, genre, intérêts : demandés plus tard (Profil, premier
+ * moment, option « Femmes uniquement »).
+ */
+type Step = 'slides' | 'account' | 'email' | 'identity' | 'neighborhood' | 'rules';
 
-type Step =
-  | 'slides'
-  | 'account'
-  | 'email'
-  | 'phone'
-  | 'gender'
-  | 'age'
-  | 'photo'
-  | 'profile'
-  | 'interests'
-  | 'rules'
-  | 'neighborhood'
-  | 'cta';
+const TUNNEL_STEPS = 4;
+
+/** Indicateur discret « 1/4 » + 4 barres (encre / liseré, pas d’orange). */
+function StepBars({
+  current,
+  onBack,
+}: {
+  current: 1 | 2 | 3 | 4;
+  onBack?: () => void;
+}) {
+  return (
+    <View style={styles.stepHeader}>
+      <View style={styles.stepHeaderTop}>
+        <Text style={styles.brand}>Moment</Text>
+        {onBack ? (
+          <Pressable
+            onPress={onBack}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Retour"
+          >
+            <Text style={styles.backLink}>Retour</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View
+        style={styles.stepBarsRow}
+        accessible
+        accessibilityLabel={`Étape ${current} sur ${TUNNEL_STEPS}`}
+      >
+        <View style={styles.stepBars}>
+          {Array.from({ length: TUNNEL_STEPS }, (_, i) => (
+            <View
+              key={i}
+              style={[styles.stepBar, i < current && styles.stepBarOn]}
+            />
+          ))}
+        </View>
+        <Text style={styles.stepCount}>
+          {current}/{TUNNEL_STEPS}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export function OnboardingScreen() {
   const { completeOnboarding } = useChance();
@@ -118,20 +143,18 @@ export function OnboardingScreen() {
   const [authProvider, setAuthProvider] = useState<AuthProvider | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
-  const [gender, setGender] = useState<Gender | null>(null);
-  const [ageText, setAgeText] = useState('');
-  const [womenOnlyPreference, setWomenOnlyPreference] = useState(false);
-  const [photoUri, setPhotoUri] = useState<string | undefined>();
   const [firstName, setFirstName] = useState('');
-  const [bio, setBio] = useState('');
-  const [interests, setInterests] = useState<string[]>([]);
-  const [customFilters, setCustomFilters] = useState<string[]>([]);
+  const [ageText, setAgeText] = useState('');
   const [acceptedRules, setAcceptedRules] = useState(false);
   const [absencesExpanded, setAbsencesExpanded] = useState(false);
   const [neighborhood, setNeighborhood] = useState('');
   const [error, setError] = useState('');
   const listRef = useRef<FlatList>(null);
+
+  const go = (next: Step) => {
+    setError('');
+    setStep(next);
+  };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
@@ -156,7 +179,7 @@ export function OnboardingScreen() {
     setEmail(
       provider === 'apple' ? 'toi@icloud.com' : 'toi@gmail.com',
     );
-    setStep('phone');
+    setStep('identity');
   };
 
   const continueEmail = () => {
@@ -171,31 +194,14 @@ export function OnboardingScreen() {
     }
     setError('');
     setAuthProvider('email');
-    setStep('phone');
+    setStep('identity');
   };
 
-  const continuePhone = () => {
-    if (!isValidFrPhone(phone)) {
-      setError('Numéro FR invalide (ex. 06 12 34 56 78 ou +33 6…).');
+  const continueIdentity = () => {
+    if (!firstName.trim()) {
+      setError('Indique ton prénom.');
       return;
     }
-    setError('');
-    setStep('gender');
-  };
-
-  const continueGender = () => {
-    if (!gender) {
-      setError('Choisis ton genre.');
-      return;
-    }
-    setError('');
-    if (gender !== 'femme') {
-      setWomenOnlyPreference(false);
-    }
-    setStep('age');
-  };
-
-  const continueAge = () => {
     const age = parseAdultAge(ageText);
     if (age == null) {
       const n = Number.parseInt(ageText.trim(), 10);
@@ -206,58 +212,7 @@ export function OnboardingScreen() {
       }
       return;
     }
-    setError('');
-    setStep('photo');
-  };
-
-  const onPickPhoto = async () => {
-    const uri = await pickProfilePhoto();
-    if (uri) setPhotoUri(uri);
-  };
-
-  const continueProfile = () => {
-    if (!firstName.trim()) {
-      setError('Indique ton prénom.');
-      return;
-    }
-    setError('');
-    setStep('interests');
-  };
-
-  const skipBio = () => {
-    if (!firstName.trim()) {
-      setError('Indique ton prénom.');
-      return;
-    }
-    setBio('');
-    setError('');
-    setStep('interests');
-  };
-
-  const toggleInterest = (interest: string) => {
-    setInterests((prev) => {
-      if (prev.includes(interest)) {
-        setError('');
-        return prev.filter((i) => i !== interest);
-      }
-      if (prev.length >= SUGGESTED_INTERESTS_MAX) {
-        setError(
-          `Tu peux en choisir jusqu’à ${SUGGESTED_INTERESTS_MAX} dans la liste — ou crée le tien juste en dessous.`,
-        );
-        return prev;
-      }
-      setError('');
-      return [...prev, interest];
-    });
-  };
-
-  const continueRules = () => {
-    if (!acceptedRules) {
-      setError('Coche la case pour confirmer que tu as compris.');
-      return;
-    }
-    setError('');
-    setStep('neighborhood');
+    go('neighborhood');
   };
 
   const continueNeighborhood = () => {
@@ -265,29 +220,36 @@ export function OnboardingScreen() {
       setError('Indique ton quartier.');
       return;
     }
-    setError('');
-    setStep('cta');
+    go('rules');
   };
 
-  const finish = (intent: EntryIntent) => {
-    if (!authProvider || !gender) return;
+  /** Règles comprises → directement dans l’app (Autour de toi). */
+  const continueRules = () => {
+    if (!acceptedRules) {
+      setError('Coche la case pour confirmer que tu as compris.');
+      return;
+    }
+    if (!authProvider) {
+      go('account');
+      return;
+    }
     const age = parseAdultAge(ageText);
-    if (age == null) return;
+    if (age == null || !firstName.trim()) {
+      go('identity');
+      return;
+    }
+    if (!neighborhood.trim()) {
+      go('neighborhood');
+      return;
+    }
+    setError('');
     completeOnboarding({
       firstName: firstName.trim(),
       age,
-      gender,
       neighborhood: neighborhood.trim(),
-      bio: bio.trim(),
-      interests,
-      customFilters,
-      photoUri,
-      phone: phone.trim(),
       authProvider,
       email: email.trim().toLowerCase() || undefined,
-      womenOnlyPreference: gender === 'femme' ? womenOnlyPreference : false,
-      entryIntent: intent,
-      dispoSoir: intent === 'dispo',
+      entryIntent: 'feed',
     });
   };
 
@@ -295,7 +257,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <Text style={styles.brand}>Moment</Text>
+          <StepBars current={1} />
           <Text style={styles.title}>Crée ton compte</Text>
           <Text style={styles.hint}>
             Connexion simulée (démo) — Apple / Google / e-mail. Ce n’est pas une
@@ -326,8 +288,11 @@ export function OnboardingScreen() {
   if (step === 'email') {
     return (
       <SafeAreaView style={styles.safe}>
-        <View style={styles.wrap}>
-          <Text style={styles.brand}>Moment</Text>
+        <ScrollView
+          contentContainerStyle={styles.wrapScroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <StepBars current={1} onBack={() => go('account')} />
           <Text style={styles.title}>E-mail</Text>
           <Text style={styles.hint}>Démo locale : rien n’est envoyé.</Text>
           <Text style={styles.label}>E-mail</Text>
@@ -356,272 +321,111 @@ export function OnboardingScreen() {
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button title="Continuer" onPress={continueEmail} style={styles.cta} />
-          <Button
-            title="Retour"
-            variant="ghost"
-            onPress={() => {
-              setError('');
-              setStep('account');
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  if (step === 'identity') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView
+          contentContainerStyle={styles.wrapScroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          <StepBars
+            current={2}
+            onBack={() => go(authProvider === 'email' ? 'email' : 'account')}
+          />
+          <Text style={styles.title}>Toi, en deux mots</Text>
+          <Text style={styles.hint}>
+            Ton prénom, pour qu’on sache comment t’appeler. Ton âge, parce que
+            Moment est réservé aux 18 ans et plus.
+          </Text>
+          <Text style={styles.label}>Prénom</Text>
+          <TextInput
+            selectionColor={colors.primary}
+            cursorColor={colors.primary}
+            style={styles.input}
+            value={firstName}
+            onChangeText={(t) => {
+              setFirstName(t);
+              if (error) setError('');
             }}
-            style={styles.secondary}
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'phone') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.wrap}>
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Ton numéro</Text>
-          <Text style={styles.hint}>
-            Obligatoire pour la sécurité et les rappels. Format France.
-          </Text>
-          <Text style={styles.label}>Téléphone *</Text>
-          <TextInput
-            selectionColor={colors.primary}
-            cursorColor={colors.primary}
-            style={styles.input}
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="06 12 34 56 78"
+            placeholder="Alex"
             placeholderTextColor={colors.textMuted}
-            keyboardType="phone-pad"
-            autoComplete="tel"
+            autoCapitalize="words"
+            autoComplete="given-name"
+            textContentType="givenName"
+            returnKeyType="next"
           />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button title="Continuer" onPress={continuePhone} style={styles.cta} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'gender') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.wrap}>
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Genre</Text>
-          <Text style={styles.hint}>
-            Pas pour draguer. Le filtre sert à se sentir à l’aise.{'\n'}
-            Si tu es une femme, tu peux limiter la sortie aux femmes.
-          </Text>
-          <View style={styles.row}>
-            {genders.map((g) => (
-              <Button
-                key={g.id}
-                title={g.label}
-                variant={gender === g.id ? 'primary' : 'ghost'}
-                onPress={() => {
-                  setGender(g.id);
-                  if (g.id !== 'femme') setWomenOnlyPreference(false);
-                }}
-                style={styles.chipBtn}
-              />
-            ))}
-          </View>
-          {gender === 'femme' ? (
-            <View style={styles.toggleCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.toggleLabel}>Femmes uniquement</Text>
-                <Text style={styles.toggleHint}>
-                  S’applique à tes annonces et / ou demandes.
-                </Text>
-              </View>
-              <Switch
-                value={womenOnlyPreference}
-                onValueChange={setWomenOnlyPreference}
-                trackColor={{ true: colors.primary, false: colors.border }}
-            ios_backgroundColor={colors.border}
-                thumbColor={colors.white}
-              />
-            </View>
-          ) : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button
-            title="Continuer"
-            onPress={continueGender}
-            style={styles.cta}
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-
-  if (step === 'age') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.wrap}>
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Ton âge</Text>
-          <Text style={styles.hint}>
-            Obligatoire — Moment est réservé aux adultes (18 ans et plus). Pas
-            d’âge par défaut.
-          </Text>
-          <Text style={styles.label}>Âge *</Text>
+          <Text style={styles.label}>Âge</Text>
           <TextInput
             selectionColor={colors.primary}
             cursorColor={colors.primary}
-            style={styles.input}
+            style={[styles.input, styles.inputAge]}
             value={ageText}
-            onChangeText={setAgeText}
+            onChangeText={(t) => {
+              setAgeText(t);
+              if (error) setError('');
+            }}
             placeholder="Ex. 29"
             placeholderTextColor={colors.textMuted}
             keyboardType="number-pad"
             maxLength={2}
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button title="Continuer" onPress={continueAge} style={styles.cta} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'photo') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.wrap}>
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Une photo</Text>
-          <Text style={styles.hint}>
-            Optionnelle — tu pourras l’ajouter plus tard.
-          </Text>
-          <Pressable onPress={onPickPhoto} style={styles.photoBox}>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.photoImg} />
-            ) : (
-              <Text style={styles.photoPlaceholder}>Ajouter une photo</Text>
-            )}
-          </Pressable>
-          <Button
-            title={photoUri ? 'Changer la photo' : 'Choisir une photo'}
-            variant={photoUri ? 'secondary' : 'primary'}
-            onPress={onPickPhoto}
-            style={styles.cta}
-          />
-          <Button
-            title={photoUri ? 'Continuer' : 'Passer'}
-            variant={photoUri ? 'primary' : 'ghost'}
-            onPress={() => setStep('profile')}
-            style={styles.secondary}
-          />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'profile') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView
-          contentContainerStyle={styles.wrapScroll}
-          keyboardShouldPersistTaps="handled"
-        >
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Prénom & bio</Text>
-          <Text style={styles.hint}>
-            Prénom obligatoire. Bio optionnelle — tu pourras la modifier plus
-            tard.
-          </Text>
-          <Text style={styles.label}>Prénom *</Text>
-          <TextInput
-            selectionColor={colors.primary}
-            cursorColor={colors.primary}
-            style={styles.input}
-            value={firstName}
-            onChangeText={setFirstName}
-            placeholder="Alex"
-            placeholderTextColor={colors.textMuted}
-          />
-          <Text style={styles.label}>Bio (optionnel)</Text>
-          <TextInput
-            selectionColor={colors.primary}
-            cursorColor={colors.primary}
-            style={[styles.input, styles.multiline]}
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Qui es-tu, qu’est-ce que tu aimes faire à Paris…"
-            placeholderTextColor={colors.textMuted}
-            multiline
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             title="Continuer"
-            onPress={continueProfile}
+            onPress={continueIdentity}
             style={styles.cta}
-          />
-          <Button
-            title="Passer"
-            variant="ghost"
-            onPress={skipBio}
-            style={styles.secondary}
           />
         </ScrollView>
       </SafeAreaView>
     );
   }
 
-  if (step === 'interests') {
+  if (step === 'neighborhood') {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView
           contentContainerStyle={styles.wrapScroll}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Centres d’intérêt</Text>
+          <StepBars current={3} onBack={() => go('identity')} />
+          <Text style={styles.title}>Ton quartier</Text>
           <Text style={styles.hint}>
-            Optionnel — suggéré {SUGGESTED_INTERESTS_MIN} à{' '}
-            {SUGGESTED_INTERESTS_MAX}. Tu peux passer.
+            Pas de GPS continu. Choisis un quartier ou écris le tien.
           </Text>
-          <View style={styles.chips}>
-            {INTEREST_SUGGESTIONS.map((interest) => {
-              const selected = interests.includes(interest);
-              return (
-                <Pressable
-                  key={interest}
-                  onPress={() => toggleInterest(interest)}
-                  style={[styles.chip, selected && styles.chipOn]}
-                >
-                  <Text
-                    style={[styles.chipText, selected && styles.chipTextOn]}
-                  >
-                    {interest}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={styles.counter}>
-            {interests.length}/{SUGGESTED_INTERESTS_MAX}
-          </Text>
-          <CustomFiltersEditor
-            value={customFilters}
-            onChange={setCustomFilters}
-            label="Créer un centre d’intérêt"
+          <PillsWithOther
+            options={PARIS_NEIGHBORHOODS.map((q) => ({ id: q as string, label: q }))}
+            selected={neighborhood}
+            onSelect={(q) => {
+              setNeighborhood(q);
+              setError('');
+            }}
+            otherActive={
+              neighborhood.trim() !== '' &&
+              !(PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
+            }
+            otherValue={
+              (PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
+                ? ''
+                : neighborhood
+            }
+            onChangeOther={(t) => {
+              setNeighborhood(t);
+              setError('');
+            }}
+            placeholder="ex. Batignolles"
+            maxLength={40}
+            accessibilityLabel="Autre quartier"
           />
           {error ? <Text style={styles.error}>{error}</Text> : null}
           <Button
             title="Continuer"
-            onPress={() => {
-              setError('');
-              setStep('rules');
-            }}
+            onPress={continueNeighborhood}
             style={styles.cta}
-          />
-          <Button
-            title="Passer"
-            variant="ghost"
-            onPress={() => {
-              setInterests([]);
-              setCustomFilters([]);
-              setError('');
-              setStep('rules');
-            }}
-            style={styles.secondary}
           />
         </ScrollView>
       </SafeAreaView>
@@ -651,7 +455,7 @@ export function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <ScrollView contentContainerStyle={styles.wrapScroll}>
-          <Text style={styles.brand}>Moment</Text>
+          <StepBars current={4} onBack={() => go('neighborhood')} />
           <Text style={styles.title}>Comment ça marche</Text>
           <View style={styles.disclaimerBox}>
             <Text style={styles.disclaimerLead}>
@@ -754,86 +558,6 @@ export function OnboardingScreen() {
             style={styles.cta}
           />
         </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'neighborhood') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.wrapScroll}>
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Ton quartier</Text>
-          <Text style={styles.hint}>
-            Pas de GPS continu. Choisis un quartier ou écris le tien.
-          </Text>
-          <PillsWithOther
-            options={PARIS_NEIGHBORHOODS.map((q) => ({ id: q as string, label: q }))}
-            selected={neighborhood}
-            onSelect={(q) => {
-              setNeighborhood(q);
-              setError('');
-            }}
-            otherActive={
-              neighborhood.trim() !== '' &&
-              !(PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
-            }
-            otherValue={
-              (PARIS_NEIGHBORHOODS as readonly string[]).includes(neighborhood)
-                ? ''
-                : neighborhood
-            }
-            onChangeOther={(t) => {
-              setNeighborhood(t);
-              setError('');
-            }}
-            placeholder="ex. Batignolles"
-            maxLength={40}
-            accessibilityLabel="Autre quartier"
-          />
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button
-            title="Continuer"
-            onPress={continueNeighborhood}
-            style={styles.cta}
-          />
-        </ScrollView>
-      </SafeAreaView>
-    );
-  }
-
-  if (step === 'cta') {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.wrap}>
-          <Text style={styles.brand}>Moment</Text>
-          <Text style={styles.title}>Prêt ?</Text>
-          <Text style={styles.hint}>
-            Invite à ta table, parcours les invitations autour de toi, ou
-            indique que tu es dispo.
-          </Text>
-          <Button
-            title="J’invite"
-            onPress={() => finish('create')}
-            style={styles.cta}
-          />
-          <Button
-            title="Voir les invitations"
-            variant="ghost"
-            onPress={() => finish('feed')}
-            style={styles.secondaryOutline}
-          />
-          <Pressable
-            onPress={() => finish('dispo')}
-            style={styles.textLinkWrap}
-            accessibilityRole="link"
-            accessibilityLabel="Pas de resto en tête ? Indiquer que je suis dispo"
-          >
-            <Text style={styles.textLink}>
-              Pas de resto en tête ? Indiquer que je suis dispo
-            </Text>
-          </Pressable>
-        </View>
       </SafeAreaView>
     );
   }
@@ -974,10 +698,39 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxxl,
   },
+  stepHeader: { gap: spacing.md },
+  stepHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backLink: {
+    ...typography.bodyStrong,
+    color: colors.textSecondary,
+  },
+  stepBarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  stepBars: { flex: 1, flexDirection: 'row', gap: 6 },
+  stepBar: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+  },
+  stepBarOn: { backgroundColor: colors.text },
+  stepCount: {
+    ...typography.small,
+    color: colors.textSecondary,
+    minWidth: 28,
+    textAlign: 'right',
+  },
   title: {
     ...typography.title,
     color: colors.text,
-    marginTop: spacing.xl,
+    marginTop: spacing.xxl,
     marginBottom: spacing.sm,
   },
   hint: {
@@ -1001,91 +754,10 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
   },
-  multiline: { minHeight: 110, textAlignVertical: 'top' },
-  counter: {
-    ...typography.small,
-    color: colors.textMuted,
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  row: { flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap' },
-  chipBtn: { paddingHorizontal: spacing.md, minHeight: 44 },
-  chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    backgroundColor: colors.chip,
-    borderWidth: 1,
-    borderColor: colors.chipBorder,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radius.full,
-  },
-  chipOn: { backgroundColor: colors.chipActive, borderColor: colors.chipActive },
-  chipText: {
-    ...typography.caption,
-    color: colors.chipText,
-    fontFamily: fonts.semiBold,
-  },
-  chipTextOn: { color: colors.white },
+  inputAge: { width: 120 },
   cta: { marginTop: spacing.xxl },
   secondary: { marginTop: spacing.md },
-  secondaryOutline: {
-    marginTop: spacing.md,
-    borderColor: colors.border,
-  },
-  textLinkWrap: {
-    marginTop: spacing.lg,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-  },
-  textLink: {
-    ...typography.body,
-    color: colors.text,
-    textAlign: 'center',
-    textDecorationLine: 'underline',
-    fontFamily: fonts.medium,
-  },
   error: { ...typography.caption, color: colors.danger, marginTop: spacing.md },
-  toggleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.xl,
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  toggleLabel: { ...typography.bodyStrong, color: colors.text },
-  toggleHint: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  photoBox: {
-    alignSelf: 'center',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    marginTop: spacing.lg,
-  },
-  photoImg: { width: 140, height: 140 },
-  photoPlaceholder: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
-  },
   disclaimerBox: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

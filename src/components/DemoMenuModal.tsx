@@ -716,7 +716,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             onPress={() => {
               Alert.alert(
                 'Réinitialiser la démo ?',
-                'Tu reviendras au début de l’onboarding (slides → compte → téléphone → …).',
+                'Tu reviendras au début : 3 slides, puis compte → prénom et âge → quartier → règles.',
                 [
                   { text: 'Annuler', style: 'cancel' },
                   {

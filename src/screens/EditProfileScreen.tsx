@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -12,13 +13,16 @@ import {
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { CustomFiltersEditor } from '../components/CustomFiltersEditor';
+import { GenderPills } from '../components/GenderPills';
 import { PillsWithOther } from '../components/PillsWithOther';
 import { useChance } from '../data/ChanceContext';
 import {
   INTEREST_SUGGESTIONS,
   SUGGESTED_INTERESTS_MAX,
+  isValidFrPhone,
 } from '../data/interests';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
+import { Gender } from '../data/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { AGE_REQUIRED_HINT, AGE_UNDERAGE_HINT, parseAdultAge } from '../utils/age';
 import { pickProfilePhoto } from '../utils/pickProfilePhoto';
@@ -41,6 +45,13 @@ export function EditProfileScreen() {
     user?.customFilters ? [...user.customFilters] : [],
   );
   const [photoUri, setPhotoUri] = useState<string | undefined>(user?.photoUri);
+  // Plus demandés à l’entrée : tous optionnels ici.
+  const [gender, setGender] = useState<Gender | undefined>(user?.gender);
+  const [genderDetail, setGenderDetail] = useState(user?.genderDetail ?? '');
+  const [womenOnlyPreference, setWomenOnlyPreference] = useState(
+    !!user?.womenOnlyPreference,
+  );
+  const [phone, setPhone] = useState(user?.phone ?? '');
   const [error, setError] = useState('');
 
   if (!user) {
@@ -90,6 +101,10 @@ export function EditProfileScreen() {
       setError('Indique ton quartier.');
       return;
     }
+    if (phone.trim() && !isValidFrPhone(phone)) {
+      setError('Numéro FR invalide (ex. 06 12 34 56 78 ou +33 6…).');
+      return;
+    }
     updateProfile({
       firstName: firstName.trim(),
       age,
@@ -98,6 +113,10 @@ export function EditProfileScreen() {
       interests,
       customFilters,
       photoUri: photoUri ?? null,
+      gender: gender ?? null,
+      genderDetail: gender === 'autre' ? genderDetail.trim() || null : null,
+      womenOnlyPreference: gender === 'femme' ? womenOnlyPreference : false,
+      phone: phone.trim() || null,
     });
     Alert.alert('Profil mis à jour', 'Tes infos sont visibles sur Moment.');
     navigation.goBack();
@@ -169,6 +188,55 @@ export function EditProfileScreen() {
         maxLength={40}
         accessibilityLabel="Autre quartier"
       />
+
+      <Text style={styles.label}>Téléphone</Text>
+      <Text style={styles.fieldHint}>
+        Pour la sécurité et les rappels. Demandé avant ton premier moment.
+      </Text>
+      <TextInput
+        selectionColor={colors.primary}
+        cursorColor={colors.primary}
+        style={styles.input}
+        value={phone}
+        onChangeText={setPhone}
+        placeholder="06 12 34 56 78"
+        placeholderTextColor={colors.textMuted}
+        keyboardType="phone-pad"
+        autoComplete="tel"
+        textContentType="telephoneNumber"
+      />
+
+      <Text style={styles.label}>Genre (optionnel)</Text>
+      <Text style={styles.fieldHint}>
+        Pas pour draguer : il sert à l’option « Femmes uniquement ».
+      </Text>
+      <GenderPills
+        gender={gender}
+        detail={genderDetail}
+        onChange={(g, d) => {
+          setGender(g);
+          setGenderDetail(d);
+          if (g !== 'femme') setWomenOnlyPreference(false);
+        }}
+      />
+      {gender === 'femme' ? (
+        <View style={styles.toggleCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleLabel}>Femmes uniquement</Text>
+            <Text style={styles.toggleHint}>
+              Activé par défaut quand tu publies un moment.
+            </Text>
+          </View>
+          <Switch
+            value={womenOnlyPreference}
+            onValueChange={setWomenOnlyPreference}
+            trackColor={{ true: colors.primary, false: colors.border }}
+            ios_backgroundColor={colors.border}
+            thumbColor={colors.white}
+            accessibilityLabel="Femmes uniquement par défaut"
+          />
+        </View>
+      ) : null}
 
       <Text style={styles.label}>Bio (optionnel)</Text>
       <TextInput
@@ -250,6 +318,23 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   multiline: { minHeight: 120, textAlignVertical: 'top' },
+  toggleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleLabel: { ...typography.bodyStrong, color: colors.text },
+  toggleHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
   counter: {
     ...typography.small,
     color: colors.textMuted,
