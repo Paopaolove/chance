@@ -25,6 +25,7 @@ import { Gender, OutingCategory, PartnerGesture } from '../data/types';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import {
+  addParisDays,
   isStartsAtPast,
   parisWallToUtc,
   parisYmd,
@@ -94,10 +95,6 @@ function pad2(n: number) {
 }
 
 /** Local calendar day as JJ/MM/AAAA. */
-function formatDateInput(d: Date): string {
-  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
-
 /** Local time as HH:mm. */
 function formatTimeInput(d: Date): string {
   return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
@@ -173,9 +170,9 @@ const DAY_PILLS: { id: 0 | 1 | 2; label: string }[] = [
 ];
 
 function dateStrForOffset(offsetDays: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  return formatDateInput(d);
+  // Jour calendaire de Paris (pas l’horloge du téléphone) : « Demain » à 23h50
+  // reste cohérent avec la vérification « date passée » faite en heure de Paris.
+  return ymdToFr(addParisDays(parisYmd(Date.now()), offsetDays));
 }
 
 /**
@@ -246,11 +243,12 @@ function defaultDateTime(
   timeStr: string;
 } {
   const base = new Date();
-  if (typeof dateOffsetDays === 'number' && dateOffsetDays >= 0) {
-    base.setDate(base.getDate() + dateOffsetDays);
-  } else if (!fromDispo) {
-    base.setDate(base.getDate() + 1);
-  }
+  const offset =
+    typeof dateOffsetDays === 'number' && dateOffsetDays >= 0
+      ? dateOffsetDays
+      : fromDispo
+        ? 0
+        : 1;
   base.setHours(20, 0, 0, 0);
   let timeStr = formatTimeInput(base);
   if (timeLabel) {
@@ -259,7 +257,7 @@ function defaultDateTime(
       timeStr = `${pad2(parsed.h)}:${pad2(parsed.m)}`;
     }
   }
-  return { dateStr: formatDateInput(base), timeStr };
+  return { dateStr: dateStrForOffset(offset), timeStr };
 }
 
 export function CreateOutingScreen() {
