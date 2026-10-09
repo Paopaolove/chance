@@ -469,7 +469,7 @@ export interface ImprevuReport {
 
 /**
  * Photo d’un moment passé (après la rencontre, jamais avant).
- * Le lieu, la table — pas un portrait. Max 2 par personne et par moment.
+ * Le lieu, la table, les gens (portrait permis). Max 2 par personne et par moment.
  * Publiée sur les profils (section « Moments passés ») seulement quand
  * TOUTES les autres personnes présentes ont accepté. Sinon privée
  * (visible par l’auteur seul). Pas de like, pas de commentaire, pas de fil.

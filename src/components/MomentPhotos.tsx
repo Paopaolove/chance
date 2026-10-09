@@ -192,7 +192,7 @@ export function OwnPastMoment({
             onPress={onAdd}
           />
           <Text style={styles.hint}>
-            Le lieu, la table. Pas un portrait. {myPhotoCount}/
+            Le lieu, la table, les gens. {myPhotoCount}/
             {MOMENT_PHOTOS_MAX_PER_PERSON}
           </Text>
         </View>

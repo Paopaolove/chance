@@ -147,7 +147,7 @@ export function LeaveReviewScreen() {
     if (photoGate.ok) {
       Alert.alert(
         'Merci',
-        'Ton avis est publié. Ajouter une photo du moment ? Le lieu, la table. Pas un portrait.',
+        'Ton avis est publié. Ajouter une photo du moment ? Le lieu, la table, les gens.',
         [
           { text: 'Plus tard', style: 'cancel', onPress: () => navigation.goBack() },
           {
@@ -198,7 +198,7 @@ export function LeaveReviewScreen() {
                 onPress={() => void addPhotoThen()}
               />
               <Text style={styles.photoHint}>
-                Le lieu, la table. Pas un portrait. {myPhotoCount}/
+                Le lieu, la table, les gens. {myPhotoCount}/
                 {MOMENT_PHOTOS_MAX_PER_PERSON}
               </Text>
             </View>

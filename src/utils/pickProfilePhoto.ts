@@ -83,11 +83,11 @@ export function pickProfilePhoto(): Promise<string | undefined> {
 
 /**
  * Photo d’un moment passé (après la rencontre) : le lieu, la table.
- * Pas un portrait. Format 4:3, bibliothèque ou appareil photo.
+ * Portrait permis. Format 4:3, bibliothèque ou appareil photo.
  */
 export function pickMomentPhoto(): Promise<string | undefined> {
   return new Promise((resolve) => {
-    Alert.alert('Photo du moment', 'Le lieu, la table. Pas un portrait.', [
+    Alert.alert('Photo du moment', 'Le lieu, la table, les gens.', [
       {
         text: 'Bibliothèque',
         onPress: () => {
