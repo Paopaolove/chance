@@ -114,6 +114,7 @@ import {
 import { makeVenueKey } from '../utils/venue';
 import {
   momentParticipants,
+  isMomentParticipant,
   momentPhotoStatus,
   MOMENT_PHOTOS_MAX_PER_PERSON,
   MOMENT_PHOTO_PLACEHOLDER_PREFIX,
@@ -424,6 +425,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!outing || outing.status !== 'open' || outing.spotsLeft < 1) {
         return state;
       }
+      // Garde-fous (doublent joinOuting) : pas sa propre annonce, pas après l’heure.
+      if (outing.hostId === action.payload.userId) return state;
+      if (!isOutingAcceptingRequests(outing)) return state;
       if (outing.womenOnly && state.currentUser?.gender !== 'femme') {
         return state;
       }
@@ -499,6 +503,12 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'DECLINE_REQUEST': {
+      // Refuser = demande en attente seulement (jamais un accepté / confirmé :
+      // la place et la caution ne seraient pas rendues).
+      const declined = state.requests.find(
+        (r) => r.id === action.payload.requestId,
+      );
+      if (!declined || declined.status !== 'pending') return state;
       return {
         ...state,
         requests: state.requests.map((r) =>
@@ -1763,6 +1773,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       const outing = state.outings.find((o) => o.id === photo.outingId);
       // Jamais avant la rencontre : sortie terminée uniquement.
       if (!outing || outing.status !== 'completed') return state;
+      // Seulement une personne présente à table (hôte + invités présents).
+      if (!isMomentParticipant(outing, state.requests, photo.uploaderId)) {
+        return state;
+      }
       const mine = state.momentPhotos.filter(
         (p) =>
           p.outingId === photo.outingId && p.uploaderId === photo.uploaderId,
