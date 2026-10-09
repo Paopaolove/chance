@@ -243,6 +243,9 @@ export interface Outing {
    */
   categoryDetail?: string;
   neighborhood: string;
+  /** Coordonnées optionnelles (carte). Sinon dérivées du quartier (utils/parisGeo). */
+  latitude?: number;
+  longitude?: number;
   venueName: string;
   approxArea: string;
   /** Stored for host; never shown until request is confirmed. */

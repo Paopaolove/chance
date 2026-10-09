@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DemoMenuModal } from '../components/DemoMenuModal';
 import { OutingCard } from '../components/OutingCard';
+import { MomentsMap } from '../components/MomentsMap';
 import { pinPartnerOutingsNearSoon } from '../utils/partners';
 import { PersonCard } from '../components/PersonCard';
 import { useChance } from '../data/ChanceContext';
@@ -211,6 +212,8 @@ export function FeedScreen() {
     }, 1200);
   };
   const [mode, setMode] = useState<FeedMode>('sorties');
+  /** Liste / Carte — Annonces seulement (pas de carte des personnes). */
+  const [view, setView] = useState<'liste' | 'carte'>('liste');
   const [categoryFilter, setCategoryFilter] = useState<FilterId>('all');
   /** Catégorie « Autre » libre : précision (ex. padel, expo) combinée à la pastille. */
   const [categoryText, setCategoryText] = useState('');
@@ -997,6 +1000,26 @@ export function FeedScreen() {
         })}
       </View>
       {mode === 'dispos' ? dispoRow : null}
+      {mode === 'sorties' ? (
+        <View style={styles.viewToggle}>
+          {(['liste', 'carte'] as const).map((v) => {
+            const on = view === v;
+            return (
+              <Pressable
+                key={v}
+                onPress={() => setView(v)}
+                style={[styles.chip, on && styles.chipSelected]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: on }}
+              >
+                <Text style={[styles.chipText, on && styles.chipTextSelected]}>
+                  {v === 'liste' ? 'Liste' : 'Carte'}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       {filterRow}
       {filtersPanel}
     </View>
@@ -1027,7 +1050,22 @@ export function FeedScreen() {
         <Text style={styles.sub}>Des moments, pas des profils.</Text>
       </View>
 
-      {mode === 'sorties' ? (
+      {mode === 'sorties' && view === 'carte' ? (
+        <View style={styles.mapScreen}>
+          <ScrollView
+            style={styles.mapHeader}
+            contentContainerStyle={styles.mapHeaderContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {listHeader}
+          </ScrollView>
+          <MomentsMap
+            outings={filteredOutings}
+            onOpen={(id) => navigation.navigate('OutingDetail', { outingId: id })}
+            emptyOverlay={emptyMoments()}
+          />
+        </View>
+      ) : mode === 'sorties' ? (
         <FlatList
           data={filteredOutings}
           keyExtractor={(item) => item.id}
@@ -1091,6 +1129,10 @@ const styles = StyleSheet.create({
   title: { ...typography.title, color: colors.text, marginTop: 2 },
   sub: { ...typography.caption, color: colors.textSecondary, marginTop: 4 },
   listHeader: { marginBottom: spacing.lg },
+  viewToggle: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  mapScreen: { flex: 1 },
+  mapHeader: { flexGrow: 0, maxHeight: '55%' },
+  mapHeaderContent: { paddingHorizontal: spacing.screen },
   /** Annonces / Dispo : pastille active orange + texte blanc, l’autre blanche + liseré. */
   segment: {
     flexDirection: 'row',
