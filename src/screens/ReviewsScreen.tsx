@@ -103,14 +103,14 @@ export function ReviewsScreen() {
         <Text style={styles.header}>
           {`${formatRatingAverage(stats.average!)} · ${
             stats.outingCount === 1
-              ? '1 sortie'
-              : `${stats.outingCount} sorties`
+              ? '1 moment'
+              : `${stats.outingCount} moments`
           }`}
         </Text>
       )}
       <Text style={styles.sub}>
         Commentaire et réponse non modifiables. Le texte peut être masqué
-        d’un commun accord — la note et le nombre de sorties restent.
+        d’un commun accord — la note et le nombre de moments restent.
       </Text>
 
       {!reviews.length ? (
@@ -208,7 +208,7 @@ export function ReviewsScreen() {
                   onPress={() => {
                     Alert.alert(
                       'Masquer le texte',
-                      'Les deux personnes doivent accepter. Seul le texte disparaît — la note et le nombre de sorties restent.',
+                      'Les deux personnes doivent accepter. Seul le texte disparaît — la note et le nombre de moments restent.',
                       [
                         { text: 'Annuler', style: 'cancel' },
                         {
@@ -247,7 +247,7 @@ export function ReviewsScreen() {
                 <View style={styles.waitingBox}>
                   <Text style={styles.waitingHide}>
                     En attente de l’accord de l’autre personne. La note et le
-                    compteur de sorties restent.
+                    compteur de moments restent.
                   </Text>
                   <Pressable
                     onPress={() => {

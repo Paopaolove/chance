@@ -95,7 +95,7 @@ export function canConfirmOuting(
       ok: false,
       reason: 'essentiel_no_credits',
       message:
-        'Plus de sorties Essentiel ce mois-ci. Passe en Illimité ou rachète un mois.',
+        'Plus de moments Essentiel ce mois-ci. Passe en Illimité ou rachète un mois.',
     };
   }
   if (user.plan === 'payg') {
@@ -105,7 +105,7 @@ export function canConfirmOuting(
     return {
       ok: false,
       reason: 'payg_no_credits',
-      message: 'Achète une sortie (6,90 €) pour confirmer ta place.',
+      message: 'Achète un moment (6,90 €) pour confirmer ta place.',
     };
   }
   // essai expired or unknown / none

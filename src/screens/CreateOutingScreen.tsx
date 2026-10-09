@@ -234,6 +234,18 @@ function DayPills({
   );
 }
 
+/** Heure et minute courantes à Paris (pas l’horloge du téléphone). */
+function parisHourMinute(nowMs: number): { h: number; m: number } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(nowMs));
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  return { h: get('hour'), m: get('minute') };
+}
+
 function defaultDateTime(
   fromDispo: boolean,
   timeLabel?: string,
@@ -251,13 +263,25 @@ function defaultDateTime(
         : 1;
   base.setHours(20, 0, 0, 0);
   let timeStr = formatTimeInput(base);
+  let finalOffset = offset;
   if (timeLabel) {
     const parsed = parseTimeInput(timeLabel);
     if (parsed) {
       timeStr = `${pad2(parsed.h)}:${pad2(parsed.m)}`;
     }
+  } else if (offset === 0) {
+    // Ce soir après 20 h (heure de Paris) : jamais 20:00 déjà passée.
+    // Heure ronde suivante ; à partir de 23 h → Demain 20:00.
+    const nowParis = parisHourMinute(Date.now());
+    if (nowParis.h >= 20) {
+      if (nowParis.h >= 23) {
+        finalOffset = 1;
+      } else {
+        timeStr = `${pad2(nowParis.h + 1)}:00`;
+      }
+    }
   }
-  return { dateStr: dateStrForOffset(offset), timeStr };
+  return { dateStr: dateStrForOffset(finalOffset), timeStr };
 }
 
 export function CreateOutingScreen() {
@@ -522,7 +546,7 @@ export function CreateOutingScreen() {
     }
     if (category === 'autre' && !categoryDetail.trim()) {
       Alert.alert(
-        'Précise la sortie',
+        'Précise le moment',
         'Quand tu choisis Autre, indique ce que tu proposes (ex. balade, café, atelier…).',
       );
       return;
@@ -680,7 +704,7 @@ export function CreateOutingScreen() {
           <Text style={styles.blockedTitle}>
             Une seule annonce active à la fois
             {active.status === 'closed'
-              ? ' — tu as encore des confirmés sur une sortie à venir (même clôturée).'
+              ? ' — tu as encore des confirmés sur un moment à venir (même clôturé).'
               : '. Clôture-la pour en ouvrir une autre.'}
           </Text>
           <View style={styles.activeCard}>
@@ -705,14 +729,14 @@ export function CreateOutingScreen() {
                 closeOuting(active.id);
                 Alert.alert(
                   'Inscriptions closes',
-                  'Les confirmés gardent leur place — le créneau reste actif jusqu’à la fin de la sortie.',
+                  'Les confirmés gardent leur place — le créneau reste actif jusqu’à la fin du moment.',
                 );
               }}
               style={{ marginTop: spacing.md }}
             />
           ) : (
             <Text style={[styles.activeMeta, { marginTop: spacing.md }]}>
-              Attends la fin de la sortie (ou marque-la terminée après l’heure)
+              Attends la fin du moment (ou marque-le terminé après l’heure)
               pour libérer ton créneau d’annonce.
             </Text>
           )}
@@ -742,7 +766,7 @@ export function CreateOutingScreen() {
             </Text>
             <Pressable onPress={exitUrgentMode} hitSlop={8}>
               <Text style={styles.urgentBannerLink}>
-                Publier une sortie classique →
+                Publier un moment classique →
               </Text>
             </Pressable>
           </View>
@@ -816,7 +840,7 @@ export function CreateOutingScreen() {
           <Text style={styles.label}>Invitation</Text>
           <View style={styles.budgetCard}>
             <Text style={styles.budgetFreeHint}>
-              Sortie sans addition. La caution 20 € reste, pour la venue.
+              Moment sans addition. La caution 20 € reste, pour la venue.
             </Text>
           </View>
 
@@ -877,7 +901,7 @@ export function CreateOutingScreen() {
             )}
             <Text style={styles.dispoBannerBody}>
               {inviteeName
-                ? `Destinataire conservé : ${inviteeName}. Prérempli depuis sa dispo — tu lui proposes cette sortie.`
+                ? `Destinataire conservé : ${inviteeName}. Prérempli depuis sa dispo — tu lui proposes ce moment.`
                 : 'Catégorie, créneau et quartier sont préremplis. Ajoute le lieu, ton plafond d’invitation et un message, puis publie.'}
             </Text>
           </View>
@@ -925,12 +949,12 @@ export function CreateOutingScreen() {
             category === 'sport'
               ? 'Quel sport ? (ex. padel, footing)'
               : category === 'autre'
-                ? 'Précise la sortie (ex. balade, café, atelier)'
+                ? 'Précise le moment (ex. balade, café, atelier)'
                 : 'Autre : précise (ex. balade, atelier)'
           }
           maxLength={60}
           accessibilityLabel={
-            category === 'sport' ? 'Quel sport ?' : 'Autre : précise la sortie'
+            category === 'sport' ? 'Quel sport ?' : 'Autre : précise le moment'
           }
           hint={
             category === 'autre' && !categoryDetail.trim()
@@ -1127,7 +1151,7 @@ export function CreateOutingScreen() {
             <Text style={styles.label}>Invitation</Text>
             <View style={styles.budgetCard}>
               <Text style={styles.budgetFreeHint}>
-                Sortie sans addition. La caution 20 € reste, pour la venue.
+                Moment sans addition. La caution 20 € reste, pour la venue.
               </Text>
             </View>
           </>

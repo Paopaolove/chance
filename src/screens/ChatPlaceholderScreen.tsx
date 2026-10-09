@@ -159,7 +159,7 @@ export function ChatPlaceholderScreen() {
             {formatUntilChatOpens(outing.startsAt, now, chatUnlockOptsFor(outing))}
           </Text>
           <Text style={styles.lockBody}>
-            Le chat s’ouvre 1 h avant la sortie (
+            Le chat s’ouvre 1 h avant le moment (
             {opensAt.toLocaleString('fr-FR', {
               weekday: 'short',
               day: 'numeric',
@@ -170,7 +170,7 @@ export function ChatPlaceholderScreen() {
             ).
           </Text>
           <Text style={styles.lockHint}>
-            Sortie : {formatOutingWhen(outing.startsAt)}
+            Moment : {formatOutingWhen(outing.startsAt)}
           </Text>
         </View>
 

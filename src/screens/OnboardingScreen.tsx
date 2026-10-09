@@ -465,7 +465,7 @@ export function OnboardingScreen() {
               On ne swipe pas. On ne cherche pas quelqu’un.
             </Text>
             <Text style={styles.disclaimerLead}>
-              On partage une table, un verre ou une sortie.
+              On partage une table, un verre ou un moment.
             </Text>
           </View>
           <View style={styles.stepsBox}>
@@ -511,7 +511,7 @@ export function OnboardingScreen() {
                 6,90 € pour Moment, 13,10 € pour l’hôte.
               </Text>
               <Text style={[styles.rulesLine, styles.rulesGap]}>
-                Un imprévu, tu peux le signaler une fois par sortie, avec une
+                Un imprévu, tu peux le signaler une fois par moment, avec une
                 phrase.
               </Text>
               <Text style={styles.rulesLine}>

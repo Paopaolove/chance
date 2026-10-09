@@ -103,8 +103,8 @@ export function ConfirmSlotScreen() {
           <Text style={styles.hero}>{partner ? 'Ta place est prise' : 'C’est noté'}</Text>
           <Text style={styles.bodyCenter}>
             {partner
-              ? 'Le lieu n’a rien à valider. Le chat est déjà ouvert et l’adresse exacte est visible sur la sortie. Sur place : « Je suis arrivé » dès 15 min avant.'
-              : 'Le chat s’ouvrira 1 heure avant. L’adresse exacte est maintenant visible sur la sortie.'}
+              ? 'Le lieu n’a rien à valider. Le chat est déjà ouvert et l’adresse exacte est visible sur le moment. Sur place : « Je suis arrivé » dès 15 min avant.'
+              : 'Le chat s’ouvrira 1 heure avant. L’adresse exacte est maintenant visible sur le moment.'}
           </Text>
         </View>
         <Button
@@ -137,12 +137,12 @@ export function ConfirmSlotScreen() {
           <Text style={styles.hero}>Trop tard</Text>
           <Text style={styles.bodyCenter}>
             {outing.status === 'completed'
-              ? 'Cette sortie est terminée — confirmation impossible.'
+              ? 'Ce moment est terminé — confirmation impossible.'
               : outing.status === 'cancelled'
-                ? 'Cette sortie est annulée — confirmation impossible.'
+                ? 'Ce moment est annulé — confirmation impossible.'
                 : isUrgentOnSite(outing)
                   ? 'Cette invitation urgente n’accepte plus de confirmation.'
-                  : 'L’heure de la sortie est passée — tu ne peux plus confirmer.'}
+                  : 'L’heure du moment est passée — tu ne peux plus confirmer.'}
           </Text>
         </View>
         <Button title="Retour aux annonces" onPress={goFeed} />
@@ -225,8 +225,8 @@ export function ConfirmSlotScreen() {
         showToast(
           'Trop tard',
           result.reason === 'outing_finished'
-            ? 'Cette sortie est terminée.'
-            : 'L’heure de la sortie est passée — confirmation impossible.',
+            ? 'Ce moment est terminé.'
+            : 'L’heure du moment est passée — confirmation impossible.',
         );
         setExpired(true);
         return;

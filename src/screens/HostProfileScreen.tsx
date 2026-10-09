@@ -271,14 +271,14 @@ export function HostProfileScreen() {
           <Text style={styles.stats}>
             {`${formatRatingAverage(stats.average!)} · ${
               stats.outingCount === 1
-                ? '1 sortie'
-                : `${stats.outingCount} sorties`
+                ? '1 moment'
+                : `${stats.outingCount} moments`
             }`}
           </Text>
         )}
         <Text style={styles.statsNote}>
-          Les notes parlent du respect en sortie, pas d’un crush. « X sorties »
-          = sorties honorées (terminées), pas le nombre d’avis.
+          Les notes parlent du respect pendant un moment, pas d’un crush. « X moments »
+          = moments honorés (terminés), pas le nombre d’avis.
         </Text>
       </View>
 

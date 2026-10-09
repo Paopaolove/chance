@@ -81,7 +81,7 @@ export function OutingCard({ outing, onPress }: Props) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Sortie ${place}`}
+      accessibilityLabel={`Moment ${place}`}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={styles.mainRow}>

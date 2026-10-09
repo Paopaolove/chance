@@ -187,10 +187,10 @@ export function RequestsScreen() {
             navigation.navigate('OutingDetail', { outingId: outing.id })
           }
           accessibilityRole="button"
-          accessibilityLabel={`Sortie ${outing?.title ?? ''}`}
+          accessibilityLabel={`Moment ${outing?.title ?? ''}`}
         >
           <Text style={styles.cardMeta}>
-            pour « {outing?.title ?? 'sortie'} » ·{' '}
+            pour « {outing?.title ?? 'moment'} » ·{' '}
             {r.partnerAutoSeat && r.status === 'accepted'
               ? 'a rejoint — confirmation en cours (rien à faire)'
               : statusLabels[r.status]}
@@ -216,9 +216,9 @@ export function RequestsScreen() {
             !isOutingAcceptingRequests(outing)) ? (
             <Text style={styles.msg}>
               {outing.status === 'completed'
-                ? 'Sortie terminée — plus d’acceptation.'
+                ? 'Moment terminé — plus d’acceptation.'
                 : outing.status === 'cancelled'
-                  ? 'Sortie annulée — plus d’acceptation.'
+                  ? 'Moment annulé — plus d’acceptation.'
                   : isUrgentOnSite(outing)
                     ? 'Fenêtre urgente terminée — plus d’acceptation.'
                     : 'L’heure est passée — plus d’acceptation.'}
@@ -232,10 +232,10 @@ export function RequestsScreen() {
                   if (!res.ok) {
                     const messages: Record<string, string> = {
                       outing_started:
-                        'L’heure de la sortie est passée — tu ne peux plus accepter.',
-                      outing_finished: 'Cette sortie est terminée.',
+                        'L’heure du moment est passée — tu ne peux plus accepter.',
+                      outing_finished: 'Ce moment est terminé.',
                       invalid: 'Demande invalide.',
-                      not_found: 'Sortie introuvable.',
+                      not_found: 'Moment introuvable.',
                     };
                     Alert.alert(
                       'Impossible',
@@ -328,9 +328,9 @@ export function RequestsScreen() {
               outing.status !== 'closed'
                 ? 'Délai de confirmation dépassé — place libérée.'
                 : outing.status === 'cancelled'
-                  ? 'Sortie annulée — plus de confirmation.'
+                  ? 'Moment annulé — plus de confirmation.'
                   : outing.status === 'completed'
-                    ? 'Sortie terminée — plus de confirmation.'
+                    ? 'Moment terminé — plus de confirmation.'
                     : 'Annonce clôturée — plus de confirmation.'}
             </Text>
           ) : (

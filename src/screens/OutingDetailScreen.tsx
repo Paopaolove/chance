@@ -51,7 +51,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'OutingDetail'>;
 
 const RECOMMENDED_INTRO =
-  'Salut ! Ta sortie m’intéresse — je suis motivé et dispo. À bientôt ?';
+  'Salut ! Ton moment m’intéresse — je suis motivé et dispo. À bientôt ?';
 
 export function OutingDetailScreen() {
   const navigation = useNavigation<Nav>();
@@ -178,9 +178,9 @@ export function OutingDetailScreen() {
         women_only: 'Ce moment est réservé aux femmes.',
         full: 'Plus de place disponible.',
         already_requested: 'Tu as déjà une demande en cours.',
-        own_outing: 'C’est ta propre sortie.',
+        own_outing: 'C’est ton propre moment.',
         outing_started:
-          'Cette sortie a déjà commencé ou est terminée — plus de demandes.',
+          'Ce moment a déjà commencé ou est terminé — plus de demandes.',
       };
       Alert.alert('Impossible', messages[result.reason] ?? result.reason);
       return;
@@ -258,6 +258,7 @@ export function OutingDetailScreen() {
             </Text>
             <Text style={styles.imprevuReason}>{pending.reason}</Text>
             <Button
+              variant="secondary"
               title="Accepter l’imprévu"
               onPress={() => {
                 const r = respondImprevu(pending.id, 'accepted');
@@ -317,6 +318,7 @@ export function OutingDetailScreen() {
                   <View style={styles.venueIssueActions}>
                     <Button
                       title="Accepter le lieu alternatif"
+                      variant="secondary"
                       onPress={() => {
                         const r = respondVenueAlternate(outing.id, 'accepted');
                         if (!r.ok) Alert.alert('Impossible', r.reason);
@@ -511,7 +513,7 @@ export function OutingDetailScreen() {
             : partner
               ? `${partnerChips.join(' + ') || 'Offre du lieu'} — chacun règle le reste de sa part sur place (pas via l’app).`
               : outing.budgetMaxEuros <= 0
-                ? 'Sortie gratuite — réglée sur place, pas via l’app.'
+                ? 'Moment gratuit — réglé sur place, pas via l’app.'
                 : `J’invite jusqu’à ${outing.budgetMaxEuros} € par personne, réglé sur place au lieu (pas via l’app). Au-delà = hors invitation.`}
         </Text>
         {partner ? (
@@ -651,16 +653,16 @@ export function OutingDetailScreen() {
                       r.outingId === outing.id && r.status === 'confirmed',
                   );
                   Alert.alert(
-                    'Annuler toute la sortie ?',
+                    'Annuler tout le moment ?',
                     partner && hasConfirmed
                       ? 'Toutes les cautions seront rendues. Ton lieu reçoit 1 avertissement — au 2e, le compte partenaire est fermé.'
                       : hasConfirmed
                         ? 'Les places confirmées seront annulées et les cautions rendues (mock).'
-                        : 'La sortie sera fermée et les demandes en cours annulées.',
+                        : 'Le moment sera fermé et les demandes en cours annulées.',
                     [
                       { text: 'Retour', style: 'cancel' },
                       {
-                        text: 'Annuler la sortie',
+                        text: 'Annuler le moment',
                         style: 'destructive',
                         onPress: () => {
                           const res = cancelOuting(outing.id);
@@ -679,9 +681,9 @@ export function OutingDetailScreen() {
           ) : (
             <Text style={styles.hint}>
               {outing.status === 'completed'
-                ? 'Sortie terminée.'
+                ? 'Moment terminé.'
                 : outing.status === 'cancelled'
-                  ? 'Sortie annulée.'
+                  ? 'Moment annulé.'
                   : outing.status === 'closed'
                     ? partner && outing.partnerAutoClosedFull
                       ? 'Complet — annonce clôturée automatiquement. Les confirmés gardent leur place.'
@@ -705,7 +707,7 @@ export function OutingDetailScreen() {
               onPress={() => {
                 completeOuting(outing.id);
                 Alert.alert(
-                  'Sortie terminée',
+                  'Moment terminé',
                   'Confirme la présence de chaque invité pour rendre la caution et débloquer les avis (confirmé ≠ présent).',
                 );
               }}
@@ -863,7 +865,7 @@ export function OutingDetailScreen() {
                     : getMyImprevu(outing.id)!.status === 'pending'
                       ? 'en attente'
                       : getMyImprevu(outing.id)!.status === 'accepted'
-                        ? 'accepté — sortie annulée'
+                        ? 'accepté — moment annulé'
                         : getMyImprevu(outing.id)!.status === 'auto_refused'
                           ? 'sans réponse à l’heure'
                           : 'refusé — au moins 3 heures / joker'}
@@ -915,9 +917,9 @@ export function OutingDetailScreen() {
                 : isStartsAtPast(outing.startsAt)) ? (
                 <Text style={styles.hint}>
                   {outing.status === 'completed'
-                    ? 'Sortie terminée — confirmation impossible.'
+                    ? 'Moment terminé — confirmation impossible.'
                     : outing.status === 'cancelled'
-                      ? 'Sortie annulée — confirmation impossible.'
+                      ? 'Moment annulé — confirmation impossible.'
                       : isUrgentOnSite(outing)
                         ? 'Invitation urgente close — confirmation impossible.'
                         : 'L’heure est passée — confirmation impossible.'}
@@ -1115,7 +1117,7 @@ export function OutingDetailScreen() {
                     : outing.urgentOnSite
                       ? 'Le chat est ouvert (invitation urgente).'
                       : 'Le chat est ouvert (H−1).'
-                  : 'Le chat s’ouvre 1 h avant la sortie.'}
+                  : 'Le chat s’ouvre 1 h avant le moment.'}
               </Text>
               <Button
                 title={
@@ -1182,9 +1184,9 @@ export function OutingDetailScreen() {
         <View style={styles.actions}>
           <Text style={styles.hint}>
             {outing.status === 'completed'
-              ? 'Sortie terminée — plus de demandes.'
+              ? 'Moment terminé — plus de demandes.'
               : outing.status === 'cancelled'
-                ? 'Sortie annulée — plus de demandes.'
+                ? 'Moment annulé — plus de demandes.'
                 : isUrgentOnSite(outing)
                   ? 'Fenêtre urgente terminée — plus de demandes.'
                   : 'L’heure est passée — cette annonce n’accepte plus de demandes.'}

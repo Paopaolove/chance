@@ -33,9 +33,9 @@ export function planLabel(plan: string): string {
     case 'essai':
       return 'Essai 1 mois illimité';
     case 'payg':
-      return 'À la sortie (6,90 €)';
+      return 'À l’unité (6,90 €)';
     case 'essentiel':
-      return 'Essentiel (4 sorties / mois)';
+      return 'Essentiel (4 moments / mois)';
     case 'illimite':
       return 'Illimité';
     default:
@@ -62,7 +62,7 @@ export function formatRatingLine(
   if (outingCount <= 0 || average == null) {
     return newUserChanceCopy(firstName);
   }
-  const sorties = outingCount === 1 ? '1 sortie' : `${outingCount} sorties`;
+  const sorties = outingCount === 1 ? '1 moment' : `${outingCount} moments`;
   return `${formatRatingAverage(average)} · ${sorties}`;
 }
 

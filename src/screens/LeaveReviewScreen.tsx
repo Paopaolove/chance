@@ -74,7 +74,7 @@ export function LeaveReviewScreen() {
     if (!rating) {
       Alert.alert(
         'Note requise',
-        'Réponds à « La sortie s’est-elle bien passée ? » (1 à 5 étoiles).',
+        'Réponds à « Le moment s’est-il bien passé ? » (1 à 5 étoiles).',
       );
       return;
     }
@@ -127,18 +127,18 @@ export function LeaveReviewScreen() {
     });
     if (!result.ok) {
       const messages: Record<string, string> = {
-        already_reviewed: 'Tu as déjà noté cette sortie.',
+        already_reviewed: 'Tu as déjà noté ce moment.',
         self: 'Tu ne peux pas te noter toi-même.',
         no_user: 'Profil manquant.',
         invalid_rating: 'Note invalide.',
         invalid_venue_rating: 'Note du lieu invalide.',
-        outing_not_found: 'Sortie introuvable.',
+        outing_not_found: 'Moment introuvable.',
         not_completed:
-          'Tu ne peux noter qu’après une sortie terminée (honorée).',
+          'Tu ne peux noter qu’après un moment terminé (honoré).',
         not_participant:
-          'Avis réservé aux participants d’une sortie terminée.',
+          'Avis réservé aux participants d’un moment terminé.',
         target_not_participant:
-          'Tu ne peux noter que quelqu’un qui a participé à cette sortie.',
+          'Tu ne peux noter que quelqu’un qui a participé à ce moment.',
         low_star_reason_required: 'Motif requis pour une note basse.',
       };
       Alert.alert('Impossible', messages[result.reason] ?? result.reason);
@@ -209,15 +209,15 @@ export function LeaveReviewScreen() {
     }
     const copy: Record<string, string> = {
       not_completed:
-        'Tu ne peux noter qu’après une sortie terminée (honorée).',
+        'Tu ne peux noter qu’après un moment terminé (honoré).',
       not_participant:
-        'Avis réservé aux participants d’une sortie terminée.',
+        'Avis réservé aux participants d’un moment terminé.',
       target_not_participant:
-        'Tu ne peux noter que quelqu’un qui a participé à cette sortie.',
-      already_reviewed: 'Tu as déjà noté cette personne pour cette sortie.',
+        'Tu ne peux noter que quelqu’un qui a participé à ce moment.',
+      already_reviewed: 'Tu as déjà noté cette personne pour ce moment.',
       self: 'Tu ne peux pas te noter toi-même.',
       no_user: 'Profil manquant.',
-      outing_not_found: 'Sortie introuvable.',
+      outing_not_found: 'Moment introuvable.',
     };
     return (
       <ScrollView
@@ -227,7 +227,7 @@ export function LeaveReviewScreen() {
         <Text style={styles.hero}>Avis indisponible</Text>
         <Text style={styles.intro}>
           {copy[eligibility.reason] ??
-            'Tu ne peux pas laisser d’avis pour cette sortie.'}
+            'Tu ne peux pas laisser d’avis pour ce moment.'}
         </Text>
         <Button title="Retour" onPress={() => navigation.goBack()} />
       </ScrollView>
@@ -261,7 +261,7 @@ export function LeaveReviewScreen() {
         </Pressable>
 
         <Text style={styles.label}>
-          La sortie s’est-elle bien passée ? (ponctualité, respect)
+          Le moment s’est-il bien passé ? (ponctualité, respect)
         </Text>
         <View style={styles.starsRow}>
           {([1, 2, 3, 4, 5] as const).map((n) => (

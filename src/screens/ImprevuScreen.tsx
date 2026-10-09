@@ -109,10 +109,10 @@ export function ImprevuScreen() {
     const result = reportImprevu(outingId, motive, reason, requestId);
     if (!result.ok) {
       const messages: Record<string, string> = {
-        already_reported: 'Tu as déjà signalé un imprévu pour cette sortie.',
+        already_reported: 'Tu as déjà signalé un imprévu pour ce moment.',
         not_confirmed: 'Disponible uniquement une fois la place confirmée.',
         invalid_reason: 'Raison invalide (1–3 lignes).',
-        outing_closed: 'Cette sortie est déjà clôturée.',
+        outing_closed: 'Ce moment est déjà clôturé.',
         no_responder: 'Personne à qui signaler.',
         no_user: 'Connecte-toi pour continuer.',
       };
@@ -131,7 +131,7 @@ export function ImprevuScreen() {
       existing.status === 'pending'
         ? 'En attente de réponse'
         : existing.status === 'accepted'
-          ? 'Accepté — ce n’est pas une absence · caution rendue · sortie annulée'
+          ? 'Accepté — ce n’est pas une absence · caution rendue · moment annulé'
           : existing.jokerUsed
             ? 'Joker utilisé — caution rendue · ce n’est pas une absence · hôte 0 €'
             : existing.status === 'auto_refused'
@@ -194,9 +194,9 @@ export function ImprevuScreen() {
       {otherHeader}
       <Text style={styles.title}>Signaler un imprévu</Text>
       <Text style={styles.body}>
-        Une fois par personne et par sortie. Motif + raison écrite ; l’autre
+        Une fois par personne et par moment. Motif + raison écrite ; l’autre
         accepte ou refuse — pas de chat libre (réservé à H−1). Accepté → caution
-        20 € rendue et sortie annulée (ce n’est pas une absence). Refusé → tu
+        20 € rendue et moment annulé (ce n’est pas une absence). Refusé → tu
         peux utiliser ton joker, sinon règle des 3 heures (trop tard / absence
         → 6,90 € Moment / 13,10 € hôte).
       </Text>

@@ -3376,7 +3376,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           outingId,
           requestId,
           kind: 'system',
-          text: 'Le chat est ouvert — 1 h avant la sortie. Bonne sortie !',
+          text: 'Le chat est ouvert — 1 h avant le moment. Bon moment !',
           createdAt: now,
         },
       ];
@@ -4181,7 +4181,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     const title = outing.title;
     const toast: AppToast = {
       id: uid('toast'),
-      title: 'Noter la sortie',
+      title: 'Noter le moment',
       body: `Comment s’est passée « ${title} » ? Laisse une note.`,
       createdAt: new Date().toISOString(),
       type: 'rate_after',
@@ -5125,7 +5125,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           id: uid('toast'),
           title: 'Lieu refusé',
           body:
-            'Tu sors de la sortie — caution rendue (pas d’absence). Les autres peuvent encore répondre.',
+            'Tu quittes le moment — caution rendue (pas d’absence). Les autres peuvent encore répondre.',
           createdAt: new Date().toISOString(),
           type: 'cancellation',
           outingId,

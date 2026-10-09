@@ -175,7 +175,7 @@ export function DispoSoirScreen() {
     }
     if (on && categories.includes('autre') && !categoryDetail.trim()) {
       Alert.alert(
-        'Précise la sortie',
+        'Précise le moment',
         'Quand tu coches Autre, indique ce que tu as en tête (ex. bowling…).',
       );
       return;
@@ -185,7 +185,7 @@ export function DispoSoirScreen() {
       on ? 'Visible' : 'Invisible pour l’instant',
       on
         ? 'Ça s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.'
-        : 'Les autres ne peuvent plus te proposer de sortie.',
+        : 'Les autres ne peuvent plus te proposer de moment.',
     );
     navigation.goBack();
   };
@@ -206,7 +206,7 @@ export function DispoSoirScreen() {
     }
     if (categories.includes('autre') && !categoryDetail.trim()) {
       Alert.alert(
-        'Précise la sortie',
+        'Précise le moment',
         'Quand tu coches Autre, indique ce que tu as en tête (ex. bowling…).',
       );
       return;
@@ -268,7 +268,7 @@ export function DispoSoirScreen() {
     >
       <Text style={styles.title}>Dispo</Text>
       <Text style={styles.body}>
-        {`Les autres peuvent te proposer une sortie.\nÇa s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.`}
+        {`Les autres peuvent te proposer un moment.\nÇa s’arrête à la fin du créneau, à minuit, ou dès que tu confirmes une table.`}
       </Text>
 
       <View style={styles.card}>
@@ -396,7 +396,7 @@ export function DispoSoirScreen() {
         placeholderTextColor={colors.textMuted}
         autoCorrect={false}
         maxLength={60}
-        accessibilityLabel="Autre : précise la sortie"
+        accessibilityLabel="Autre : précise le moment"
       />
 
       <Text style={styles.section}>Quartier *</Text>
@@ -477,7 +477,7 @@ export function DispoSoirScreen() {
         style={styles.ctaSecondary}
       />
       <Text style={styles.footerHint}>
-        Même règles qu’une sortie : 10 min pour confirmer, caution 20 €,
+        Mêmes règles qu’un moment : 10 min pour confirmer, caution 20 €,
         adresse exacte après confirmation.
       </Text>
     </ScrollView>

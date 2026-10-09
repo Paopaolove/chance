@@ -138,7 +138,7 @@ export const mockHosts: User[] = [
     firstName: 'Inès',
     age: 27,
     gender: 'femme',
-    bio: 'Canal, apéros en terrasse et playlists partagées. Dispo pour une sortie légère ce soir.',
+    bio: 'Canal, apéros en terrasse et playlists partagées. Dispo pour un moment léger ce soir.',
     neighborhood: 'Canal Saint-Martin',
     plan: 'illimite',
     trialEndsAt: '2026-11-01T00:00:00.000Z',

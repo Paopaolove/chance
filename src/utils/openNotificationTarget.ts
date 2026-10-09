@@ -125,7 +125,7 @@ export function openNotificationTarget(
         return;
       }
       if (outing?.status === 'cancelled') {
-        Alert.alert('Sortie annulée', 'Le chat n’est plus disponible.');
+        Alert.alert('Moment annulé', 'Le chat n’est plus disponible.');
         goOuting(nav, oid);
         return;
       }
@@ -202,13 +202,13 @@ export function openNotificationTarget(
       }
       if (oid && outing?.status === 'cancelled') {
         Alert.alert(
-          'Sortie annulée',
-          'Impossible de noter une sortie annulée.',
+          'Moment annulé',
+          'Impossible de noter un moment annulé.',
         );
       } else if (oid && (!match || toRate.length === 0)) {
         Alert.alert(
           'Notation indisponible',
-          'Tu pourras noter seulement si tu étais présent·e. Voici tes sorties à noter.',
+          'Tu pourras noter seulement si tu étais présent·e. Voici tes moments à noter.',
         );
       }
       goProfileRate(nav);

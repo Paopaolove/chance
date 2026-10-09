@@ -82,7 +82,7 @@ export function PaywallScreen() {
     >
       <Text style={styles.title}>Choisis ta formule</Text>
       <Text style={styles.sub}>
-        Après l’essai, confirme une place avec À la sortie, Essentiel ou
+        Après l’essai, confirme une place avec À l’unité, Essentiel ou
         Illimité. Publier une annonce reste gratuit. Caution{' '}
         {PRICING.deposit.euros} € à la confirmation (mock).
       </Text>
@@ -193,13 +193,13 @@ export function PaywallScreen() {
             <Text style={styles.detail}>{p.detail}</Text>
             {p.id === 'essentiel' && interval === 'month' ? (
               <Text style={styles.detail}>
-                {PRICING.essentiel.outingsPerMonth} sorties / mois
+                {PRICING.essentiel.outingsPerMonth} moments / mois
               </Text>
             ) : null}
             <Button
               title={
                 p.kind === 'payg'
-                  ? 'Acheter 1 sortie'
+                  ? 'Acheter 1 moment'
                   : active
                     ? 'Sélectionnée'
                     : 'S’abonner'

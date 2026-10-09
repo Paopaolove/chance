@@ -278,8 +278,8 @@ export function ProfileScreen() {
             }
           />
           <Text style={styles.ratingRespectNote}>
-            Les notes parlent du respect en sortie, pas d’un crush. « X sorties »
-            = sorties honorées, pas le nombre d’avis.
+            Les notes parlent du respect pendant un moment, pas d’un crush. « X moments »
+            = moments honorés, pas le nombre d’avis.
           </Text>
           <Text style={styles.sub}>
             {subParts.join(' · ')}
@@ -534,7 +534,7 @@ export function ProfileScreen() {
                   </Text>
                   <Text style={styles.cardHint}>
                     {user.partnerVenueName ?? 'Le lieu'} a eu 2 avertissements
-                    (sorties annulées ou non honorées). Publication en tant que
+                    (moments annulés ou non honorés). Publication en tant que
                     lieu bloquée.
                   </Text>
                 </>
@@ -648,7 +648,7 @@ export function ProfileScreen() {
           ) : null}
           {user.plan === 'essentiel' ? (
             <Text style={styles.cardHint}>
-              {outingCreditsOf(user)} / 4 sorties restantes
+              {outingCreditsOf(user)} / 4 moments restants
               {user.planInterval === 'year'
                 ? ' · annuel'
                 : user.planInterval === 'month'
@@ -658,7 +658,7 @@ export function ProfileScreen() {
           ) : null}
           {user.plan === 'illimite' ? (
             <Text style={styles.cardHint}>
-              Sorties illimitées
+              Moments illimités
               {user.planInterval === 'year'
                 ? ' · annuel'
                 : user.planInterval === 'month'
@@ -669,7 +669,7 @@ export function ProfileScreen() {
           {user.plan === 'payg' ? (
             <Text style={styles.cardHint}>
               {outingCreditsOf(user) > 0
-                ? `${outingCreditsOf(user)} sortie(s) créditée(s)`
+                ? `${outingCreditsOf(user)} moment(s) crédité(s)`
                 : 'Aucun moment crédité — rachète pour confirmer'}
             </Text>
           ) : null}
@@ -723,7 +723,7 @@ export function ProfileScreen() {
         >
           <Text style={styles.cardLabel}>Mes moments</Text>
           <Text style={styles.cardHint}>
-            Après une sortie terminée, note la personne et le lieu
+            Après un moment terminé, note la personne et le lieu
             séparément (commentaires optionnels). Une fois notée, elle
             passe dans Passées.
           </Text>
@@ -789,7 +789,7 @@ export function ProfileScreen() {
                       >
                         <Text style={styles.cardValue}>{item.outing.title}</Text>
                         <Text style={styles.cardHint}>
-                          Sortie terminée — personne n’est marquée présente
+                          Moment terminé — personne n’est marquée présente
                           (démo).
                         </Text>
                         <Button

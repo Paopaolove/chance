@@ -41,8 +41,8 @@ export function RatingLine({
           ? 'vient d’arriver'
           : `${formatRatingAverage(stats.average!)} · ${
               stats.outingCount === 1
-                ? '1 sortie'
-                : `${stats.outingCount} sorties`
+                ? '1 moment'
+                : `${stats.outingCount} moments`
             }`}
       </Text>
     );
@@ -58,7 +58,7 @@ export function RatingLine({
     content = (
       <Text style={[styles.text, style]} numberOfLines={2}>
         {`${formatRatingAverage(stats.average!)} · ${
-          stats.outingCount === 1 ? '1 sortie' : `${stats.outingCount} sorties`
+          stats.outingCount === 1 ? '1 moment' : `${stats.outingCount} moments`
         }`}
       </Text>
     );

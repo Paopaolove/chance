@@ -227,7 +227,7 @@ export async function scheduleChatUnlockNotification(input: {
 export async function simulateDemoNotifications(input?: {
   outingTitle?: string;
 }): Promise<{ ok: true; pushOk: boolean } | { ok: false; reason: string }> {
-  const title = input?.outingTitle ?? 'ta sortie';
+  const title = input?.outingTitle ?? 'ton moment';
   const granted = await ensureNotificationPermissions();
   if (!granted) return { ok: false, reason: 'permission_denied' };
 
@@ -287,7 +287,7 @@ export async function simulateDemoNotifications(input?: {
     },
     {
       type: 'rate_after',
-      title: 'Noter la sortie',
+      title: 'Noter le moment',
       body: `Démo · comment s’est passée « ${title} » ?`,
       delay: 17,
     },
