@@ -37,12 +37,15 @@ export function PersonCard({ person, onPropose }: Props) {
       : cats[0]
         ? categoryLabels[cats[0]]
         : null;
-  const pillLabel = firstCat
+  // L’envie d’abord (ligne principale), le prénom ensuite.
+  const envieLine = firstCat
     ? cats.length > 1
       ? `${firstCat} +${cats.length - 1}`
       : firstCat
-    : 'Dispo';
-  const placeLine = [slot, quartier].filter(Boolean).join(' · ');
+    : 'Dispo pour un moment';
+  // Une seule pastille : le créneau.
+  const pillLabel = slot || 'Dispo';
+  const placeLine = quartier ?? '';
 
   return (
     <View style={styles.card}>
@@ -71,15 +74,18 @@ export function PersonCard({ person, onPropose }: Props) {
         </Pressable>
 
         <View style={styles.mainText}>
+          <Text style={styles.name} numberOfLines={1}>
+            {envieLine}
+          </Text>
           {/* Prénom → profil (Pressable séparé) */}
           <Pressable
             onPress={openPerson}
             accessibilityRole="button"
             accessibilityLabel={`Voir le profil de ${person.firstName}`}
-            hitSlop={{ top: 8, bottom: 4 }}
+            hitSlop={{ top: 6, bottom: 6 }}
             style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
           >
-            <Text style={styles.name} numberOfLines={1}>
+            <Text style={styles.personName} numberOfLines={1}>
               {person.firstName}
             </Text>
           </Pressable>
@@ -133,6 +139,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 24,
     color: colors.text,
+  },
+  personName: {
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
+    marginTop: 2,
   },
   meta: {
     ...typography.caption,

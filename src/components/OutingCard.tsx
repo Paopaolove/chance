@@ -68,7 +68,11 @@ export function OutingCard({ outing, onPress }: Props) {
 
   // Une ligne : quand · lieu · quartier (pas de « Maintenant » en double avec la pastille).
   const showWhen = !(outing.urgentOnSite && !outing.urgentAutoH90);
-  const place = partner ? outing.title : outing.venueName;
+  // Le titre (activité) est en tête : la ligne de lieu ne le répète pas.
+  const place =
+    outing.venueName && outing.venueName !== outing.title
+      ? outing.venueName
+      : null;
   const placeLine = [
     showWhen ? formatOutingWhen(outing.startsAt) : null,
     place,
@@ -81,7 +85,7 @@ export function OutingCard({ outing, onPress }: Props) {
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Moment ${place}`}
+      accessibilityLabel={`Moment ${outing.title}`}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={styles.mainRow}>
@@ -108,19 +112,25 @@ export function OutingCard({ outing, onPress }: Props) {
           />
         </Pressable>
         <View style={styles.mainText}>
-          {/* Prénom → profil (Pressable séparé, n’ouvre pas la sortie) */}
-          <Pressable
-            onPress={openHost}
-            accessibilityRole="button"
-            accessibilityLabel={`Voir le profil de ${outing.hostName}`}
-            hitSlop={{ top: 8, bottom: 4 }}
-            style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
-          >
-            <Text style={styles.title} numberOfLines={1}>
-              {partner ? outing.hostName : `${outing.hostName} t’invite`}
-            </Text>
-          </Pressable>
-          {partner ? <Text style={styles.partnerTag}>Partenaire</Text> : null}
+          {/* L’activité d’abord (expo, foot, verre…) — reste de la carte → moment */}
+          <Text style={styles.title} numberOfLines={2}>
+            {outing.title}
+          </Text>
+          {/* Prénom ensuite → profil (Pressable séparé, n’ouvre pas le moment) */}
+          <View style={styles.hostRow}>
+            <Pressable
+              onPress={openHost}
+              accessibilityRole="button"
+              accessibilityLabel={`Voir le profil de ${outing.hostName}`}
+              hitSlop={{ top: 6, bottom: 6 }}
+              style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
+            >
+              <Text style={styles.hostName} numberOfLines={1}>
+                {partner ? outing.hostName : `${outing.hostName} t’invite`}
+              </Text>
+            </Pressable>
+            {partner ? <Text style={styles.partnerTag}> · Partenaire</Text> : null}
+          </View>
           <Text style={styles.place} numberOfLines={1}>
             {placeLine}
           </Text>
@@ -168,10 +178,20 @@ const styles = StyleSheet.create({
     ...typography.small,
     fontFamily: fonts.semiBold,
     color: colors.textSecondary,
+  },
+  hostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 2,
+    minWidth: 0,
+  },
+  hostName: {
+    ...typography.caption,
+    fontFamily: fonts.semiBold,
+    color: colors.text,
   },
   mainText: { flex: 1, minWidth: 0 },
-  nameTap: { alignSelf: 'flex-start', maxWidth: '100%' },
+  nameTap: { flexShrink: 1 },
   title: {
     ...typography.subtitle,
     fontFamily: fonts.semiBold,
