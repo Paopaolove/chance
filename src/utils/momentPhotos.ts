@@ -5,6 +5,7 @@ import type {
   Request,
 } from '../data/types';
 import { wasPresent } from './outingActive';
+import { isPartnerListing } from './partners';
 
 /** Max photos par personne et par moment. */
 export const MOMENT_PHOTOS_MAX_PER_PERSON = 2;
@@ -15,18 +16,29 @@ export const MOMENT_PHOTO_PLACEHOLDER_PREFIX = 'placeholder:';
 export type MomentParticipant = { userId: string; name: string };
 
 /**
- * Personnes qui étaient vraiment à table : l’hôte + les invités marqués
- * présents (Confirmé ≠ présent). Uniquement pour une sortie terminée —
- * jamais avant la rencontre.
+ * L’hôte compte à table seulement s’il est venu : pas de no-show hôte
+ * signalé, et pas une annonce de lieu partenaire (le lieu n’est pas une
+ * personne à table).
+ */
+export function hostWasAtTable(outing: Outing): boolean {
+  if (outing.hostNoShowReported) return false;
+  if (isPartnerListing(outing)) return false;
+  return true;
+}
+
+/**
+ * Personnes qui étaient vraiment à table : l’hôte s’il est venu + les
+ * invités marqués présents (Confirmé ≠ présent). Uniquement pour un moment
+ * terminé — jamais avant la rencontre.
  */
 export function momentParticipants(
   outing: Outing,
   requests: Request[],
 ): MomentParticipant[] {
   if (outing.status !== 'completed') return [];
-  const list: MomentParticipant[] = [
-    { userId: outing.hostId, name: outing.hostName },
-  ];
+  const list: MomentParticipant[] = hostWasAtTable(outing)
+    ? [{ userId: outing.hostId, name: outing.hostName }]
+    : [];
   for (const r of requests) {
     if (r.outingId !== outing.id || !wasPresent(r)) continue;
     if (list.some((p) => p.userId === r.userId)) continue;
