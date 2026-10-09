@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { Button } from '../components/Button';
 import { GivenReviewSummary } from '../components/GivenReviewSummary';
+import { RedoMomentLink } from '../components/RedoMomentLink';
+import { isPartnerListing } from '../utils/partners';
 import { useChance } from '../data/ChanceContext';
 import { LowStarReasonKind } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
@@ -34,6 +36,7 @@ export function LeaveReviewScreen() {
   const route = useRoute<R>();
   const openProfile = useOpenUserProfile();
   const {
+    getOutingById,
     addReview,
     canLeaveReview,
     getMyReviewFor,
@@ -42,6 +45,11 @@ export function LeaveReviewScreen() {
   } = useChance();
   const { outingId, toUserId, toUserName } = route.params;
   const eligibility = canLeaveReview(outingId, toUserId);
+  const reviewedOuting = getOutingById(outingId);
+  // Relance vers une personne, jamais vers un lieu partenaire.
+  const canRedo =
+    !!reviewedOuting &&
+    !(isPartnerListing(reviewedOuting) && reviewedOuting.hostId === toUserId);
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
   const [wantToSeeAgain, setWantToSeeAgain] = useState<boolean | null>(null);
   const [lowStarKind, setLowStarKind] = useState<LowStarReasonKind | null>(
@@ -149,10 +157,10 @@ export function LeaveReviewScreen() {
         'Merci',
         'Ton avis est publié. Ajouter une photo du moment ? Le lieu, la table, les gens.',
         [
-          { text: 'Plus tard', style: 'cancel', onPress: () => navigation.goBack() },
+          { text: 'Plus tard', style: 'cancel' },
           {
             text: 'Ajouter une photo du moment',
-            onPress: () => void addPhotoThen(() => navigation.goBack()),
+            onPress: () => void addPhotoThen(),
           },
         ],
       );
@@ -162,7 +170,7 @@ export function LeaveReviewScreen() {
       'Merci',
       'Ton avis est publié. Les commentaires ne sont plus modifiables.',
     );
-    navigation.goBack();
+    // On reste ici : l’écran affiche l’avis envoyé + « Refaire un moment avec … ».
   };
 
   if (!eligibility.ok) {
@@ -190,6 +198,9 @@ export function LeaveReviewScreen() {
             }
             style={{ marginBottom: spacing.xl }}
           />
+          {canRedo ? (
+            <RedoMomentLink userId={toUserId} firstName={toUserName} />
+          ) : null}
           {photoGate.ok ? (
             <View style={{ marginBottom: spacing.xl }}>
               <Button
@@ -246,7 +257,7 @@ export function LeaveReviewScreen() {
       </Text>
 
       <View style={styles.personBlock}>
-        <Text style={styles.blockTitle}>Rencontre</Text>
+        <Text style={styles.blockTitle}>La personne</Text>
         <Pressable
           onPress={() => openProfile(toUserId)}
           accessibilityRole="button"

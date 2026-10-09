@@ -1,5 +1,7 @@
 import { CompositeNavigationProp, RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { withAccount } from '../components/GuestGate';
+import { RedoMomentLink } from '../components/RedoMomentLink';
+import { isPartnerListing } from '../utils/partners';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
@@ -866,6 +868,16 @@ function ProfileScreenInner() {
                             })
                           }
                         />
+                        {!(
+                          isPartnerListing(item.outing) &&
+                          item.outing.hostId === item.toUserId
+                        ) ? (
+                          <RedoMomentLink
+                            userId={item.toUserId}
+                            firstName={item.toUserName}
+                            compact
+                          />
+                        ) : null}
                       </View>
                     ))}
                   </>

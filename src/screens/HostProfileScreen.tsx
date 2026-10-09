@@ -260,7 +260,7 @@ export function HostProfileScreen() {
       ) : null}
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Avis rencontre</Text>
+        <Text style={styles.sectionTitle}>Avis sur la personne</Text>
         {isNew ? (
           <Text style={[styles.stats, styles.statsNew]}>
             {`${firstName} vient d’arriver. Donne-lui son `}
