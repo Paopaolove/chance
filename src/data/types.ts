@@ -467,6 +467,28 @@ export interface ImprevuReport {
   jokerUsed?: boolean;
 }
 
+/**
+ * Photo d’un moment passé (après la rencontre, jamais avant).
+ * Le lieu, la table — pas un portrait. Max 2 par personne et par moment.
+ * Publiée sur les profils (section « Moments passés ») seulement quand
+ * TOUTES les autres personnes présentes ont accepté. Sinon privée
+ * (visible par l’auteur seul). Pas de like, pas de commentaire, pas de fil.
+ */
+export type MomentPhotoConsent = 'pending' | 'accepted' | 'declined';
+
+export interface MomentPhoto {
+  id: string;
+  outingId: string;
+  uploaderId: string;
+  uploaderName: string;
+  /** URI locale (image picker) ou `placeholder:…` (démo, dessin local). */
+  uri: string;
+  /** ISO UTC. */
+  createdAt: string;
+  /** Une entrée par autre personne présente (hôte + invités présents). */
+  consents: Record<string, MomentPhotoConsent>;
+}
+
 export interface AppToast {
   id: string;
   title: string;
@@ -515,6 +537,8 @@ export interface AppState {
   userReports: UserModerationReport[];
   /** Host id → avertissements partenaire (annulation / ne honore pas). */
   partnerWarningsByHost: Record<string, number>;
+  /** Photos de moments passés (profil seulement, jamais dans le fil). */
+  momentPhotos: MomentPhoto[];
 }
 
 export type DispoProfileUpdate = {
@@ -791,7 +815,25 @@ export type AppAction =
   /** Lieu : « Pas venu » sans arrivée → trace (le lapin passe par REPORT_GUEST_NO_SHOW). */
   | { type: 'MARK_PARTNER_ABSENT_AT'; payload: { requestId: string; at: string } }
   /** Silence des deux le lendemain → caution rendue (pas d’absence, pas de présence). */
-  | { type: 'RETURN_DEPOSIT_SILENCE'; payload: { requestId: string } };
+  | { type: 'RETURN_DEPOSIT_SILENCE'; payload: { requestId: string } }
+  /** Photo d’un moment terminé (auteur = participant présent). */
+  | { type: 'ADD_MOMENT_PHOTO'; payload: MomentPhoto }
+  /** L’auteur supprime sa photo (à tout moment). */
+  | { type: 'DELETE_MOMENT_PHOTO'; payload: { photoId: string } }
+  /** Accord / refus / retrait d’accord d’un participant. */
+  | {
+      type: 'SET_MOMENT_PHOTO_CONSENT';
+      payload: {
+        photoId: string;
+        userId: string;
+        consent: MomentPhotoConsent;
+      };
+    }
+  /** Démo QA : moment passé seedé (sortie terminée + présents + photos). */
+  | {
+      type: 'SEED_PAST_MOMENT';
+      payload: { outing: Outing; requests: Request[]; photos: MomentPhoto[] };
+    };
 
 /** Motif obligatoire si note personne 1 ou 2 (respect / rencontre). */
 export type LowStarReasonKind =

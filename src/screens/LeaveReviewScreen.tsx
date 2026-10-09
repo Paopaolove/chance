@@ -17,6 +17,8 @@ import { LowStarReasonKind } from '../data/types';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { useOpenUserProfile } from '../utils/openUserProfile';
+import { pickMomentPhoto } from '../utils/pickProfilePhoto';
+import { MOMENT_PHOTOS_MAX_PER_PERSON } from '../utils/momentPhotos';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'LeaveReview'>;
@@ -31,7 +33,13 @@ export function LeaveReviewScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
   const openProfile = useOpenUserProfile();
-  const { addReview, canLeaveReview, getMyReviewFor } = useChance();
+  const {
+    addReview,
+    canLeaveReview,
+    getMyReviewFor,
+    canAddMomentPhoto,
+    addMomentPhoto,
+  } = useChance();
   const { outingId, toUserId, toUserName } = route.params;
   const eligibility = canLeaveReview(outingId, toUserId);
   const [rating, setRating] = useState<1 | 2 | 3 | 4 | 5 | null>(null);
@@ -47,6 +55,20 @@ export function LeaveReviewScreen() {
   const [venueComment, setVenueComment] = useState('');
 
   const needsMotive = rating === 1 || rating === 2;
+  // Photo du moment : seulement après la rencontre (sortie terminée, présent).
+  const photoGate = canAddMomentPhoto(outingId);
+  const myPhotoCount = photoGate.ok
+    ? MOMENT_PHOTOS_MAX_PER_PERSON - photoGate.remaining
+    : MOMENT_PHOTOS_MAX_PER_PERSON;
+
+  const addPhotoThen = async (after?: () => void) => {
+    const uri = await pickMomentPhoto();
+    if (uri) {
+      const r = addMomentPhoto(outingId, uri);
+      if (!r.ok) Alert.alert('Impossible', 'La photo n’a pas pu être ajoutée.');
+    }
+    after?.();
+  };
 
   const onSubmit = () => {
     if (!rating) {
@@ -122,6 +144,20 @@ export function LeaveReviewScreen() {
       Alert.alert('Impossible', messages[result.reason] ?? result.reason);
       return;
     }
+    if (photoGate.ok) {
+      Alert.alert(
+        'Merci',
+        'Ton avis est publié. Ajouter une photo du moment ? Le lieu, la table. Pas un portrait.',
+        [
+          { text: 'Plus tard', style: 'cancel', onPress: () => navigation.goBack() },
+          {
+            text: 'Ajouter une photo du moment',
+            onPress: () => void addPhotoThen(() => navigation.goBack()),
+          },
+        ],
+      );
+      return;
+    }
     Alert.alert(
       'Merci',
       'Ton avis est publié. Les commentaires ne sont plus modifiables.',
@@ -154,6 +190,19 @@ export function LeaveReviewScreen() {
             }
             style={{ marginBottom: spacing.xl }}
           />
+          {photoGate.ok ? (
+            <View style={{ marginBottom: spacing.xl }}>
+              <Button
+                title="Ajouter une photo du moment"
+                variant="secondary"
+                onPress={() => void addPhotoThen()}
+              />
+              <Text style={styles.photoHint}>
+                Le lieu, la table. Pas un portrait. {myPhotoCount}/
+                {MOMENT_PHOTOS_MAX_PER_PERSON}
+              </Text>
+            </View>
+          ) : null}
           <Button title="Retour" onPress={() => navigation.goBack()} />
         </ScrollView>
       );
@@ -413,6 +462,11 @@ export function LeaveReviewScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.sm,
+  },
   scroll: { flex: 1, backgroundColor: colors.background },
   content: { padding: spacing.xl, paddingBottom: spacing.xxxl },
   hero: { ...typography.hero, color: colors.text, marginBottom: spacing.sm },

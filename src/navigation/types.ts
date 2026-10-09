@@ -29,8 +29,11 @@ export type MainTabParamList = {
   Feed: undefined;
   Create: CreateOutingParams | undefined;
   Requests: undefined;
-  /** focusSection: scroll to « Mes sorties à noter » (notif rate_after). */
-  Profile: { focusSection?: 'rate' } | undefined;
+  /**
+   * focusSection: scroll to « Mes moments » (notif rate_after) or
+   * « Moments passés » (notif moment_photo : photo à accepter).
+   */
+  Profile: { focusSection?: 'rate' | 'photos' } | undefined;
 };
 
 export type RootStackParamList = {

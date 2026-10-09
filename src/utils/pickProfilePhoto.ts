@@ -10,7 +10,7 @@ async function ensureLibraryPermission(): Promise<boolean> {
   if (asked.granted) return true;
   Alert.alert(
     'Accès photos refusé',
-    'Autorise l’accès à ta photothèque dans les réglages pour ajouter une photo de profil sur Moment.',
+    'Autorise l’accès à ta photothèque dans les réglages pour ajouter une photo sur Moment.',
   );
   return false;
 }
@@ -22,13 +22,14 @@ async function ensureCameraPermission(): Promise<boolean> {
   if (asked.granted) return true;
   Alert.alert(
     'Accès caméra refusé',
-    'Autorise l’accès à l’appareil photo dans les réglages pour prendre une photo de profil.',
+    'Autorise l’accès à l’appareil photo dans les réglages pour prendre une photo.',
   );
   return false;
 }
 
 async function launch(
   source: PhotoSource,
+  aspect: [number, number] = [1, 1],
 ): Promise<string | undefined> {
   const ok =
     source === 'library'
@@ -41,13 +42,13 @@ async function launch(
       ? await ImagePicker.launchImageLibraryAsync({
           mediaTypes: ['images'],
           allowsEditing: true,
-          aspect: [1, 1],
+          aspect,
           quality: 0.8,
         })
       : await ImagePicker.launchCameraAsync({
           mediaTypes: ['images'],
           allowsEditing: true,
-          aspect: [1, 1],
+          aspect,
           quality: 0.8,
         });
 
@@ -69,6 +70,34 @@ export function pickProfilePhoto(): Promise<string | undefined> {
         text: 'Appareil photo',
         onPress: () => {
           void launch('camera').then(resolve);
+        },
+      },
+      {
+        text: 'Annuler',
+        style: 'cancel',
+        onPress: () => resolve(undefined),
+      },
+    ]);
+  });
+}
+
+/**
+ * Photo d’un moment passé (après la rencontre) : le lieu, la table.
+ * Pas un portrait. Format 4:3, bibliothèque ou appareil photo.
+ */
+export function pickMomentPhoto(): Promise<string | undefined> {
+  return new Promise((resolve) => {
+    Alert.alert('Photo du moment', 'Le lieu, la table. Pas un portrait.', [
+      {
+        text: 'Bibliothèque',
+        onPress: () => {
+          void launch('library', [4, 3]).then(resolve);
+        },
+      },
+      {
+        text: 'Appareil photo',
+        onPress: () => {
+          void launch('camera', [4, 3]).then(resolve);
         },
       },
       {

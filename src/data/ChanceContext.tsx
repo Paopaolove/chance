@@ -24,6 +24,7 @@ import {
   Gender,
   LateReport,
   ImprevuMotive,
+  MomentPhoto,
   ImprevuReport,
   OnboardingInput,
   VenueAlternate,
@@ -112,6 +113,15 @@ import {
 } from '../utils/participationRights';
 import { makeVenueKey } from '../utils/venue';
 import {
+  momentParticipants,
+  momentPhotoStatus,
+  MOMENT_PHOTOS_MAX_PER_PERSON,
+  MOMENT_PHOTO_PLACEHOLDER_PREFIX,
+  requiredConsenters,
+  type MomentParticipant,
+  type MomentPhotoStatus,
+} from '../utils/momentPhotos';
+import {
   cancelScheduledNotificationIds,
   ensureAndroidChannel,
   scheduleAcceptedConfirmNotifications,
@@ -170,6 +180,7 @@ const initialState: AppState = {
   blockedUserIds: [],
   userReports: [],
   partnerWarningsByHost: {},
+  momentPhotos: [],
 };
 
 /** Paris neighborhoods default for a demo venue. */
@@ -835,6 +846,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         blockedUserIds: [],
         userReports: [],
         partnerWarningsByHost: {},
+        momentPhotos: [],
       };
 
     case 'ADD_CHAT_MESSAGE':
@@ -1746,6 +1758,51 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'ADD_MOMENT_PHOTO': {
+      const photo = action.payload;
+      const outing = state.outings.find((o) => o.id === photo.outingId);
+      // Jamais avant la rencontre : sortie terminée uniquement.
+      if (!outing || outing.status !== 'completed') return state;
+      const mine = state.momentPhotos.filter(
+        (p) =>
+          p.outingId === photo.outingId && p.uploaderId === photo.uploaderId,
+      );
+      if (mine.length >= MOMENT_PHOTOS_MAX_PER_PERSON) return state;
+      if (state.momentPhotos.some((p) => p.id === photo.id)) return state;
+      return { ...state, momentPhotos: [...state.momentPhotos, photo] };
+    }
+
+    case 'DELETE_MOMENT_PHOTO':
+      return {
+        ...state,
+        momentPhotos: state.momentPhotos.filter(
+          (p) => p.id !== action.payload.photoId,
+        ),
+      };
+
+    case 'SET_MOMENT_PHOTO_CONSENT': {
+      const { photoId, userId, consent } = action.payload;
+      return {
+        ...state,
+        momentPhotos: state.momentPhotos.map((p) =>
+          p.id === photoId && p.uploaderId !== userId
+            ? { ...p, consents: { ...p.consents, [userId]: consent } }
+            : p,
+        ),
+      };
+    }
+
+    case 'SEED_PAST_MOMENT': {
+      const { outing, requests, photos } = action.payload;
+      if (state.outings.some((o) => o.id === outing.id)) return state;
+      return {
+        ...state,
+        outings: [...state.outings, outing],
+        requests: [...state.requests, ...requests],
+        momentPhotos: [...state.momentPhotos, ...photos],
+      };
+    }
+
     default:
       return state;
   }
@@ -2219,6 +2276,77 @@ interface ChanceContextValue {
         winnerRequestId: string;
         loserRequestId: string;
       }
+    | { ok: false; reason: string };
+  /**
+   * Moments passés — photos après la rencontre (profil seulement).
+   * Participants = hôte + invités présents d’une sortie terminée.
+   */
+  getMomentParticipants: (outingId: string) => MomentParticipant[];
+  getMomentPhotoStatus: (photo: MomentPhoto) => MomentPhotoStatus;
+  canAddMomentPhoto: (
+    outingId: string,
+  ) =>
+    | { ok: true; remaining: number }
+    | {
+        ok: false;
+        reason:
+          | 'no_user'
+          | 'outing_not_found'
+          | 'not_completed'
+          | 'not_participant'
+          | 'limit';
+      };
+  addMomentPhoto: (
+    outingId: string,
+    uri: string,
+  ) => { ok: true; photoId: string } | { ok: false; reason: string };
+  /** Auteur seulement, à tout moment. */
+  deleteMomentPhoto: (
+    photoId: string,
+  ) => { ok: true } | { ok: false; reason: string };
+  /**
+   * Autre participant : « J’accepte » / « Non merci ». Retirer son accord
+   * plus tard = 'declined' → la photo redevient privée.
+   */
+  respondMomentPhoto: (
+    photoId: string,
+    decision: 'accepted' | 'declined',
+  ) => { ok: true } | { ok: false; reason: string };
+  /**
+   * Mes moments passés (Profil) : photos publiées + mes photos (avec statut).
+   * Les photos non publiées des autres ne sont jamais listées ici.
+   */
+  getMyPastMoments: () => {
+    outing: Outing;
+    participants: MomentParticipant[];
+    photos: { photo: MomentPhoto; status: MomentPhotoStatus; mine: boolean }[];
+  }[];
+  /** Profil d’une autre personne : moments avec au moins une photo publiée. */
+  getPublishedPastMomentsForUser: (userId: string) => {
+    outing: Outing;
+    photos: MomentPhoto[];
+  }[];
+  /** Photos d’autres participants qui attendent mon accord. */
+  getPendingMomentPhotoConsentsForMe: () => {
+    photo: MomentPhoto;
+    outing: Outing;
+  }[];
+  /** Démo QA : les autres personnes de la table acceptent / refusent ma photo. */
+  simulateOtherMomentPhotoResponse: (
+    decision: 'accepted' | 'declined',
+  ) =>
+    | { ok: true; outingTitle: string; names: string[] }
+    | { ok: false; reason: string };
+  /** Démo QA : quelqu’un de la table ajoute une photo → je dois accepter. */
+  simulateOtherAddsMomentPhoto: () =>
+    | { ok: true; outingTitle: string; uploaderName: string }
+    | { ok: false; reason: string };
+  /**
+   * Démo QA : un moment passé sur un profil mock (photo acceptée) + un moment
+   * passé avec moi (pour tester l’ajout de photo).
+   */
+  seedDemoPastMoments: () =>
+    | { ok: true; mockUserId: string; mockUserName: string }
     | { ok: false; reason: string };
   /** Demo: fire all priority notifications quickly (push + in-app fallback). */
   simulateLocalNotifications: (
@@ -5615,6 +5743,492 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.outings, state.requests],
   );
 
+  // ——— Moments passés : photos après la rencontre (profil seulement) ———
+
+  const getMomentParticipants = useCallback(
+    (outingId: string): MomentParticipant[] => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return [];
+      return momentParticipants(outing, state.requests);
+    },
+    [state.outings, state.requests],
+  );
+
+  const getMomentPhotoStatus = useCallback(
+    (photo: MomentPhoto): MomentPhotoStatus =>
+      momentPhotoStatus(
+        photo,
+        state.outings.find((o) => o.id === photo.outingId),
+        state.requests,
+      ),
+    [state.outings, state.requests],
+  );
+
+  const canAddMomentPhoto = useCallback(
+    (outingId: string) => {
+      const user = state.currentUser;
+      if (!user) return { ok: false as const, reason: 'no_user' as const };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) {
+        return { ok: false as const, reason: 'outing_not_found' as const };
+      }
+      // Pas avant la rencontre : uniquement une sortie terminée.
+      if (outing.status !== 'completed') {
+        return { ok: false as const, reason: 'not_completed' as const };
+      }
+      const people = momentParticipants(outing, state.requests);
+      if (!people.some((p) => p.userId === user.id)) {
+        return { ok: false as const, reason: 'not_participant' as const };
+      }
+      const mine = state.momentPhotos.filter(
+        (p) => p.outingId === outingId && p.uploaderId === user.id,
+      ).length;
+      if (mine >= MOMENT_PHOTOS_MAX_PER_PERSON) {
+        return { ok: false as const, reason: 'limit' as const };
+      }
+      return {
+        ok: true as const,
+        remaining: MOMENT_PHOTOS_MAX_PER_PERSON - mine,
+      };
+    },
+    [state.currentUser, state.outings, state.requests, state.momentPhotos],
+  );
+
+  const addMomentPhoto = useCallback(
+    (
+      outingId: string,
+      uri: string,
+    ): { ok: true; photoId: string } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      const gate = canAddMomentPhoto(outingId);
+      if (!gate.ok) return gate;
+      if (!user || !uri.trim()) return { ok: false, reason: 'invalid' };
+      const outing = state.outings.find((o) => o.id === outingId)!;
+      const others = momentParticipants(outing, state.requests).filter(
+        (p) => p.userId !== user.id,
+      );
+      const consents: MomentPhoto['consents'] = {};
+      for (const p of others) consents[p.userId] = 'pending';
+      const photo: MomentPhoto = {
+        id: uid('mphoto'),
+        outingId,
+        uploaderId: user.id,
+        uploaderName: user.firstName,
+        uri,
+        createdAt: new Date().toISOString(),
+        consents,
+      };
+      dispatch({ type: 'ADD_MOMENT_PHOTO', payload: photo });
+      // Les autres reçoivent une notif « J’accepte / Non merci » sur leur
+      // téléphone (backend à venir). Ici : simple bandeau pour l’auteur.
+      const names = others.map((p) => p.name).join(', ');
+      dispatch({
+        type: 'SET_TOAST',
+        payload: {
+          id: uid('toast'),
+          title: 'Photo envoyée pour accord',
+          body: `${names} ${
+            others.length > 1 ? 'doivent être d’accord' : 'doit être d’accord'
+          } pour qu’elle apparaisse sur vos profils. En attendant, elle reste privée.`,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      return { ok: true, photoId: photo.id };
+    },
+    [state.currentUser, state.outings, state.requests, canAddMomentPhoto],
+  );
+
+  const deleteMomentPhoto = useCallback(
+    (photoId: string): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const photo = state.momentPhotos.find((p) => p.id === photoId);
+      if (!photo) return { ok: false, reason: 'not_found' };
+      if (photo.uploaderId !== user.id) return { ok: false, reason: 'not_owner' };
+      dispatch({ type: 'DELETE_MOMENT_PHOTO', payload: { photoId } });
+      return { ok: true };
+    },
+    [state.currentUser, state.momentPhotos],
+  );
+
+  const respondMomentPhoto = useCallback(
+    (
+      photoId: string,
+      decision: 'accepted' | 'declined',
+    ): { ok: true } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const photo = state.momentPhotos.find((p) => p.id === photoId);
+      if (!photo) return { ok: false, reason: 'not_found' };
+      if (photo.uploaderId === user.id) return { ok: false, reason: 'own_photo' };
+      const outing = state.outings.find((o) => o.id === photo.outingId);
+      if (!outing) return { ok: false, reason: 'outing_not_found' };
+      const required = requiredConsenters(photo, outing, state.requests);
+      if (!required.some((p) => p.userId === user.id)) {
+        return { ok: false, reason: 'not_participant' };
+      }
+      dispatch({
+        type: 'SET_MOMENT_PHOTO_CONSENT',
+        payload: { photoId, userId: user.id, consent: decision },
+      });
+      return { ok: true };
+    },
+    [state.currentUser, state.momentPhotos, state.outings, state.requests],
+  );
+
+  const getMyPastMoments = useCallback(() => {
+    const user = state.currentUser;
+    if (!user) return [];
+    const items: {
+      outing: Outing;
+      participants: MomentParticipant[];
+      photos: {
+        photo: MomentPhoto;
+        status: MomentPhotoStatus;
+        mine: boolean;
+      }[];
+    }[] = [];
+    for (const outing of state.outings) {
+      const participants = momentParticipants(outing, state.requests);
+      if (!participants.some((p) => p.userId === user.id)) continue;
+      const photos = state.momentPhotos
+        .filter((p) => p.outingId === outing.id)
+        .map((photo) => ({
+          photo,
+          status: momentPhotoStatus(photo, outing, state.requests),
+          mine: photo.uploaderId === user.id,
+        }))
+        // Photo d’un autre non publiée : jamais affichée ici.
+        .filter((x) => x.mine || x.status === 'published')
+        .sort((a, b) => a.photo.createdAt.localeCompare(b.photo.createdAt));
+      items.push({ outing, participants, photos });
+    }
+    items.sort(
+      (a, b) =>
+        new Date(b.outing.startsAt).getTime() -
+        new Date(a.outing.startsAt).getTime(),
+    );
+    return items;
+  }, [state.currentUser, state.outings, state.requests, state.momentPhotos]);
+
+  const getPublishedPastMomentsForUser = useCallback(
+    (userId: string) => {
+      const items: { outing: Outing; photos: MomentPhoto[] }[] = [];
+      for (const outing of state.outings) {
+        const participants = momentParticipants(outing, state.requests);
+        if (!participants.some((p) => p.userId === userId)) continue;
+        const published = state.momentPhotos
+          .filter(
+            (p) =>
+              p.outingId === outing.id &&
+              momentPhotoStatus(p, outing, state.requests) === 'published',
+          )
+          .sort((a, b) => {
+            // Ses propres photos d’abord, puis les plus anciennes.
+            const ownA = a.uploaderId === userId ? 0 : 1;
+            const ownB = b.uploaderId === userId ? 0 : 1;
+            if (ownA !== ownB) return ownA - ownB;
+            return a.createdAt.localeCompare(b.createdAt);
+          })
+          // 1–2 photos par moment sur un profil : pas un mur d’images.
+          .slice(0, MOMENT_PHOTOS_MAX_PER_PERSON);
+        if (published.length) items.push({ outing, photos: published });
+      }
+      items.sort(
+        (a, b) =>
+          new Date(b.outing.startsAt).getTime() -
+          new Date(a.outing.startsAt).getTime(),
+      );
+      return items;
+    },
+    [state.outings, state.requests, state.momentPhotos],
+  );
+
+  const getPendingMomentPhotoConsentsForMe = useCallback(() => {
+    const user = state.currentUser;
+    if (!user) return [];
+    const items: { photo: MomentPhoto; outing: Outing }[] = [];
+    for (const photo of state.momentPhotos) {
+      if (photo.uploaderId === user.id) continue;
+      if ((photo.consents[user.id] ?? 'pending') !== 'pending') continue;
+      const outing = state.outings.find((o) => o.id === photo.outingId);
+      if (!outing) continue;
+      const required = requiredConsenters(photo, outing, state.requests);
+      if (!required.some((p) => p.userId === user.id)) continue;
+      items.push({ photo, outing });
+    }
+    items.sort((a, b) => a.photo.createdAt.localeCompare(b.photo.createdAt));
+    return items;
+  }, [state.currentUser, state.momentPhotos, state.outings, state.requests]);
+
+  const simulateOtherMomentPhotoResponse = useCallback(
+    (decision: 'accepted' | 'declined') => {
+      const user = state.currentUser;
+      if (!user) return { ok: false as const, reason: 'no_user' };
+      const mine = state.momentPhotos
+        .filter((p) => p.uploaderId === user.id)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      // Priorité : une photo encore en attente, sinon la plus récente.
+      const target =
+        mine.find((p) => {
+          const o = state.outings.find((x) => x.id === p.outingId);
+          return momentPhotoStatus(p, o, state.requests) === 'pending';
+        }) ?? mine[0];
+      if (!target) {
+        return {
+          ok: false as const,
+          reason: 'Ajoute d’abord une photo à un moment passé (Profil).',
+        };
+      }
+      const outing = state.outings.find((o) => o.id === target.outingId);
+      if (!outing) return { ok: false as const, reason: 'outing_not_found' };
+      const others = requiredConsenters(target, outing, state.requests);
+      for (const p of others) {
+        dispatch({
+          type: 'SET_MOMENT_PHOTO_CONSENT',
+          payload: { photoId: target.id, userId: p.userId, consent: decision },
+        });
+      }
+      const names = others.map((p) => p.name);
+      const who = names.join(', ');
+      const plural = names.length > 1;
+      dispatch({
+        type: 'SET_TOAST',
+        payload: {
+          id: uid('toast'),
+          title:
+            decision === 'accepted'
+              ? `${who} ${plural ? 'sont' : 'est'} d’accord`
+              : `${who} ${plural ? 'préfèrent' : 'préfère'} non`,
+          body:
+            decision === 'accepted'
+              ? `Ta photo de « ${outing.title} » apparaît sur vos profils.`
+              : `Ta photo de « ${outing.title} » reste privée.`,
+          createdAt: new Date().toISOString(),
+          type: 'moment_photo',
+          outingId: outing.id,
+        },
+      });
+      return { ok: true as const, outingTitle: outing.title, names };
+    },
+    [state.currentUser, state.momentPhotos, state.outings, state.requests],
+  );
+
+  /** Démo : construit une sortie terminée + présents (tous les ids figés). */
+  const buildDemoPastMoment = useCallback(
+    (input: {
+      idSuffix: string;
+      hostId: string;
+      guests: { userId: string; userName: string; userAge: number }[];
+      title: string;
+      category: OutingCategory;
+      venueName: string;
+      neighborhood: string;
+      daysAgo: number;
+    }) => {
+      const host = mockHosts.find((h) => h.id === input.hostId);
+      const starts = new Date();
+      starts.setDate(starts.getDate() - input.daysAgo);
+      starts.setHours(20, 0, 0, 0);
+      const outingId = `outing-past-${input.idSuffix}`;
+      const outing: Outing = {
+        id: outingId,
+        hostId: input.hostId,
+        hostName: host?.firstName ?? 'Quelqu’un',
+        hostAge: host?.age ?? 30,
+        hostGender: host?.gender,
+        title: input.title,
+        description: 'Moment passé (démo).',
+        category: input.category,
+        neighborhood: input.neighborhood,
+        venueName: input.venueName,
+        approxArea: input.neighborhood,
+        exactAddress: '',
+        startsAt: starts.toISOString(),
+        capacity: Math.min(3, Math.max(1, input.guests.length)) as 1 | 2 | 3,
+        spotsLeft: 0,
+        womenOnly: false,
+        budgetMaxEuros: 0,
+        status: 'completed',
+        createdAt: new Date(starts.getTime() - 2 * 86400000).toISOString(),
+      };
+      const requests: Request[] = input.guests.map((g, i) => ({
+        id: `req-past-${input.idSuffix}-${i}`,
+        outingId,
+        userId: g.userId,
+        userName: g.userName,
+        userAge: g.userAge,
+        message: '',
+        status: 'confirmed',
+        createdAt: outing.createdAt,
+        confirmedAt: outing.createdAt,
+        depositStatus: 'returned',
+        attendance: 'present',
+      }));
+      return { outing, requests };
+    },
+    [],
+  );
+
+  const simulateOtherAddsMomentPhoto = useCallback(() => {
+    const user = state.currentUser;
+    if (!user) return { ok: false as const, reason: 'no_user' };
+    // Mon moment passé le plus récent (où j’étais vraiment à table).
+    let outing = [...state.outings]
+      .filter((o) =>
+        momentParticipants(o, state.requests).some((p) => p.userId === user.id),
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime(),
+      )[0];
+    let extraRequests: Request[] = [];
+    let seedOuting: Outing | null = null;
+    if (!outing) {
+      const built = buildDemoPastMoment({
+        idSuffix: `me-${Date.now()}`,
+        hostId: 'host-3',
+        guests: [
+          { userId: user.id, userName: user.firstName, userAge: user.age },
+        ],
+        title: 'Expo photo puis café',
+        category: 'culture',
+        venueName: 'Le Bal',
+        neighborhood: 'Batignolles',
+        daysAgo: 2,
+      });
+      outing = built.outing;
+      seedOuting = built.outing;
+      extraRequests = built.requests;
+    }
+    const requests = [...state.requests, ...extraRequests];
+    const people = momentParticipants(outing, requests);
+    const uploader = people.find((p) => p.userId !== user.id);
+    if (!uploader) return { ok: false as const, reason: 'no_other' };
+    const already = state.momentPhotos.filter(
+      (p) => p.outingId === outing!.id && p.uploaderId === uploader.userId,
+    ).length;
+    if (already >= MOMENT_PHOTOS_MAX_PER_PERSON) {
+      return {
+        ok: false as const,
+        reason: `${uploader.name} a déjà ajouté 2 photos à ce moment.`,
+      };
+    }
+    const consents: MomentPhoto['consents'] = {};
+    for (const p of people) {
+      if (p.userId === uploader.userId) continue;
+      // Les autres mocks ont déjà dit oui : seul mon accord manque.
+      consents[p.userId] = p.userId === user.id ? 'pending' : 'accepted';
+    }
+    const photo: MomentPhoto = {
+      id: uid('mphoto'),
+      outingId: outing.id,
+      uploaderId: uploader.userId,
+      uploaderName: uploader.name,
+      uri: `${MOMENT_PHOTO_PLACEHOLDER_PREFIX}table`,
+      createdAt: new Date().toISOString(),
+      consents,
+    };
+    if (seedOuting) {
+      dispatch({
+        type: 'SEED_PAST_MOMENT',
+        payload: { outing: seedOuting, requests: extraRequests, photos: [photo] },
+      });
+    } else {
+      dispatch({ type: 'ADD_MOMENT_PHOTO', payload: photo });
+    }
+    const title = `${uploader.name} a ajouté une photo`;
+    const body = `${uploader.name} a ajouté une photo de votre moment « ${outing.title} ». Tu es d’accord pour qu’elle apparaisse sur vos profils ?`;
+    void (async () => {
+      void ensureAndroidChannel();
+      const push = await sendPriorityPush({
+        type: 'moment_photo',
+        title,
+        body,
+        data: { outingId: outing!.id },
+      });
+      dispatch({
+        type: 'SET_TOAST',
+        payload: {
+          id: uid('toast'),
+          title,
+          body,
+          createdAt: new Date().toISOString(),
+          type: 'moment_photo',
+          outingId: outing!.id,
+        },
+      });
+      void push;
+    })();
+    return {
+      ok: true as const,
+      outingTitle: outing.title,
+      uploaderName: uploader.name,
+    };
+  }, [
+    state.currentUser,
+    state.outings,
+    state.requests,
+    state.momentPhotos,
+    buildDemoPastMoment,
+  ]);
+
+  const seedDemoPastMoments = useCallback(() => {
+    const user = state.currentUser;
+    // 1) Profil mock : Nina (hôte) + Camille, une photo de la table acceptée.
+    const mock = buildDemoPastMoment({
+      idSuffix: 'mock-nina',
+      hostId: 'host-2',
+      guests: [{ userId: 'host-4', userName: 'Camille', userAge: 29 }],
+      title: 'Vin nature à Oberkampf',
+      category: 'bar',
+      venueName: 'Le Siffleur',
+      neighborhood: 'Oberkampf',
+      daysAgo: 6,
+    });
+    const camille = mockHosts.find((h) => h.id === 'host-4');
+    if (camille) mock.requests[0].userAge = camille.age;
+    const mockPhoto: MomentPhoto = {
+      id: 'mphoto-demo-nina-1',
+      outingId: mock.outing.id,
+      uploaderId: 'host-4',
+      uploaderName: camille?.firstName ?? 'Camille',
+      uri: `${MOMENT_PHOTO_PLACEHOLDER_PREFIX}table`,
+      createdAt: new Date(
+        new Date(mock.outing.startsAt).getTime() + 3 * 3600000,
+      ).toISOString(),
+      consents: { 'host-2': 'accepted' },
+    };
+    dispatch({
+      type: 'SEED_PAST_MOMENT',
+      payload: { ...mock, photos: [mockPhoto] },
+    });
+    // 2) Un moment passé avec moi (Thomas hôte), sans photo : pour tester l’ajout.
+    if (user) {
+      const withMe = buildDemoPastMoment({
+        idSuffix: `me-thomas`,
+        hostId: 'host-3',
+        guests: [
+          { userId: user.id, userName: user.firstName, userAge: user.age },
+        ],
+        title: 'Dîner au comptoir',
+        category: 'restaurant',
+        venueName: 'Le Petit Vendôme',
+        neighborhood: 'Opéra',
+        daysAgo: 1,
+      });
+      dispatch({
+        type: 'SEED_PAST_MOMENT',
+        payload: { ...withMe, photos: [] },
+      });
+    }
+    return {
+      ok: true as const,
+      mockUserId: 'host-2',
+      mockUserName: mockHosts.find((h) => h.id === 'host-2')?.firstName ?? 'Nina',
+    };
+  }, [state.currentUser, buildDemoPastMoment]);
+
   const simulateLocalNotifications = useCallback(
     async (outingTitle?: string) => {
       void ensureAndroidChannel();
@@ -5714,6 +6328,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       partnerMarkNoShow,
       simulatePartnerGuestConfirms,
       simulatePartnerNextDay,
+      getMomentParticipants,
+      getMomentPhotoStatus,
+      canAddMomentPhoto,
+      addMomentPhoto,
+      deleteMomentPhoto,
+      respondMomentPhoto,
+      getMyPastMoments,
+      getPublishedPastMomentsForUser,
+      getPendingMomentPhotoConsentsForMe,
+      simulateOtherMomentPhotoResponse,
+      simulateOtherAddsMomentPhoto,
+      seedDemoPastMoments,
     }),
     [
       state,
@@ -5803,6 +6429,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       partnerMarkNoShow,
       simulatePartnerGuestConfirms,
       simulatePartnerNextDay,
+      getMomentParticipants,
+      getMomentPhotoStatus,
+      canAddMomentPhoto,
+      addMomentPhoto,
+      deleteMomentPhoto,
+      respondMomentPhoto,
+      getMyPastMoments,
+      getPublishedPastMomentsForUser,
+      getPendingMomentPhotoConsentsForMe,
+      simulateOtherMomentPhotoResponse,
+      simulateOtherAddsMomentPhoto,
+      seedDemoPastMoments,
     ],
   );
 

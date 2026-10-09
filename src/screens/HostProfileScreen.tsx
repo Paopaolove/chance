@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
+import { PublicPastMoment } from '../components/MomentPhotos';
 import { useChance } from '../data/ChanceContext';
 import { mockHosts } from '../data/mockOutings';
 import { OutingCategory } from '../data/types';
@@ -43,6 +44,7 @@ export function HostProfileScreen() {
     blockUser,
     isBlocked,
     peopleDispo,
+    getPublishedPastMomentsForUser,
   } = useChance();
   const [reportReason, setReportReason] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
@@ -68,6 +70,8 @@ export function HostProfileScreen() {
   const photoUri = host?.photoUri;
 
   const reviews = getReviewsForUser(userId);
+  // Photos publiées seulement (toute la table d’accord). Profil uniquement.
+  const pastMoments = getPublishedPastMomentsForUser(userId);
   const stats = getRatingStats(userId);
   const isNew = stats.outingCount <= 0 || stats.average == null;
   const photoSize = Math.max(72, hostPhotoSize(state.currentUser));
@@ -339,6 +343,19 @@ export function HostProfileScreen() {
           );
         })
       )}
+
+      {pastMoments.length ? (
+        <View style={styles.pastSection}>
+          <Text style={styles.sectionTitle}>Moments passés</Text>
+          {pastMoments.map((m) => (
+            <PublicPastMoment
+              key={m.outing.id}
+              outing={m.outing}
+              photos={m.photos}
+            />
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -409,6 +426,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   section: { marginBottom: spacing.md },
+  pastSection: { marginTop: spacing.xxl },
   sectionTitle: {
     ...typography.subtitle,
     fontFamily: fonts.semiBold,

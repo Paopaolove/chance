@@ -57,6 +57,9 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     setPartnerPinned,
     simulatePartnerGuestConfirms,
     simulatePartnerNextDay,
+    seedDemoPastMoments,
+    simulateOtherAddsMomentPhoto,
+    simulateOtherMomentPhotoResponse,
   } = useChance();
 
   const me = state.currentUser;
@@ -686,6 +689,73 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                     ? `${res.refunded} caution(s) rendue(s) — silence des deux, aucune pénalité.`
                     : res.reason,
                 );
+              })
+            }
+            style={styles.btn}
+          />
+
+          <Text style={styles.section}>Moments passés (photos)</Text>
+          <Text style={styles.sectionHint}>
+            Photos après le moment, profil seulement. Publiées quand toute
+            la table est d’accord.
+          </Text>
+          <Button
+            title="Seed : moment passé avec photo acceptée (Nina)"
+            variant="secondary"
+            disabled={busy}
+            onPress={() =>
+              run('Moment passé', () => {
+                const r = seedDemoPastMoments();
+                if (!r.ok) {
+                  Alert.alert('Démo', r.reason);
+                  return;
+                }
+                onClose();
+                setTimeout(() => {
+                  if (!navigationRef.isReady()) return;
+                  navigationRef.navigate('HostProfile', { userId: r.mockUserId });
+                }, 0);
+                Alert.alert(
+                  'Moment passé (démo)',
+                  `Profil de ${r.mockUserName} : « Moments passés » avec une photo acceptée. Un moment passé avec toi est aussi dans ton Profil, pour tester l’ajout.`,
+                );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="L’autre ajoute une photo (à accepter)"
+            variant="secondary"
+            disabled={busy || !me}
+            onPress={() =>
+              run('Photo de l’autre', () => {
+                const r = simulateOtherAddsMomentPhoto();
+                if (!r.ok) Alert.alert('Démo', r.reason);
+                else onClose();
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="L’autre accepte la photo"
+            variant="ghost"
+            disabled={busy || !me}
+            onPress={() =>
+              run('Accord photo', () => {
+                const r = simulateOtherMomentPhotoResponse('accepted');
+                if (!r.ok) Alert.alert('Démo', r.reason);
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="L’autre refuse la photo"
+            variant="ghost"
+            disabled={busy || !me}
+            onPress={() =>
+              run('Refus photo', () => {
+                const r = simulateOtherMomentPhotoResponse('declined');
+                if (!r.ok) Alert.alert('Démo', r.reason);
               })
             }
             style={styles.btn}

@@ -37,6 +37,13 @@ function goProfileRate(nav: Nav) {
   nav.navigate('MainTabs', { screen: 'Profile', params: { focusSection: 'rate' } });
 }
 
+function goProfilePhotos(nav: Nav) {
+  nav.navigate('MainTabs', {
+    screen: 'Profile',
+    params: { focusSection: 'photos' },
+  });
+}
+
 function goOuting(nav: Nav, outingId: string) {
   nav.navigate('OutingDetail', { outingId });
 }
@@ -205,6 +212,12 @@ export function openNotificationTarget(
         );
       }
       goProfileRate(nav);
+      return;
+    }
+
+    case 'moment_photo': {
+      // Photos de moments passés : uniquement dans le Profil (jamais le fil).
+      goProfilePhotos(nav);
       return;
     }
 

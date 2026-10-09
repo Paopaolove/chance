@@ -11,6 +11,10 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { genderLabel } from '../components/GenderPills';
 import { GivenReviewSummary } from '../components/GivenReviewSummary';
+import {
+  MomentPhotoConsentCard,
+  OwnPastMoment,
+} from '../components/MomentPhotos';
 import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import { mergeProfileTags } from '../data/interests';
@@ -29,7 +33,7 @@ import {
   outingCreditsOf,
   trialDaysRemaining,
 } from '../utils/subscription';
-import { pickProfilePhoto } from '../utils/pickProfilePhoto';
+import { pickMomentPhoto, pickProfilePhoto } from '../utils/pickProfilePhoto';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import {
   PARTNER_CULTURE_MAX_SAME_EVENING,
@@ -49,6 +53,7 @@ export function ProfileScreen() {
   const route = useRoute<ProfileRoute>();
   const scrollRef = useRef<ScrollView>(null);
   const rateSectionY = useRef(0);
+  const photosSectionY = useRef(0);
   const {
     state,
     getActiveOutingForUser,
@@ -59,16 +64,24 @@ export function ProfileScreen() {
     getCompletedOutingsMissingPresent,
     demoMarkConfirmedPresent,
     hasJokerAvailable,
+    getMyPastMoments,
+    getPendingMomentPhotoConsentsForMe,
+    canAddMomentPhoto,
+    addMomentPhoto,
+    deleteMomentPhoto,
+    respondMomentPhoto,
   } = useChance();
   const user = state.currentUser;
   const active = getActiveOutingForUser();
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (route.params?.focusSection !== 'rate') return;
+    const focus = route.params?.focusSection;
+    if (focus !== 'rate' && focus !== 'photos') return;
     const t = setTimeout(() => {
+      const y = focus === 'photos' ? photosSectionY.current : rateSectionY.current;
       scrollRef.current?.scrollTo({
-        y: Math.max(0, rateSectionY.current - 24),
+        y: Math.max(0, y - 24),
         animated: true,
       });
       // Clear so a later rate_after tap can scroll again
@@ -132,6 +145,27 @@ export function ProfileScreen() {
     user.neighborhood,
   ].filter(Boolean);
   const displayTags = mergeProfileTags(user.interests, user.customFilters);
+
+  const pastMoments = getMyPastMoments();
+  const pendingConsents = getPendingMomentPhotoConsentsForMe();
+  const nextConsent = pendingConsents[0];
+
+  const onAddMomentPhoto = async (outingId: string) => {
+    const gate = canAddMomentPhoto(outingId);
+    if (!gate.ok) {
+      Alert.alert(
+        'Impossible',
+        gate.reason === 'limit'
+          ? 'Deux photos maximum par moment.'
+          : 'Les photos s’ajoutent seulement après un moment terminé, si tu y étais.',
+      );
+      return;
+    }
+    const uri = await pickMomentPhoto();
+    if (!uri) return;
+    const r = addMomentPhoto(outingId, uri);
+    if (!r.ok) Alert.alert('Impossible', 'La photo n’a pas pu être ajoutée.');
+  };
 
   const onPickPhoto = async () => {
     const uri = await pickProfilePhoto();
@@ -315,6 +349,46 @@ export function ProfileScreen() {
           ) : (
             <Text style={styles.cardHint}>Aucun centre d’intérêt pour l’instant.</Text>
           )}
+        </View>
+
+        <View
+          onLayout={(e) => {
+            photosSectionY.current = e.nativeEvent.layout.y;
+          }}
+        >
+          {nextConsent ? (
+            <MomentPhotoConsentCard
+              photo={nextConsent.photo}
+              outing={nextConsent.outing}
+              remaining={pendingConsents.length - 1}
+              onAccept={() => respondMomentPhoto(nextConsent.photo.id, 'accepted')}
+              onDecline={() => respondMomentPhoto(nextConsent.photo.id, 'declined')}
+            />
+          ) : null}
+          {pastMoments.length ? (
+            <View style={styles.pastSection}>
+              <Text style={styles.pastTitle}>Moments passés</Text>
+              <Text style={styles.pastHint}>
+                Une photo apparaît sur vos profils quand toute la table est
+                d’accord.
+              </Text>
+              {pastMoments.map((m) => {
+                const myCount = m.photos.filter((p) => p.mine).length;
+                return (
+                  <OwnPastMoment
+                    key={m.outing.id}
+                    outing={m.outing}
+                    photos={m.photos}
+                    myPhotoCount={myCount}
+                    canAdd={canAddMomentPhoto(m.outing.id).ok}
+                    onAdd={() => void onAddMomentPhoto(m.outing.id)}
+                    onDelete={(id) => deleteMomentPhoto(id)}
+                    onWithdraw={(id) => respondMomentPhoto(id, 'declined')}
+                  />
+                );
+              })}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -955,6 +1029,18 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 4,
+  },
+  pastSection: { marginBottom: spacing.md },
+  pastTitle: {
+    ...typography.subtitle,
+    color: colors.text,
+    marginTop: spacing.sm,
+  },
+  pastHint: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: 4,
+    marginBottom: spacing.md,
   },
   sortieSection: {
     ...typography.bodyStrong,

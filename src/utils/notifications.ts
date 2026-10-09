@@ -23,7 +23,9 @@ export type PriorityNotifType =
   | 'imprevu'
   | 'cancellation'
   | 'new_venue'
-  | 'rate_after';
+  | 'rate_after'
+  /** Photo d’un moment passé à accepter (ou réponse à ma photo) → Profil. */
+  | 'moment_photo';
 
 export type ScheduledNotifIds = {
   accepted?: string;
