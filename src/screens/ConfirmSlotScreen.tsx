@@ -108,7 +108,7 @@ export function ConfirmSlotScreen() {
           </Text>
         </View>
         <Button
-          title="Voir la sortie"
+          title="Voir le moment"
           onPress={() =>
             navigation.replace('OutingDetail', { outingId: outing.id })
           }

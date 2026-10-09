@@ -121,7 +121,7 @@ export function HostProfileScreen() {
 
       {activeOuting ? (
         <Button
-          title="Voir sa sortie"
+          title="Voir son moment"
           variant="ghost"
           onPress={() =>
             navigation.navigate('OutingDetail', { outingId: activeOuting.id })
@@ -145,7 +145,7 @@ export function HostProfileScreen() {
         const slotPrefill = dispoSlotCreatePrefill(slot);
         return (
           <Button
-            title={`Proposer une sortie à ${firstName}`}
+            title={`Proposer un moment à ${firstName}`}
             onPress={() =>
               navigation.navigate('MainTabs', {
                 screen: 'Create',

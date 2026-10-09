@@ -92,7 +92,7 @@ export function ChatPlaceholderScreen() {
   if (!outing) {
     return (
       <View style={styles.center}>
-        <Text style={styles.body}>Sortie introuvable.</Text>
+        <Text style={styles.body}>Moment introuvable.</Text>
       </View>
     );
   }

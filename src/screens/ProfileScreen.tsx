@@ -670,7 +670,7 @@ export function ProfileScreen() {
             <Text style={styles.cardHint}>
               {outingCreditsOf(user) > 0
                 ? `${outingCreditsOf(user)} sortie(s) créditée(s)`
-                : 'Aucune sortie créditée — rachète pour confirmer'}
+                : 'Aucun moment crédité — rachète pour confirmer'}
             </Text>
           ) : null}
           <Button
@@ -769,7 +769,7 @@ export function ProfileScreen() {
                           </Text>
                         </Pressable>
                         <Button
-                          title="Noter la sortie"
+                          title="Noter le moment"
                           variant="secondary"
                           onPress={() =>
                             navigation.navigate('LeaveReview', {

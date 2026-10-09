@@ -356,7 +356,7 @@ export function CreateOutingScreen() {
     }
     if (prefill.categoryDetail != null) setCategoryDetail(prefill.categoryDetail);
     if (prefill.neighborhood) setNeighborhood(prefill.neighborhood);
-    // Do not prefill J'invite jusqu'à from Dispo guest budget.
+    // Do not prefill J’invite jusqu’à from Dispo guest budget.
     if (prefill.topic != null) setTopic(prefill.topic);
     if (prefill.excludedTopics != null) setExcludedTopics(prefill.excludedTopics);
     if (prefill.flexibleSlot != null) setFlexibleSlot(!!prefill.flexibleSlot);
@@ -693,7 +693,7 @@ export function CreateOutingScreen() {
             </Text>
           </View>
           <Button
-            title="Voir la sortie"
+            title="Voir le moment"
             variant="secondary"
             onPress={() =>
               navigation.navigate('OutingDetail', { outingId: active.id })
@@ -1066,9 +1066,9 @@ export function CreateOutingScreen() {
 
         {isPaidInviteCategory(category) ? (
           <>
-            <Text style={styles.label}>J'invite jusqu'à *</Text>
+            <Text style={styles.label}>J’invite jusqu’à *</Text>
             <Text style={styles.inviteHint}>
-              J'invite jusqu'à ce montant, réglé sur place.
+              J’invite jusqu’à ce montant, réglé sur place.
             </Text>
             <PillsWithOther
               look="outline"
@@ -1135,7 +1135,7 @@ export function CreateOutingScreen() {
           </>
         )}
 
-        <Text style={styles.label}>Ce que j'offre (optionnel)</Text>
+        <Text style={styles.label}>Ce que j’offre (optionnel)</Text>
         <TextInput
           selectionColor={colors.primary}
           cursorColor={colors.primary}

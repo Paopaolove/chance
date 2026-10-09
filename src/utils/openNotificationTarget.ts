@@ -105,7 +105,7 @@ export function openNotificationTarget(
 
     case 'confirmed': {
       if (outing?.status === 'cancelled') {
-        Alert.alert('Sortie annulée', 'Cette sortie a été annulée.');
+        Alert.alert('Moment annulé', 'Ce moment a été annulé.');
         goOuting(nav, outing.id);
         return;
       }
@@ -144,7 +144,7 @@ export function openNotificationTarget(
         return;
       }
       if (outing?.status === 'cancelled') {
-        Alert.alert('Sortie annulée', 'Cette sortie a été annulée.');
+        Alert.alert('Moment annulé', 'Ce moment a été annulé.');
       }
       goOuting(nav, oid);
       return;
@@ -157,7 +157,7 @@ export function openNotificationTarget(
         return;
       }
       if (outing?.status === 'cancelled') {
-        Alert.alert('Sortie annulée', 'Cette sortie a été annulée.');
+        Alert.alert('Moment annulé', 'Ce moment a été annulé.');
         goOuting(nav, oid);
         return;
       }
@@ -177,7 +177,7 @@ export function openNotificationTarget(
         return;
       }
       if (outing?.status === 'cancelled') {
-        Alert.alert('Sortie annulée', 'Cette sortie a été annulée.');
+        Alert.alert('Moment annulé', 'Ce moment a été annulé.');
       }
       goOuting(nav, oid);
       return;

@@ -110,7 +110,7 @@ export function OutingDetailScreen() {
   if (!outing) {
     return (
       <View style={styles.missing}>
-        <Text style={styles.missingText}>Sortie introuvable.</Text>
+        <Text style={styles.missingText}>Moment introuvable.</Text>
       </View>
     );
   }
@@ -424,10 +424,10 @@ export function OutingDetailScreen() {
         <Text style={styles.inviteLine}>
           {partner
             ? `${outing.hostName} · Partenaire${partnerChips.length ? ` · ${partnerChips.join(' · ')}` : ''}`
-            : `${outing.hostName} t'invite${
+            : `${outing.hostName} t’invite${
                 outing.budgetMaxEuros <= 0
                   ? ' · Gratuit'
-                  : ` · jusqu'à ${outing.budgetMaxEuros} €`
+                  : ` · jusqu’à ${outing.budgetMaxEuros} €`
               }`}
         </Text>
       </Pressable>
@@ -512,7 +512,7 @@ export function OutingDetailScreen() {
               ? `${partnerChips.join(' + ') || 'Offre du lieu'} — chacun règle le reste de sa part sur place (pas via l’app).`
               : outing.budgetMaxEuros <= 0
                 ? 'Sortie gratuite — réglée sur place, pas via l’app.'
-                : `J'invite jusqu'à ${outing.budgetMaxEuros} € par personne, réglé sur place au lieu (pas via l'app). Au-delà = hors invitation.`}
+                : `J’invite jusqu’à ${outing.budgetMaxEuros} € par personne, réglé sur place au lieu (pas via l’app). Au-delà = hors invitation.`}
         </Text>
         {partner ? (
           <Text style={[styles.hint, { marginTop: spacing.sm }]}>
@@ -643,7 +643,7 @@ export function OutingDetailScreen() {
                 }}
               />
               <Button
-                title="Annuler la sortie"
+                title="Annuler le moment"
                 variant="danger"
                 onPress={() => {
                   const hasConfirmed = incomingRequests.some(
@@ -665,7 +665,7 @@ export function OutingDetailScreen() {
                         onPress: () => {
                           const res = cancelOuting(outing.id);
                           if (res.ok) {
-                            Alert.alert('Sortie annulée', 'Cautions rendues si besoin (mock).');
+                            Alert.alert('Moment annulé', 'Cautions rendues si besoin (mock).');
                             navigation.goBack();
                           }
                         },

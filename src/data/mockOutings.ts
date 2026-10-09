@@ -423,7 +423,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'femme',
     title: 'Dîner simple au Marais',
     description:
-      "J'invite jusqu'à 45 € au resto — pasta + un verre, réglé sur place. Au-delà = hors invitation.",
+      "J’invite jusqu’à 45 € au resto — pasta + un verre, réglé sur place. Au-delà = hors invitation.",
     category: 'restaurant',
     neighborhood: 'Le Marais',
     venueName: 'Trattoria du pont',
@@ -447,7 +447,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'femme',
     title: 'Apéro vin nature Oberkampf',
     description:
-      "Apéro vin nature — J'invite jusqu'à 20 € par personne, réglé au bar. Au-delà = hors invitation.",
+      "Apéro vin nature — J’invite jusqu’à 20 € par personne, réglé au bar. Au-delà = hors invitation.",
     category: 'bar',
     neighborhood: 'Oberkampf',
     venueName: 'Cave du coin',
@@ -470,7 +470,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'homme',
     title: 'Jazz & bière à Bastille',
     description:
-      "Jazz live — J'invite jusqu'à 20 € (entrée + une bière). Billets déjà pris.",
+      "Jazz live — J’invite jusqu’à 20 € (entrée + une bière). Billets déjà pris.",
     category: 'culture',
     neighborhood: 'Bastille',
     venueName: 'Cave à jazz',
@@ -560,7 +560,7 @@ export const mockOutings: Outing[] = [
     hostGender: 'homme',
     title: 'Pièce de théâtre Opéra',
     description:
-      "Place théâtre offerte (billets déjà achetés). J'invite jusqu'à 12 € pour un verre après.",
+      "Place théâtre offerte (billets déjà achetés). J’invite jusqu’à 12 € pour un verre après.",
     category: 'culture',
     neighborhood: 'Opéra',
     venueName: 'Théâtre du Passage',
@@ -697,16 +697,16 @@ export const BUDGET_MIN_EUROS = 5;
 export const BUDGET_MAX_EUROS = 50;
 
 export const budgetChipLabel = (euros: number): string =>
-  euros <= 0 ? 'Gratuit' : `J'invite jusqu'à ${euros} €`;
+  euros <= 0 ? 'Gratuit' : `J’invite jusqu’à ${euros} €`;
 
-/** Card / detail line: {firstName} t'invite · {venue} · jusqu'à X € (or Gratuit). */
+/** Card / detail line: {firstName} t’invite · {venue} · jusqu’à X € (or Gratuit). */
 export const inviteOfferLine = (
   firstName: string,
   venue: string,
   euros: number,
 ): string => {
-  const cap = euros <= 0 ? 'Gratuit' : `jusqu'à ${euros} €`;
-  return `${firstName} t'invite · ${venue} · ${cap}`;
+  const cap = euros <= 0 ? 'Gratuit' : `jusqu’à ${euros} €`;
+  return `${firstName} t’invite · ${venue} · ${cap}`;
 };
 
 /** @deprecated Import from `./pricing` — re-exported for compatibility. */

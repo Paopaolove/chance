@@ -141,7 +141,7 @@ export function ImprevuScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {otherHeader}
         <Text style={styles.title}>Imprévu déjà signalé</Text>
-        <Text style={styles.body}>Une seule fois par personne et par sortie.</Text>
+        <Text style={styles.body}>Une seule fois par personne et par moment.</Text>
         <View style={styles.card}>
           <Text style={styles.section}>Statut</Text>
           <Text style={styles.bodyStrong}>{statusLabel}</Text>
