@@ -11,7 +11,7 @@ import { ImprevuScreen } from '../screens/ImprevuScreen';
 import { ConfirmSlotScreen } from '../screens/ConfirmSlotScreen';
 import { DispoSoirScreen } from '../screens/DispoSoirScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
-import { OnboardingScreen } from '../screens/OnboardingScreen';
+import { AccountScreen, OnboardingScreen } from '../screens/OnboardingScreen';
 import { OutingDetailScreen } from '../screens/OutingDetailScreen';
 import { PaywallScreen } from '../screens/PaywallScreen';
 import { PartnerApplyScreen } from '../screens/PartnerApplyScreen';
@@ -58,7 +58,7 @@ export function RootNavigator() {
           contentStyle: { backgroundColor: colors.background },
         }}
       >
-        {!state.onboardingDone || !state.currentUser ? (
+        {!state.slidesSeen && !state.currentUser ? (
           <Stack.Screen
             name="Onboarding"
             component={OnboardingScreen}
@@ -70,6 +70,11 @@ export function RootNavigator() {
               name="MainTabs"
               component={MainTabs}
               options={{ headerShown: false, headerBackTitle: 'Retour', title: 'Retour' }}
+            />
+            <Stack.Screen
+              name="Account"
+              component={AccountScreen}
+              options={{ headerShown: false, presentation: 'fullScreenModal' }}
             />
             <Stack.Screen
               name="OutingDetail"

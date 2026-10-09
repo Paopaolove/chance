@@ -166,6 +166,7 @@ function withRestoredSeat(o: Outing): Outing {
 
 const initialState: AppState = {
   onboardingDone: false,
+  slidesSeen: false,
   currentUser: null,
   outings: mockOutings,
   requests: [],
@@ -226,9 +227,13 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         onboardingDone: true,
+        slidesSeen: true,
         currentUser: action.payload,
         entryIntent: action.entryIntent,
       };
+
+    case 'SEE_SLIDES':
+      return { ...state, slidesSeen: true };
 
     case 'CLEAR_ENTRY_INTENT':
       return {
@@ -421,6 +426,8 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'JOIN_OUTING': {
+      // Fil avant le compte : pas de demande sans compte.
+      if (!state.currentUser) return state;
       const outing = state.outings.find((o) => o.id === action.payload.outingId);
       if (!outing || outing.status !== 'open' || outing.spotsLeft < 1) {
         return state;
@@ -1868,6 +1875,8 @@ type CreateOutingFailReason =
 interface ChanceContextValue {
   state: AppState;
   completeOnboarding: (input: OnboardingInput) => void;
+  /** Slides vues → fil visible sans compte. */
+  markSlidesSeen: () => void;
   clearEntryIntent: () => void;
   registerAccount: (email: string) => void;
   setPermissions: (input: {
@@ -2485,6 +2494,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         entryIntent,
       });
     }, []);
+
+  const markSlidesSeen = useCallback(() => {
+    dispatch({ type: 'SEE_SLIDES' });
+  }, []);
 
   const clearEntryIntent = useCallback(() => {
     dispatch({ type: 'CLEAR_ENTRY_INTENT' });
@@ -6257,6 +6270,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     () => ({
       state,
       completeOnboarding,
+      markSlidesSeen,
       clearEntryIntent,
       registerAccount,
       setPermissions,
@@ -6358,6 +6372,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [
       state,
       completeOnboarding,
+      markSlidesSeen,
       clearEntryIntent,
       registerAccount,
       setPermissions,

@@ -9,6 +9,8 @@ import { FeedScreen } from '../screens/FeedScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { RequestsScreen } from '../screens/RequestsScreen';
 import { colors, fonts } from '../theme';
+import { openAccountFlow } from './accountGate';
+import { navigationRef } from './navigationRef';
 import { MainTabParamList, RootStackParamList } from './types';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -85,6 +87,17 @@ export function MainTabs() {
         name="Create"
         component={CreateOutingScreen}
         options={{ title: 'Publier' }}
+        listeners={{
+          tabPress: (e) => {
+            // Sans compte : Publier ouvre le tunnel, puis l’onglet.
+            if (!state.currentUser) {
+              e.preventDefault();
+              openAccountFlow(() =>
+                navigationRef.navigate('MainTabs', { screen: 'Create' }),
+              );
+            }
+          },
+        }}
       />
       <Tab.Screen
         name="Requests"

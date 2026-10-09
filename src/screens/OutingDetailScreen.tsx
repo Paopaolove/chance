@@ -1,4 +1,5 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { openAccountFlow } from '../navigation/accountGate';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
 import {
@@ -144,6 +145,12 @@ export function OutingDetailScreen() {
   // Premier moment : téléphone (et photo proposée) avant la 1re demande.
   // « Femmes uniquement » sans genre femme : on explique d’abord, sans feuille.
   const onJoin = () => {
+    // Fil avant le compte : le compte se demande au moment de rejoindre.
+    // Après le tunnel, retour ici, bouton prêt.
+    if (!state.currentUser) {
+      openAccountFlow();
+      return;
+    }
     if (outing.womenOnly && state.currentUser?.gender !== 'femme') {
       submitJoin();
       return;

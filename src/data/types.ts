@@ -511,7 +511,10 @@ export type UserModerationReport = {
 };
 
 export interface AppState {
+  /** Compte créé (tunnel terminé). */
   onboardingDone: boolean;
+  /** Les 3 slides ont été vues (fil visible sans compte ensuite). */
+  slidesSeen: boolean;
   currentUser: User | null;
   outings: Outing[];
   requests: Request[];
@@ -595,6 +598,7 @@ export type OnboardingInput = {
 
 export type AppAction =
   | { type: 'COMPLETE_ONBOARDING'; payload: User; entryIntent: EntryIntent }
+  | { type: 'SEE_SLIDES' }
   | { type: 'CLEAR_ENTRY_INTENT' }
   | {
       type: 'CREATE_OUTING';

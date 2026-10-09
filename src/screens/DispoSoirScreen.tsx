@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
+import { withAccount } from '../components/GuestGate';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useRef, useState } from 'react';
 import {
@@ -77,7 +78,9 @@ function initialSlotState(raw?: string): {
   };
 }
 
-export function DispoSoirScreen() {
+export const DispoSoirScreen = withAccount(DispoSoirScreenInner, 'Dispo');
+
+function DispoSoirScreenInner() {
   const navigation = useNavigation<Nav>();
   const { state, setDispoProfile } = useChance();
   const user = state.currentUser;

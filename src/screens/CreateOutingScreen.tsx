@@ -1,4 +1,5 @@
 import Slider from '@react-native-community/slider';
+import { withAccount } from '../components/GuestGate';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -284,7 +285,9 @@ function defaultDateTime(
   return { dateStr: dateStrForOffset(finalOffset), timeStr };
 }
 
-export function CreateOutingScreen() {
+export const CreateOutingScreen = withAccount(CreateOutingScreenInner, 'Publier');
+
+function CreateOutingScreenInner() {
   const navigation = useNavigation<Nav>();
   const openProfile = useOpenUserProfile();
   const route = useRoute<CreateRoute>();

@@ -1,4 +1,5 @@
 import { CompositeNavigationProp, RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { withAccount } from '../components/GuestGate';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
@@ -47,7 +48,9 @@ type Nav = CompositeNavigationProp<
 >;
 type ProfileRoute = RouteProp<MainTabParamList, 'Profile'>;
 
-export function ProfileScreen() {
+export const ProfileScreen = withAccount(ProfileScreenInner, 'Profil');
+
+function ProfileScreenInner() {
   const navigation = useNavigation<Nav>();
   const openProfile = useOpenUserProfile();
   const route = useRoute<ProfileRoute>();

@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
+import { withAccount } from '../components/GuestGate';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import {
@@ -29,7 +30,9 @@ const KINDS: PartnerKind[] = ['resto', 'bar', 'culture'];
  * Après envoi : statut « Demande envoyée » (visible dans Profil seulement).
  * Validation par l’équipe Moment (démo : menu QA).
  */
-export function PartnerApplyScreen() {
+export const PartnerApplyScreen = withAccount(PartnerApplyScreenInner, 'Je représente un lieu');
+
+function PartnerApplyScreenInner() {
   const navigation = useNavigation<Nav>();
   const { state, submitPartnerApplication } = useChance();
   const user = state.currentUser;

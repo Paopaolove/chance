@@ -1,4 +1,5 @@
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { withAccount } from '../components/GuestGate';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -38,7 +39,9 @@ import { CheckNote } from '../components/CheckNote';
 type R = RouteProp<RootStackParamList, 'ChatPlaceholder'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-export function ChatPlaceholderScreen() {
+export const ChatPlaceholderScreen = withAccount(ChatPlaceholderScreenInner, 'Chat');
+
+function ChatPlaceholderScreenInner() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
   const openProfile = useOpenUserProfile();

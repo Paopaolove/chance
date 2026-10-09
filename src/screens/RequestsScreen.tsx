@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
+import { withAccount } from '../components/GuestGate';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -102,7 +103,9 @@ function classifyRequest(
   return 'pending';
 }
 
-export function RequestsScreen() {
+export const RequestsScreen = withAccount(RequestsScreenInner, 'Demandes');
+
+function RequestsScreenInner() {
   const navigation = useNavigation<Nav>();
   const openProfile = useOpenUserProfile();
   const {

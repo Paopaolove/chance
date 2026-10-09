@@ -19,6 +19,8 @@ import { useChance } from '../data/ChanceContext';
 import { PARIS_NEIGHBORHOODS } from '../data/neighborhoods';
 import { AuthProvider } from '../data/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
+import { clearPendingResume, takePendingResume } from '../navigation/accountGate';
+import { navigationRef } from '../navigation/navigationRef';
 import { AGE_REQUIRED_HINT, AGE_UNDERAGE_HINT, parseAdultAge } from '../utils/age';
 
 const { width } = Dimensions.get('window');
@@ -66,7 +68,7 @@ const slides: {
       { lead: 'Sport.', text: 'Foot, course, salle.', icon: 'football-outline' },
       { lead: 'Culture.', text: 'Expo, théâtre, concert.', icon: 'ticket-outline' },
       { lead: 'Table.', text: 'Resto, bar.', icon: 'restaurant-outline' },
-      { text: 'On vient pour le moment. Pas pour un rencard.', apart: true },
+      { text: 'Une rencontre, pas un rencard.', apart: true },
     ],
   },
   {
@@ -136,10 +138,28 @@ function StepBars({
   );
 }
 
+/** Slides seules : « Commencer » ouvre l’app (fil visible sans compte). */
 export function OnboardingScreen() {
-  const { completeOnboarding } = useChance();
+  return <OnboardingFlow mode="slides" />;
+}
+
+/** Tunnel de compte, demandé au moment de rejoindre ou de proposer. */
+export function AccountScreen() {
+  return <OnboardingFlow mode="account" />;
+}
+
+function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
+  const { completeOnboarding, markSlidesSeen } = useChance();
   const [index, setIndex] = useState(0);
-  const [step, setStep] = useState<Step>('slides');
+  const [step, setStep] = useState<Step>(mode === 'slides' ? 'slides' : 'account');
+
+  /** Quitter le tunnel sans compte : retour à l’écran d’origine. */
+  const closeAccount = () => {
+    clearPendingResume();
+    if (navigationRef.isReady() && navigationRef.canGoBack()) {
+      navigationRef.goBack();
+    }
+  };
   const [authProvider, setAuthProvider] = useState<AuthProvider | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -165,7 +185,8 @@ export function OnboardingScreen() {
       listRef.current?.scrollToIndex({ index: index + 1, animated: true });
       return;
     }
-    setStep('account');
+    // Fil avant le compte : on entre dans l’app sans inscription.
+    markSlidesSeen();
   };
 
   const chooseAuth = (provider: AuthProvider) => {
@@ -251,14 +272,23 @@ export function OnboardingScreen() {
       email: email.trim().toLowerCase() || undefined,
       entryIntent: 'feed',
     });
+    // Retour à l’écran d’origine, puis reprise de l’action tentée.
+    const resume = takePendingResume();
+    if (navigationRef.isReady() && navigationRef.canGoBack()) {
+      navigationRef.goBack();
+    }
+    if (resume) setTimeout(resume, 50);
   };
 
   if (step === 'account') {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.wrap}>
-          <StepBars current={1} />
+          <StepBars current={1} onBack={closeAccount} />
           <Text style={styles.title}>Crée ton compte</Text>
+          <Text style={styles.hint}>
+            Pour proposer ou rejoindre un moment.
+          </Text>
           <Text style={styles.hint}>
             Connexion simulée (démo) — Apple / Google / e-mail. Ce n’est pas une
             vraie authentification : aucune donnée n’est envoyée.

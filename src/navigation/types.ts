@@ -38,6 +38,8 @@ export type MainTabParamList = {
 
 export type RootStackParamList = {
   Onboarding: undefined;
+  /** Tunnel de compte demandé au moment de rejoindre / proposer. */
+  Account: undefined;
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   OutingDetail: { outingId: string };
   ConfirmSlot: { requestId: string };

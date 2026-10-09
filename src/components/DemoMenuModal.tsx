@@ -30,6 +30,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const {
     state,
+    completeOnboarding,
     getActiveOutingForUser,
     getOutingById,
     outgoingRequests,
@@ -142,6 +143,30 @@ export function DemoMenuModal({ visible, onClose }: Props) {
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {!state.currentUser ? (
+            <>
+              <Text style={styles.section}>Compte</Text>
+              <Button
+                title="Se connecter (démo)"
+                variant="secondary"
+                disabled={busy}
+                onPress={() =>
+                  run('Compte démo', () => {
+                    completeOnboarding({
+                      firstName: 'Camille',
+                      age: 29,
+                      neighborhood: 'Belleville',
+                      authProvider: 'email',
+                      email: 'camille@demo.local',
+                      entryIntent: 'feed',
+                    });
+                    onClose();
+                  })
+                }
+                style={styles.btn}
+              />
+            </>
+          ) : null}
           <Text style={styles.section}>Flux</Text>
           <Button
             title="Simuler demande Juliette"
