@@ -466,9 +466,9 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
     const steps: { text: string; caption?: string }[] = [
       {
         text:
-          'Tu invites à ta table jusqu’à un montant que tu choisis — ou tu rejoins une invitation.',
+          'Tu proposes un moment, jusqu’à un montant que tu choisis — ou tu en rejoins un.',
         caption:
-          'Une expo, une place. Rien à régler sur place.\nUn dîner, tu invites pour 20 €. Tu règles sur place.',
+          'Un foot, le créneau. Rien à régler.\nUne expo, une place. Rien à régler.\nUn dîner, un verre. Tu invites pour 20 €. Tu règles sur place.',
       },
       {
         text: 'Si on t’accepte, tu as 10 minutes pour dire oui.',
@@ -489,13 +489,10 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
           <Text style={styles.title}>Comment ça marche</Text>
           <View style={styles.disclaimerBox}>
             <Text style={styles.disclaimerLead}>
-              Moment n’est pas une appli pour draguer.
+              Une rencontre, pas un rencard.
             </Text>
             <Text style={styles.disclaimerLead}>
               On ne swipe pas. On ne cherche pas quelqu’un.
-            </Text>
-            <Text style={styles.disclaimerLead}>
-              On partage une table, un verre ou un moment.
             </Text>
           </View>
           <View style={styles.stepsBox}>
