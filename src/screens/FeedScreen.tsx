@@ -58,9 +58,11 @@ const FILTERS: { id: FilterId; label: string }[] = [
 
 const BUDGET_FILTERS: { id: BudgetFilter; label: string }[] = [
   { id: 'all', label: 'Budget' },
-  { id: 15, label: '≤ 15 €' },
-  { id: 25, label: '≤ 25 €' },
+  { id: 10, label: '≤ 10 €' },
+  { id: 20, label: '≤ 20 €' },
+  { id: 30, label: '≤ 30 €' },
   { id: 40, label: '≤ 40 €' },
+  { id: 50, label: '≤ 50 €' },
 ];
 
 const TRAVEL_SHORTCUTS = [15, 30, 45, 60] as const;
