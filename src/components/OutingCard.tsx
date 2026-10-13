@@ -1,15 +1,16 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useChance } from '../data/ChanceContext';
-import { categoryLabels, mockHosts } from '../data/mockOutings';
-import { Outing } from '../data/types';
+import { Ionicons } from '@expo/vector-icons';
+import { categoryLabels } from '../data/mockOutings';
+import { Outing, OutingCategory } from '../data/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
-import { formatOutingWhen } from '../utils/format';
+import {
+  formatParisTime,
+  isParisSameDay,
+  isParisTomorrow,
+} from '../utils/parisTime';
 import { useOpenUserProfile } from '../utils/openUserProfile';
-import { hostPhotoSize } from '../utils/subscription';
 import { isPartnerListing, partnerListingChips } from '../utils/partners';
-import { Avatar } from './Avatar';
-import { RatingLine } from './RatingLine';
 
 interface Props {
   outing: Outing;
@@ -49,32 +50,47 @@ function cardPill(outing: Outing, partner: boolean): CardPill {
   };
 }
 
+const CATEGORY_ICONS: Record<
+  OutingCategory,
+  keyof typeof Ionicons.glyphMap
+> = {
+  restaurant: 'restaurant-outline',
+  bar: 'wine-outline',
+  culture: 'ticket-outline',
+  sport: 'football-outline',
+  autre: 'sparkles-outline',
+};
+
+function dayLabel(startsAt: string, nowMs = Date.now()): string | null {
+  if (isParisSameDay(startsAt, nowMs)) return 'Ce soir';
+  if (isParisTomorrow(startsAt, nowMs)) return 'Demain';
+  const d = new Date(startsAt);
+  if (!Number.isFinite(d.getTime())) return null;
+  return d.toLocaleDateString('fr-FR', {
+    timeZone: 'Europe/Paris',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
 export function OutingCard({ outing, onPress }: Props) {
   const openProfile = useOpenUserProfile();
-  const { state } = useChance();
-  const viewer = state.currentUser;
-  const photoSize = hostPhotoSize(viewer);
   const partner = isPartnerListing(outing);
   const pill = cardPill(outing, partner);
-
-  const photoUri = useMemo(() => {
-    if (state.currentUser?.id === outing.hostId) {
-      return state.currentUser.photoUri;
-    }
-    return mockHosts.find((h) => h.id === outing.hostId)?.photoUri;
-  }, [state.currentUser, outing.hostId]);
+  const time = formatParisTime(outing.startsAt);
+  const iconName = CATEGORY_ICONS[outing.category] ?? 'sparkles-outline';
 
   const openHost = () => openProfile(outing.hostId);
 
-  // Une ligne : quand · lieu · quartier (pas de « Maintenant » en double avec la pastille).
+  // Une ligne : jour · lieu · quartier (l’heure est affichée à part, en grand).
   const showWhen = !(outing.urgentOnSite && !outing.urgentAutoH90);
-  // Le titre (activité) est en tête : la ligne de lieu ne le répète pas.
   const place =
     outing.venueName && outing.venueName !== outing.title
       ? outing.venueName
       : null;
   const placeLine = [
-    showWhen ? formatOutingWhen(outing.startsAt) : null,
+    showWhen ? dayLabel(outing.startsAt) : null,
     place,
     outing.neighborhood,
   ]
@@ -89,34 +105,20 @@ export function OutingCard({ outing, onPress }: Props) {
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={styles.mainRow}>
-        {/* Photo → profil (Pressable séparé) */}
-        <Pressable
-          onPress={openHost}
-          accessibilityRole="button"
-          accessibilityLabel={`Voir le profil de ${outing.hostName}`}
-          hitSlop={8}
-          style={({ pressed }) => [styles.photoCol, pressed && styles.pressed]}
+        <View
+          style={styles.iconWrap}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
         >
-          <Avatar
-            name={outing.hostName}
-            photoUri={photoUri}
-            seed={outing.hostId}
-            size={photoSize}
-          />
-          {/* Note sous la photo */}
-          <RatingLine
-            userId={outing.hostId}
-            firstName={outing.hostName}
-            onPress={openHost}
-            variant="underPhoto"
-          />
-        </Pressable>
+          <Ionicons name={iconName} size={22} color={colors.primary} />
+        </View>
         <View style={styles.mainText}>
-          {/* L’activité d’abord (expo, foot, verre…) — reste de la carte → moment */}
+          <Text style={styles.time} accessibilityLabel={`À ${time}`}>
+            {time}
+          </Text>
           <Text style={styles.title} numberOfLines={2}>
             {outing.title}
           </Text>
-          {/* Prénom ensuite → profil (Pressable séparé, n’ouvre pas le moment) */}
           <View style={styles.hostRow}>
             <Pressable
               onPress={openHost}
@@ -131,9 +133,11 @@ export function OutingCard({ outing, onPress }: Props) {
             </Pressable>
             {partner ? <Text style={styles.partnerTag}> · Partenaire</Text> : null}
           </View>
-          <Text style={styles.place} numberOfLines={1}>
-            {placeLine}
-          </Text>
+          {placeLine ? (
+            <Text style={styles.place} numberOfLines={1}>
+              {placeLine}
+            </Text>
+          ) : null}
           <View
             style={[
               styles.pill,
@@ -158,8 +162,8 @@ export function OutingCard({ outing, onPress }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.cardWarm,
+    borderRadius: radius.card,
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.xl,
     marginBottom: spacing.lg,
@@ -172,8 +176,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.lg,
   },
-  photoCol: { alignItems: 'center', width: 72 },
-  /** Badge texte, pas de carte colorée. */
+  iconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.full,
+    backgroundColor: colors.accentSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   partnerTag: {
     ...typography.small,
     fontFamily: fonts.semiBold,
@@ -192,6 +202,14 @@ const styles = StyleSheet.create({
   },
   mainText: { flex: 1, minWidth: 0 },
   nameTap: { flexShrink: 1 },
+  time: {
+    fontFamily: fonts.semiBold,
+    fontSize: 24,
+    lineHeight: 28,
+    letterSpacing: -0.4,
+    color: colors.primary,
+    marginBottom: spacing.xs,
+  },
   title: {
     ...typography.subtitle,
     fontFamily: fonts.semiBold,
@@ -204,7 +222,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
-  /** Une seule pastille : blanche + liseré ; « Maintenant » en noir plein (pas d’orange sur la carte). */
   pill: {
     alignSelf: 'flex-start',
     marginTop: spacing.md,

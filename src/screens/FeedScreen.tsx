@@ -637,13 +637,13 @@ export function FeedScreen() {
       <Pressable
         key={panel}
         onPress={() => togglePanel(panel)}
-        style={[styles.chip, on && styles.chipSelected]}
+        style={[styles.chip, on && styles.chipSelectedOutline]}
         accessibilityRole="button"
         accessibilityLabel={a11y}
         accessibilityState={{ selected: on, expanded: on }}
       >
         <Text
-          style={[styles.chipText, on && styles.chipTextSelected]}
+          style={[styles.chipText, on && styles.chipTextSelectedOutline]}
           numberOfLines={1}
         >
           {label}
@@ -651,7 +651,7 @@ export function FeedScreen() {
         <Ionicons
           name={on ? 'chevron-up' : 'chevron-down'}
           size={14}
-          color={on ? colors.white : colors.text}
+          color={on ? colors.primary : colors.text}
         />
       </Pressable>
     );
@@ -677,7 +677,8 @@ export function FeedScreen() {
         onPress={() => togglePanel('more')}
         style={[
           styles.gear,
-          (openPanel === 'more' || moreFiltersActive) && styles.chipSelected,
+          (openPanel === 'more' || moreFiltersActive) &&
+            styles.chipSelectedOutline,
         ]}
         accessibilityRole="button"
         accessibilityLabel="Autres filtres"
@@ -686,11 +687,7 @@ export function FeedScreen() {
         <Ionicons
           name="settings-outline"
           size={18}
-          color={
-            openPanel === 'more' || moreFiltersActive
-              ? colors.white
-              : colors.primary
-          }
+          color={colors.primary}
         />
       </Pressable>
     </View>
@@ -710,11 +707,16 @@ export function FeedScreen() {
           <Pressable
             key={f.id}
             onPress={() => setCategoryFilter(f.id)}
-            style={[styles.chip, selected && styles.chipSelected]}
+            style={[styles.chip, selected && styles.chipSelectedOutline]}
             accessibilityRole="button"
             accessibilityState={{ selected }}
           >
-            <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+            <Text
+              style={[
+                styles.chipText,
+                selected && styles.chipTextSelectedOutline,
+              ]}
+            >
               {f.label}
             </Text>
           </Pressable>
@@ -955,12 +957,15 @@ export function FeedScreen() {
           <View style={styles.alignRow}>
             <Pressable
               onPress={() => setAlignDispo((v) => !v)}
-              style={[styles.chip, alignDispo && styles.chipSelected]}
+              style={[styles.chip, alignDispo && styles.chipSelectedOutline]}
               accessibilityRole="button"
               accessibilityState={{ selected: alignDispo }}
             >
               <Text
-                style={[styles.chipText, alignDispo && styles.chipTextSelected]}
+                style={[
+                  styles.chipText,
+                  alignDispo && styles.chipTextSelectedOutline,
+                ]}
               >
                 Aligné à ma dispo
               </Text>
@@ -986,12 +991,24 @@ export function FeedScreen() {
                 setMode(m);
                 setOpenPanel((cur) => (cur === 'jour' ? null : cur));
               }}
-              style={[styles.segmentItem, selected && styles.segmentItemOn]}
+              style={[
+                styles.segmentItem,
+                selected &&
+                  (m === 'sorties'
+                    ? styles.segmentItemOnFilled
+                    : styles.segmentItemOnOutline),
+              ]}
               accessibilityRole="tab"
               accessibilityState={{ selected }}
             >
               <Text
-                style={[styles.segmentText, selected && styles.segmentTextOn]}
+                style={[
+                  styles.segmentText,
+                  selected &&
+                    (m === 'sorties'
+                      ? styles.segmentTextOnFilled
+                      : styles.segmentTextOnOutline),
+                ]}
               >
                 {m === 'sorties' ? 'Annonces' : 'Dispo'}
               </Text>
@@ -1008,11 +1025,13 @@ export function FeedScreen() {
               <Pressable
                 key={v}
                 onPress={() => setView(v)}
-                style={[styles.chip, on && styles.chipSelected]}
+                style={[styles.chip, on && styles.chipSelectedOutline]}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: on }}
               >
-                <Text style={[styles.chipText, on && styles.chipTextSelected]}>
+                <Text
+                  style={[styles.chipText, on && styles.chipTextSelectedOutline]}
+                >
                   {v === 'liste' ? 'Liste' : 'Carte'}
                 </Text>
               </Pressable>
@@ -1049,7 +1068,7 @@ export function FeedScreen() {
         <Text style={styles.title}>
           Autour de <Text style={styles.titleAccent}>toi</Text>
         </Text>
-        <Text style={styles.sub}>Des moments, pas des profils.</Text>
+        <Text style={styles.sub}>Ce soir, près de chez toi.</Text>
       </View>
 
       {mode === 'sorties' && view === 'carte' ? (
@@ -1136,7 +1155,7 @@ const styles = StyleSheet.create({
   mapScreen: { flex: 1 },
   mapHeader: { flexGrow: 0, maxHeight: '55%' },
   mapHeaderContent: { paddingHorizontal: spacing.screen },
-  /** Annonces / Dispo : pastille active orange + texte blanc, l’autre blanche + liseré. */
+  /** Annonces actif = plein abricot ; Dispo actif = filet abricot (un seul bouton plein). */
   segment: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -1152,16 +1171,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentItemOn: {
+  /** Annonces sélectionné : seul bouton plein abricot de l’écran. */
+  segmentItemOnFilled: {
     backgroundColor: colors.chipActive,
     borderColor: colors.chipActive,
+  },
+  /** Dispo sélectionné : filet abricot, pas de fond plein. */
+  segmentItemOnOutline: {
+    backgroundColor: colors.chip,
+    borderColor: colors.primary,
   },
   segmentText: {
     ...typography.caption,
     color: colors.chipText,
     fontFamily: fonts.semiBold,
   },
-  segmentTextOn: { color: colors.chipActiveText },
+  segmentTextOnFilled: { color: colors.chipActiveText },
+  segmentTextOnOutline: { color: colors.primary },
   dispoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1204,6 +1230,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.chipActive,
     borderColor: colors.chipActive,
   },
+  /** Liste / Carte actif : filet + texte abricot, fond blanc. */
+  chipSelectedOutline: {
+    backgroundColor: colors.chip,
+    borderColor: colors.primary,
+  },
   chipText: {
     ...typography.caption,
     color: colors.chipText,
@@ -1211,6 +1242,7 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
   chipTextSelected: { color: colors.chipActiveText },
+  chipTextSelectedOutline: { color: colors.primary },
   gear: {
     width: 36,
     height: 36,

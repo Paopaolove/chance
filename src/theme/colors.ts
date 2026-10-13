@@ -2,6 +2,10 @@ export const colors = {
   /** Fond d’écran — papier #F7F1EA ; cartes, champs et pastilles en blanc + liseré `border` */
   background: '#F7F1EA',
   surface: '#FFFFFF',
+  /** Carte moment — papier chaud #FBF8F4 (Autour de toi) */
+  cardWarm: '#FBF8F4',
+  /** Pastille pictogramme catégorie — abricot pâle */
+  accentSoft: '#F6E3DA',
   /** Surfaces secondaires — blanc + liseré `border` (un blanc, un noir, un orange) */
   surfaceMuted: '#FFFFFF',
   /** Abricot #E37A55 — uniquement : bouton principal, mot accent, onglet actif, engrenage, pastille active */
