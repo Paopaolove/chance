@@ -1046,7 +1046,9 @@ export function FeedScreen() {
         <Pressable onPress={onLogoTap} hitSlop={12}>
           <Text style={styles.brand}>Moment</Text>
         </Pressable>
-        <Text style={styles.title}>Autour de toi</Text>
+        <Text style={styles.title}>
+          Autour de <Text style={styles.titleAccent}>toi</Text>
+        </Text>
         <Text style={styles.sub}>Des moments, pas des profils.</Text>
       </View>
 
@@ -1119,14 +1121,15 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.screen,
     paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
+    paddingBottom: spacing.xl,
   },
   brand: {
     ...typography.caption,
-    color: colors.primary,
+    color: colors.text,
     fontFamily: fonts.bold,
   },
   title: { ...typography.title, color: colors.text, marginTop: 2 },
+  titleAccent: { color: colors.primary },
   sub: { ...typography.caption, color: colors.textSecondary, marginTop: 4 },
   listHeader: { marginBottom: spacing.lg },
   viewToggle: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },

@@ -93,12 +93,14 @@ const styles = StyleSheet.create({
   },
   body: {
     ...typography.body,
-    color: 'rgba(255,255,255,0.88)',
+    color: colors.white,
+    opacity: 0.88,
     marginTop: 4,
   },
   dismiss: {
     ...typography.small,
-    color: 'rgba(255,255,255,0.55)',
+    color: colors.white,
+    opacity: 0.55,
     marginTop: spacing.sm,
   },
 });

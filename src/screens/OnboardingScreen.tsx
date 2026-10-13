@@ -801,14 +801,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fonts.semiBold,
   },
+  /** Étapes en texte numéroté, directement sur le papier (pas de carte). */
   stepsBox: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
     gap: spacing.lg,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.block,
   },
   stepRow: {
     flexDirection: 'row',
