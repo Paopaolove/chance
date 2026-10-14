@@ -19,6 +19,9 @@ export const URGENT_ON_SITE_ACCEPT_MS = 30 * 60 * 1000; // 30 min after startsAt
 /** Planned outing with no confirmés → auto urgent when startsAt is within this window. */
 export const AUTO_URGENT_BEFORE_MS = 90 * 60 * 1000; // H−90
 
+/** Host may mark guest present from H−15 (same bound as partner « Je suis arrivé »). */
+export const PRESENCE_MARK_FROM_BEFORE_MS = 15 * 60 * 1000;
+
 export function isUrgentOnSite(outing: Outing): boolean {
   return outing.urgentOnSite === true;
 }
@@ -69,6 +72,17 @@ export function isUrgentAcceptWindowOpen(
  * Normal: open + startsAt not past.
  * Urgent: open + within startsAt+30 min (startsAt may already be « now »).
  */
+
+/** Host « Marquer présent » / caution return: only from H−15 onward. */
+export function isPresenceWindowOpen(
+  outing: Outing,
+  nowMs = Date.now(),
+): boolean {
+  const startMs = new Date(outing.startsAt).getTime();
+  if (!Number.isFinite(startMs)) return false;
+  return nowMs >= startMs - PRESENCE_MARK_FROM_BEFORE_MS;
+}
+
 export function isOutingAcceptingRequests(
   outing: Outing,
   nowMs = Date.now(),

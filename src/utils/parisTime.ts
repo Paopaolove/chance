@@ -92,6 +92,38 @@ export function nextParisMidnight(from: Date = new Date()): Date {
  * Convert a Europe/Paris wall-clock calendar day + time to a UTC Date.
  * Iteratively corrects timezone offset (handles DST).
  */
+function parisWallParts(utcMs: number): {
+  y: number;
+  m: number;
+  d: number;
+  h: number;
+  min: number;
+} | null {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: PARIS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(utcMs));
+  const get = (type: string) =>
+    Number(parts.find((p) => p.type === type)?.value ?? NaN);
+  const y = get('year');
+  const m = get('month');
+  const d = get('day');
+  const h = get('hour');
+  const min = get('minute');
+  if (![y, m, d, h, min].every(Number.isFinite)) return null;
+  return { y, m, d, h, min };
+}
+
+/**
+ * Convert a Europe/Paris wall-clock calendar day + time to a UTC Date.
+ * Rejects nonexistent DST spring gaps (returns Invalid Date).
+ * Ambiguous autumn hour: prefer the earlier UTC instant (still on CEST).
+ */
 export function parisWallToUtc(
   ymd: string,
   hour: number,
@@ -101,29 +133,25 @@ export function parisWallToUtc(
   if (!y || !m || !d) return new Date(NaN);
   let utcMs = Date.UTC(y, m - 1, d, hour, minute, 0);
   for (let i = 0; i < 4; i++) {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: PARIS_TIMEZONE,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    }).formatToParts(new Date(utcMs));
-    const get = (type: string) =>
-      Number(parts.find((p) => p.type === type)?.value ?? NaN);
-    const py = get('year');
-    const pm = get('month');
-    const pd = get('day');
-    const ph = get('hour');
-    const pmin = get('minute');
-    if (![py, pm, pd, ph, pmin].every(Number.isFinite)) break;
+    const got = parisWallParts(utcMs);
+    if (!got) break;
     const want = Date.UTC(y, m - 1, d, hour, minute);
-    const got = Date.UTC(py, pm - 1, pd, ph, pmin);
-    const delta = want - got;
+    const gotUtc = Date.UTC(got.y, got.m - 1, got.d, got.h, got.min);
+    const delta = want - gotUtc;
     if (delta === 0) break;
     utcMs += delta;
   }
+  const matches = (t: number) => {
+    const p = parisWallParts(t);
+    return (
+      !!p && p.y === y && p.m === m && p.d === d && p.h === hour && p.min === minute
+    );
+  };
+  // Nonexistent local time (spring forward) → refuse.
+  if (!matches(utcMs)) return new Date(NaN);
+  // Duplicated autumn hour: keep the earlier UTC instant that still matches.
+  const earlier = utcMs - 60 * 60 * 1000;
+  if (matches(earlier)) return new Date(earlier);
   return new Date(utcMs);
 }
 

@@ -48,16 +48,41 @@ function goOuting(nav: Nav, outingId: string) {
   nav.navigate('OutingDetail', { outingId });
 }
 
+type PendingNav = {
+  payload: NotificationNavPayload;
+  ctx: NotificationNavContext;
+};
+
+let pendingNotificationTarget: PendingNav | null = null;
+
+/**
+ * Flush a target queued while NavigationContainer was not ready.
+ * Call from NavigationContainer `onReady`.
+ */
+export function flushPendingNotificationTarget(
+  nav: Nav = navigationRef,
+): boolean {
+  if (!pendingNotificationTarget || !nav.isReady()) return false;
+  const pending = pendingNotificationTarget;
+  pendingNotificationTarget = null;
+  return openNotificationTarget(pending.payload, pending.ctx, nav);
+}
+
 /**
  * Central deep-link from local notification tap or clickable toast.
  * Revalidates request/outing state; Alert when target is stale.
+ * Returns true when the target was handled (ready + routed).
+ * If navigation is not ready, queues the payload for `onReady`.
  */
 export function openNotificationTarget(
   payload: NotificationNavPayload,
   ctx: NotificationNavContext,
   nav: Nav = navigationRef,
-): void {
-  if (!nav.isReady()) return;
+): boolean {
+  if (!nav.isReady()) {
+    pendingNotificationTarget = { payload, ctx };
+    return false;
+  }
 
   const type = payload.type;
   const requestId = payload.requestId;
@@ -71,13 +96,13 @@ export function openNotificationTarget(
   switch (type) {
     case 'new_request':
       goRequests(nav);
-      return;
+      return true;
 
     case 'accepted':
     case 'confirm_reminder': {
       if (req?.status === 'accepted') {
         nav.navigate('ConfirmSlot', { requestId: req.id });
-        return;
+        return true;
       }
       if (
         req &&
@@ -92,29 +117,29 @@ export function openNotificationTarget(
             : 'Cette demande n’est plus active.',
         );
         goRequests(nav);
-        return;
+        return true;
       }
       if (req?.status === 'confirmed') {
         if (outing) goOuting(nav, outing.id);
         else goRequests(nav);
-        return;
+        return true;
       }
       goRequests(nav);
-      return;
+      return true;
     }
 
     case 'confirmed': {
       if (outing?.status === 'cancelled') {
         Alert.alert('Moment annulé', 'Ce moment a été annulé.');
         goOuting(nav, outing.id);
-        return;
+        return true;
       }
       if (outing) {
         goOuting(nav, outing.id);
-        return;
+        return true;
       }
       goRequests(nav);
-      return;
+      return true;
     }
 
     case 'chat_unlock':
@@ -122,18 +147,18 @@ export function openNotificationTarget(
       const oid = outing?.id ?? outingId;
       if (!oid) {
         goRequests(nav);
-        return;
+        return true;
       }
       if (outing?.status === 'cancelled') {
         Alert.alert('Moment annulé', 'Le chat n’est plus disponible.');
         goOuting(nav, oid);
-        return;
+        return true;
       }
       nav.navigate('ChatPlaceholder', {
         outingId: oid,
         requestId: requestId ?? req?.id,
       });
-      return;
+      return true;
     }
 
     case 'late':
@@ -141,46 +166,46 @@ export function openNotificationTarget(
       const oid = outing?.id ?? outingId;
       if (!oid) {
         goRequests(nav);
-        return;
+        return true;
       }
       if (outing?.status === 'cancelled') {
         Alert.alert('Moment annulé', 'Ce moment a été annulé.');
       }
       goOuting(nav, oid);
-      return;
+      return true;
     }
 
     case 'imprevu': {
       const oid = outing?.id ?? outingId;
       if (!oid) {
         goRequests(nav);
-        return;
+        return true;
       }
       if (outing?.status === 'cancelled') {
         Alert.alert('Moment annulé', 'Ce moment a été annulé.');
         goOuting(nav, oid);
-        return;
+        return true;
       }
       const pending = ctx.getPendingImprevuForMe(oid);
       if (pending) {
         nav.navigate('Imprevu', { outingId: oid, requestId: requestId ?? req?.id });
-        return;
+        return true;
       }
       goOuting(nav, oid);
-      return;
+      return true;
     }
 
     case 'cancellation': {
       const oid = outing?.id ?? outingId;
       if (!oid) {
         goRequests(nav);
-        return;
+        return true;
       }
       if (outing?.status === 'cancelled') {
         Alert.alert('Moment annulé', 'Ce moment a été annulé.');
       }
       goOuting(nav, oid);
-      return;
+      return true;
     }
 
     case 'rate_after': {
@@ -197,7 +222,7 @@ export function openNotificationTarget(
             toUserId: match.toUserId,
             toUserName: match.toUserName,
           });
-          return;
+          return true;
         }
       }
       if (oid && outing?.status === 'cancelled') {
@@ -212,26 +237,27 @@ export function openNotificationTarget(
         );
       }
       goProfileRate(nav);
-      return;
+      return true;
     }
 
     case 'moment_photo': {
       // Photos de moments passés : uniquement dans le Profil (jamais le fil).
       goProfilePhotos(nav);
-      return;
+      return true;
     }
 
     default: {
       // Fallback: prefer ConfirmSlot / OutingDetail / Requests when ids present
       if (req?.status === 'accepted') {
         nav.navigate('ConfirmSlot', { requestId: req.id });
-        return;
+        return true;
       }
       if (outing) {
         goOuting(nav, outing.id);
-        return;
+        return true;
       }
       goRequests(nav);
+      return true;
     }
   }
 }

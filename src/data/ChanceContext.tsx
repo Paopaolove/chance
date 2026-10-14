@@ -78,6 +78,8 @@ import {
 } from '../utils/partners';
 import {
   isOutingAcceptingRequests,
+  isPresenceWindowOpen,
+  isUrgentAcceptWindowOpen,
   isUrgentOnSite,
   isVisibleOnAnnoncesFeed,
   outingOccupiesActiveSlot,
@@ -558,6 +560,16 @@ function reducer(state: AppState, action: AppAction): AppState {
           ) {
             return state;
           }
+          // Urgent confirm must stay within H+30 (confirmation instant).
+          if (
+            isUrgentOnSite(outingGate) &&
+            !isUrgentAcceptWindowOpen(
+              outingGate,
+              new Date(action.payload.confirmedAt).getTime(),
+            )
+          ) {
+            return state;
+          }
         }
       }
       if (
@@ -603,11 +615,19 @@ function reducer(state: AppState, action: AppAction): AppState {
             ...partnerUser,
             dispoSoir: false,
             dispoExpiresAt: undefined,
-            ...(action.payload.consumeCredit &&
-            (partnerUser.outingCredits ?? 0) > 0
-              ? { outingCredits: (partnerUser.outingCredits ?? 0) - 1 }
-              : {}),
           };
+          // Confirm + consume credit atomically — refuse both if no credit left.
+          if (action.payload.consumeCredit) {
+            const credits = partnerUser.outingCredits ?? 0;
+            if (credits < 1) return state;
+            partnerUser = {
+              ...partnerUser,
+              outingCredits: credits - 1,
+            };
+          }
+        } else if (action.payload.consumeCredit) {
+          // Credit was required for the guest but currentUser is not the guest.
+          return state;
         }
         return {
           ...state,
@@ -683,15 +703,14 @@ function reducer(state: AppState, action: AppAction): AppState {
       }
       // Consume credit once on accepted→confirmed only (idempotent path returned above).
       // Lot 6: only the request owner’s credits — never the host’s.
-      if (
-        action.payload.consumeCredit &&
-        nextUser &&
-        nextUser.id === req.userId &&
-        (nextUser.outingCredits ?? 0) > 0
-      ) {
+      // Confirm + consume atomically: refuse both if credit is required but missing.
+      if (action.payload.consumeCredit) {
+        if (!nextUser || nextUser.id !== req.userId) return state;
+        const credits = nextUser.outingCredits ?? 0;
+        if (credits < 1) return state;
         nextUser = {
           ...nextUser,
-          outingCredits: (nextUser.outingCredits ?? 0) - 1,
+          outingCredits: credits - 1,
         };
       }
       return {
@@ -1158,13 +1177,29 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'MARK_GUEST_PRESENT': {
       // Explicit presence (host / check-in). ≠ COMPLETE_OUTING / CLOSE_OUTING.
-      const { requestId } = action.payload;
+      const { requestId, markedAt } = action.payload;
+      const reqMark = state.requests.find((r) => r.id === requestId);
+      if (!reqMark || reqMark.status !== 'confirmed') return state;
+      if (reqMark.attendance === 'absent' || reqMark.attendance === 'present') {
+        return state; // idempotent no-op (present already) / cannot override absent
+      }
+      const outingMark = state.outings.find((o) => o.id === reqMark.outingId);
+      if (!outingMark || outingMark.status === 'cancelled') return state;
+      // Caution return only from H−15.
+      if (
+        !isPresenceWindowOpen(
+          outingMark,
+          new Date(markedAt).getTime(),
+        )
+      ) {
+        return state;
+      }
       return {
         ...state,
         requests: state.requests.map((r) => {
           if (r.id !== requestId || r.status !== 'confirmed') return r;
           if (r.attendance === 'absent' || r.attendance === 'present') {
-            return r; // idempotent; cannot override absent
+            return r;
           }
           return {
             ...r,
@@ -1398,11 +1433,32 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'REPORT_GUEST_NO_SHOW': {
-      const { outingId, requestId, guestId, strike, lowerPriority, banned } =
-        action.payload;
+      const {
+        outingId,
+        requestId,
+        guestId,
+        strike,
+        lowerPriority,
+        banned,
+        reportedAt,
+      } = action.payload;
       const existing = state.requests.find((r) => r.id === requestId);
+      // Must be confirmed and not already present.
+      if (!existing || existing.status !== 'confirmed') return state;
+      if (existing.attendance === 'present') return state;
       // Lot 6: same absence event → no double strike / forfeit.
-      if (existing?.attendance === 'absent') return state;
+      if (existing.attendance === 'absent') return state;
+      const outingNoShow = state.outings.find((o) => o.id === outingId);
+      if (!outingNoShow || outingNoShow.status === 'cancelled') return state;
+      // Not before H.
+      if (
+        !isStartsAtPast(
+          outingNoShow.startsAt,
+          new Date(reportedAt).getTime(),
+        )
+      ) {
+        return state;
+      }
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -1952,7 +2008,14 @@ interface ChanceContextValue {
     | { ok: true }
     | {
         ok: false;
-        reason: 'not_found' | 'invalid' | 'outing_started' | 'outing_finished';
+        reason:
+          | 'not_found'
+          | 'invalid'
+          | 'outing_started'
+          | 'outing_finished'
+          | 'full'
+          | 'partner'
+          | 'expired';
       };
   /** Host declines a pending request (no seat was reserved). */
   declineRequest: (requestId: string) => void;
@@ -2776,24 +2839,39 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   const cancelRequest = useCallback(
     (
       requestId: string,
-      by: 'guest' | 'host' = 'guest',
+      _byHint: 'guest' | 'host' = 'guest',
     ):
       | { ok: true; depositReturned?: boolean; depositForfeited?: boolean }
       | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
       const req = state.requests.find((r) => r.id === requestId);
       if (!req) return { ok: false, reason: 'not_found' };
-      if (
-        req.status !== 'pending' &&
-        req.status !== 'accepted' &&
-        req.status !== 'confirmed'
-      ) {
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      // Derive role from actor — never trust the caller-supplied `by`.
+      const isGuest = req.userId === user.id;
+      const isHost = outing.hostId === user.id;
+      if (!isGuest && !isHost) {
+        return { ok: false, reason: 'forbidden' };
+      }
+      const by: 'guest' | 'host' = isGuest ? 'guest' : 'host';
+      // Guest: pending / accepted / confirmed. Host: accepted / confirmed only.
+      if (by === 'guest') {
+        if (
+          req.status !== 'pending' &&
+          req.status !== 'accepted' &&
+          req.status !== 'confirmed'
+        ) {
+          return { ok: false, reason: 'invalid_status' };
+        }
+      } else if (req.status !== 'accepted' && req.status !== 'confirmed') {
         return { ok: false, reason: 'invalid_status' };
       }
-      const outing = state.outings.find((o) => o.id === req.outingId);
       const cancelledAt = new Date().toISOString();
       let depositReturned: boolean | undefined;
       let depositForfeited: boolean | undefined;
-      if (req.status === 'confirmed' && outing) {
+      if (req.status === 'confirmed') {
         const jokerExempted = isJokerExempted(state.imprevuReports, {
           outingId: req.outingId,
           reporterId: req.userId,
@@ -2815,7 +2893,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       });
       return { ok: true, depositReturned, depositForfeited };
     },
-    [state.requests, state.outings, state.imprevuReports, clearRequestSchedules],
+    [
+      state.currentUser,
+      state.requests,
+      state.outings,
+      state.imprevuReports,
+      clearRequestSchedules,
+    ],
   );
 
   const joinOuting = useCallback(
@@ -2905,7 +2989,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       | { ok: true }
       | {
           ok: false;
-          reason: 'not_found' | 'invalid' | 'outing_started' | 'outing_finished';
+          reason:
+            | 'not_found'
+            | 'invalid'
+            | 'outing_started'
+            | 'outing_finished'
+            | 'full'
+            | 'partner'
+            | 'expired';
         } => {
       const now = new Date();
       const deadline = new Date(now.getTime() + CONFIRM_WINDOW_MS);
@@ -2918,72 +3009,89 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outing.status === 'completed' || outing.status === 'cancelled') {
         return { ok: false, reason: 'outing_finished' };
       }
+      if (outing.status === 'closed') {
+        return { ok: false, reason: 'expired' };
+      }
+      // Same gates as ACCEPT_REQUEST reducer — explicit causes.
+      if (isPartnerListing(outing)) {
+        return { ok: false, reason: 'partner' };
+      }
+      if (outing.spotsLeft < 1) {
+        return { ok: false, reason: 'full' };
+      }
       if (!isOutingAcceptingRequests(outing, now.getTime())) {
         return { ok: false, reason: 'outing_started' };
       }
-      dispatch({
-        type: 'ACCEPT_REQUEST',
+      const action = {
+        type: 'ACCEPT_REQUEST' as const,
         payload: {
           requestId,
           acceptedAt: now.toISOString(),
           confirmDeadlineAt: deadline.toISOString(),
         },
-      });
-      if (req && outing) {
-        void ensureAndroidChannel();
-        void (async () => {
-          const scheduled = await scheduleAcceptedConfirmNotifications({
-            outingTitle: outing.title,
-            hostName: outing.hostName,
-            confirmDeadlineAt: deadline.toISOString(),
-            requestId,
-            outingId: outing.id,
-          });
-          const handles: ScheduledHandles = {
-            outingId: outing.id,
-            accepted: scheduled.accepted,
-            reminder3min: scheduled.reminder3min,
-          };
-          // In-app toast for « accepté + fenêtre 10 min »
-          const toast: AppToast = {
-            id: uid('toast'),
-            title: 'Tu es accepté !',
-            body: `${outing.hostName} t’a accepté pour « ${outing.title} ». Confirme ta place dans 10 min.`,
-            createdAt: new Date().toISOString(),
-            type: 'accepted',
-            requestId,
-            outingId: outing.id,
-          };
-          dispatch({ type: 'SET_TOAST', payload: toast });
-          if (!scheduled.pushOk) {
-            Alert.alert(toast.title, toast.body);
-            // Fallback rappel ~3 min left — cleared if confirm/expire/cancel
-            const deadlineMs = deadline.getTime();
-            const reminderIn = (deadlineMs - 3 * 60 * 1000 - Date.now()) / 1000;
-            if (reminderIn > 2) {
-              handles.reminderTimer = setTimeout(() => {
-                const live = scheduledByRequestRef.current.get(requestId);
-                if (!live?.reminderTimer) return; // already cleared
-                const t: AppToast = {
-                  id: uid('toast'),
-                  title: 'Plus que 3 min',
-                  body: `Confirme ta place pour « ${outing.title} » avant la fin du délai.`,
-                  createdAt: new Date().toISOString(),
-                  type: 'confirm_reminder',
-                  requestId,
-                  outingId: outing.id,
-                };
-                dispatch({ type: 'SET_TOAST', payload: t });
-                Alert.alert(t.title, t.body);
-              }, reminderIn * 1000);
-            }
-          }
-          scheduledByRequestRef.current.set(requestId, handles);
-        })();
+      };
+      // Preview: only fire success effects if the transition actually applies.
+      const next = reducer(state, action);
+      if (next === state) {
+        if (outing.spotsLeft < 1) return { ok: false, reason: 'full' };
+        if (isPartnerListing(outing)) return { ok: false, reason: 'partner' };
+        if (!isOutingAcceptingRequests(outing, now.getTime())) {
+          return { ok: false, reason: 'outing_started' };
+        }
+        return { ok: false, reason: 'invalid' };
       }
+      dispatch(action);
+      void ensureAndroidChannel();
+      void (async () => {
+        const scheduled = await scheduleAcceptedConfirmNotifications({
+          outingTitle: outing.title,
+          hostName: outing.hostName,
+          confirmDeadlineAt: deadline.toISOString(),
+          requestId,
+          outingId: outing.id,
+        });
+        const handles: ScheduledHandles = {
+          outingId: outing.id,
+          accepted: scheduled.accepted,
+          reminder3min: scheduled.reminder3min,
+        };
+        const toast: AppToast = {
+          id: uid('toast'),
+          title: 'Tu es accepté !',
+          body: `${outing.hostName} t’a accepté pour « ${outing.title} ». Confirme ta place dans 10 min.`,
+          createdAt: new Date().toISOString(),
+          type: 'accepted',
+          requestId,
+          outingId: outing.id,
+        };
+        dispatch({ type: 'SET_TOAST', payload: toast });
+        if (!scheduled.pushOk) {
+          Alert.alert(toast.title, toast.body);
+          const deadlineMs = deadline.getTime();
+          const reminderIn = (deadlineMs - 3 * 60 * 1000 - Date.now()) / 1000;
+          if (reminderIn > 2) {
+            handles.reminderTimer = setTimeout(() => {
+              const live = scheduledByRequestRef.current.get(requestId);
+              if (!live?.reminderTimer) return;
+              const t: AppToast = {
+                id: uid('toast'),
+                title: 'Plus que 3 min',
+                body: `Confirme ta place pour « ${outing.title} » avant la fin du délai.`,
+                createdAt: new Date().toISOString(),
+                type: 'confirm_reminder',
+                requestId,
+                outingId: outing.id,
+              };
+              dispatch({ type: 'SET_TOAST', payload: t });
+              Alert.alert(t.title, t.body);
+            }, reminderIn * 1000);
+          }
+        }
+        scheduledByRequestRef.current.set(requestId, handles);
+      })();
       return { ok: true };
     },
-    [state.requests, state.outings],
+    [state, state.requests, state.outings],
   );
 
   const declineRequest = useCallback((requestId: string) => {
@@ -3047,8 +3155,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       if (outingGate) {
         if (isUrgentOnSite(outingGate)) {
-          // Urgent: allow confirm while open/full (accepted cancelled on close).
+          // Urgent: allow confirm while open/full and within H+30.
           if (outingGate.status !== 'open' && outingGate.status !== 'full') {
+            return { ok: false, reason: 'outing_started' };
+          }
+          if (!isUrgentAcceptWindowOpen(outingGate)) {
             return { ok: false, reason: 'outing_started' };
           }
         } else if (isStartsAtPast(outingGate.startsAt)) {
@@ -4425,7 +4536,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (req.attendance === 'present') {
         return { ok: true }; // idempotent
       }
-      dispatch({ type: 'MARK_GUEST_PRESENT', payload: { requestId } });
+      const markedAt = new Date().toISOString();
+      // Caution return only from H−15.
+      if (!isPresenceWindowOpen(outing, new Date(markedAt).getTime())) {
+        return { ok: false, reason: 'too_early' };
+      }
+      dispatch({
+        type: 'MARK_GUEST_PRESENT',
+        payload: { requestId, markedAt },
+      });
       return { ok: true };
     },
     [state.currentUser, state.requests, state.outings],
@@ -4466,7 +4585,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           : [];
       const markedIds: string[] = [];
       for (const r of toMark) {
-        dispatch({ type: 'MARK_GUEST_PRESENT', payload: { requestId: r.id } });
+        // Demo QA: use startsAt so the H−15 reducer guard always passes.
+        dispatch({
+          type: 'MARK_GUEST_PRESENT',
+          payload: { requestId: r.id, markedAt: outing.startsAt },
+        });
         markedIds.push(r.id);
       }
       let rateTarget: {
@@ -5313,6 +5436,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           banned: s.banned,
         };
       }
+      const reportedAt = new Date().toISOString();
+      // Not before H — UI hides the button, but the action must enforce it.
+      if (!isStartsAtPast(outing.startsAt, new Date(reportedAt).getTime())) {
+        return { ok: false, reason: 'too_early' };
+      }
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
         reporterId: guestId,
@@ -5329,6 +5457,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             strike: state.guestNoShowStrikes[guestId] ?? 0,
             lowerPriority: false,
             banned: false,
+            reportedAt,
           },
         });
         const toast: AppToast = {
@@ -5359,6 +5488,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           strike,
           lowerPriority,
           banned,
+          reportedAt,
         },
       });
       const note: ChatMessage = {

@@ -239,6 +239,9 @@ function RequestsScreenInner() {
                       outing_finished: 'Ce moment est terminé.',
                       invalid: 'Demande invalide.',
                       not_found: 'Moment introuvable.',
+                      full: 'Plus de place disponible.',
+                      partner: 'Annonce partenaire : pas d’acceptation manuelle.',
+                      expired: 'Cette demande n’est plus acceptée.',
                     };
                     Alert.alert(
                       'Impossible',

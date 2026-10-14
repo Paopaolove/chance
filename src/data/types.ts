@@ -699,7 +699,7 @@ export type AppAction =
    * Explicit presence (host / check-in). Confirmé → present + held deposit
    * returned. Idempotent. Cannot override absent. ≠ COMPLETE_OUTING / CLOSE.
    */
-  | { type: 'MARK_GUEST_PRESENT'; payload: { requestId: string } }
+  | { type: 'MARK_GUEST_PRESENT'; payload: { requestId: string; markedAt: string } }
   | { type: 'ADD_REVIEW'; payload: Review }
   | { type: 'REPLY_TO_REVIEW'; payload: { reviewId: string; reply: string } }
   | {
@@ -750,6 +750,8 @@ export type AppAction =
         lowerPriority: boolean;
         /** 3e absence → compte fermé. */
         banned?: boolean;
+        /** Instant of the report — must be ≥ H. */
+        reportedAt: string;
       };
     }
   | {

@@ -2,6 +2,7 @@ import * as Notifications from 'expo-notifications';
 import React, { useEffect, useRef } from 'react';
 import { useChance } from '../data/ChanceContext';
 import {
+  flushPendingNotificationTarget,
   openNotificationTarget,
   payloadFromNotificationData,
 } from '../utils/openNotificationTarget';
@@ -9,6 +10,8 @@ import {
 /**
  * Listens for local notification taps and routes via openNotificationTarget.
  * Mount inside NavigationContainer (RootNavigator).
+ * Cold-start: queue until navigation is ready; clear the OS last-response
+ * only after the target is actually handled.
  */
 export function NotificationTapHandler() {
   const {
@@ -46,7 +49,6 @@ export function NotificationTapHandler() {
       },
     );
 
-    // Cold start: user opened app by tapping a notification
     void Notifications.getLastNotificationResponseAsync().then((last) => {
       if (!last) return;
       const data = last.notification.request.content.data as
@@ -54,11 +56,28 @@ export function NotificationTapHandler() {
         | undefined;
       const payload = payloadFromNotificationData(data);
       if (!payload.type && !payload.outingId && !payload.requestId) return;
-      // Slight delay so NavigationContainer is ready
-      setTimeout(() => {
-        openNotificationTarget(payload, ctxRef.current);
-        void Notifications.clearLastNotificationResponseAsync();
-      }, 400);
+
+      const clearIfHandled = (handled: boolean) => {
+        if (handled) {
+          void Notifications.clearLastNotificationResponseAsync();
+        }
+        return handled;
+      };
+
+      if (clearIfHandled(openNotificationTarget(payload, ctxRef.current))) {
+        return;
+      }
+      // Not ready yet (or onReady already ran before we queued): retry briefly.
+      let attempts = 0;
+      const id = setInterval(() => {
+        attempts += 1;
+        const handled =
+          flushPendingNotificationTarget() ||
+          openNotificationTarget(payload, ctxRef.current);
+        if (clearIfHandled(handled) || attempts >= 50) {
+          clearInterval(id);
+        }
+      }, 100);
     });
 
     return () => sub.remove();

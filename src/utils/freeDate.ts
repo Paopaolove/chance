@@ -43,7 +43,13 @@ export function parseFreeDate(raw: string, nowMs = Date.now()): FreeDateResult {
   let ymd = `${year}-${pad2(month)}-${pad2(day)}`;
   if (today && ymd < today) {
     if (m[3]) return { ok: false, reason: 'past' };
-    ymd = `${year + 1}-${pad2(month)}-${pad2(day)}`;
+    const nextYear = year + 1;
+    const probeNext = new Date(nextYear, month - 1, day);
+    if (probeNext.getMonth() !== month - 1 || probeNext.getDate() !== day) {
+      // e.g. 29/02 rolled into a non-leap year
+      return { ok: false, reason: 'invalid' };
+    }
+    ymd = `${nextYear}-${pad2(month)}-${pad2(day)}`;
   }
   return { ok: true, ymd };
 }

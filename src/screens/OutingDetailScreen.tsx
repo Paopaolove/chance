@@ -40,6 +40,7 @@ import { formatOutingWhen } from '../utils/format';
 import { isStartsAtPast } from '../utils/parisTime';
 import {
   isOutingAcceptingRequests,
+  isPresenceWindowOpen,
   isUrgentOnSite,
 } from '../utils/outingActive';
 import { makeVenueKey } from '../utils/venue';
@@ -801,7 +802,10 @@ export function OutingDetailScreen() {
                     ) : null}
                   </View>
                 ) : null}
-                {!partner && outing.status !== 'cancelled' && !r.attendance ? (
+                {!partner &&
+                outing.status !== 'cancelled' &&
+                !r.attendance &&
+                isPresenceWindowOpen(outing) ? (
                   <Button
                     title={`Marquer ${r.userName} présent`}
                     variant="secondary"

@@ -4,6 +4,7 @@ import {
   Theme,
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as Notifications from 'expo-notifications';
 import React from 'react';
 import { useChance } from '../data/ChanceContext';
 import { ChatPlaceholderScreen } from '../screens/ChatPlaceholderScreen';
@@ -22,6 +23,7 @@ import { ReviewsScreen } from '../screens/ReviewsScreen';
 import { VenueDetailScreen } from '../screens/VenueDetailScreen';
 import { colors } from '../theme';
 import { NotificationTapHandler } from '../components/NotificationTapHandler';
+import { flushPendingNotificationTarget } from '../utils/openNotificationTarget';
 import { MainTabs } from './MainTabs';
 import { navigationRef } from './navigationRef';
 import { RootStackParamList } from './types';
@@ -47,7 +49,16 @@ export function RootNavigator() {
   const { state } = useChance();
 
   return (
-    <NavigationContainer ref={navigationRef} theme={chanceNavTheme}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={chanceNavTheme}
+      onReady={() => {
+        const handled = flushPendingNotificationTarget();
+        if (handled) {
+          void Notifications.clearLastNotificationResponseAsync();
+        }
+      }}
+    >
       <NotificationTapHandler />
       <Stack.Navigator
         screenOptions={{
