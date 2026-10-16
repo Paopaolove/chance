@@ -1,0 +1,166 @@
+// Harnais règles Moment — lancer : npm run test:rules (Node 22). Voir scripts/run-test-rules.cjs.
+// @ts-nocheck
+import * as G from '../src/utils/parisGeo';
+import { __reducer as R, __initial as I } from '../src/data/ChanceContext';
+import * as OA from '../src/utils/outingActive';
+import * as P from '../src/utils/partners';
+import * as C from '../src/utils/chat';
+import * as PR from '../src/data/pricing';
+import * as MP from '../src/utils/momentPhotos';
+import { parseFreeDate } from '../src/utils/freeDate';
+import { parisWallToUtc, isParisTomorrow, nextParisMidnight } from '../src/utils/parisTime';
+let pass=0, fail=0; const ok=(c:any,m:string)=>{c?pass++:(fail++,console.log('FAIL',m));};
+const H=3600e3, now=Date.now(), iso=(ms:number)=>new Date(ms).toISOString();
+const me:any={id:'u1',firstName:'Moi',gender:'femme',plan:'essai'};
+const host:any={id:'h1',firstName:'Hôte'};
+const o=(x:any={}):any=>({id:'o1',hostId:'h1',hostName:'Hôte',status:'open',capacity:2,spotsLeft:2,startsAt:iso(now+5*H),category:'resto',budgetMaxEuros:20,neighborhood:'X',...x});
+const rq=(x:any={}):any=>({id:'r1',outingId:'o1',userId:'u1',userName:'Moi',status:'pending',createdAt:iso(now),...x});
+const S=(x:any={}):any=>({...I,currentUser:me,outings:[o()],requests:[],momentPhotos:[],...x});
+const freeze=(s:any)=>{const f=(v:any)=>{if(v&&typeof v==='object'){Object.freeze(v);Object.values(v).forEach(f);}return v;};return f(s);};
+const D=(s:any,a:any)=>R(freeze(s),a);
+// join / accept / confirm
+let s=D(S(),{type:'JOIN_OUTING',payload:rq()}); ok(s.requests.length===1,'join');
+ok(D(S({currentUser:{...me,gender:undefined},outings:[o({womenOnly:true})]}),{type:'JOIN_OUTING',payload:rq()}).requests.length===0,'unknown gender women-only');
+ok(D(S({outings:[o({startsAt:iso(now-60e3)})]}),{type:'JOIN_OUTING',payload:rq()}).requests.length===0,'join past start (reducer)');
+ok(D(S({outings:[o({hostId:'u1'})]}),{type:'JOIN_OUTING',payload:rq()}).requests.length===0,'join own outing (reducer)');
+s=D(s,{type:'ACCEPT_REQUEST',payload:{requestId:'r1',acceptedAt:iso(now),confirmDeadlineAt:iso(now+10*60e3)}});
+ok(s.requests[0].status==='accepted'&&s.outings[0].spotsLeft===1,'accept');
+let late=D(s,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+11*60e3)}});
+ok(late.requests[0].status==='expired'&&late.outings[0].spotsLeft===2,'10 min expiry restores seat');
+s=D(s,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+60e3)}});
+ok(s.requests[0].status==='confirmed'&&s.requests[0].depositStatus==='held','confirm holds caution');
+ok(D(s,{type:'DECLINE_REQUEST',payload:{requestId:'r1'}}).requests[0].status==='confirmed','decline must not hit confirmed');
+// cancel windows
+ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}}).requests[0].depositStatus==='returned','cancel ≥3h returned');
+ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+3*H),by:'guest'}}).requests[0].depositStatus==='forfeited','late cancel forfeited');
+ok(D(s,{type:'CANCEL_OUTING',payload:{outingId:'o1'}}).requests[0].depositStatus==='returned','host cancel returns');
+ok(PR.DEPOSIT_FORFEIT_CHANCE_EUROS+PR.DEPOSIT_FORFEIT_HOST_EUROS===20,'split 6.90+13.10');
+// complete + present + photos
+let c=D(s,{type:'COMPLETE_OUTING',payload:{outingId:'o1'}}); ok(c.requests[0].attendance===undefined,'complete ≠ present');
+ok(MP.momentParticipants(c.outings[0],c.requests).length===0,'no participants without presence');
+ok(D(c,{type:'ADD_MOMENT_PHOTO',payload:{id:'p0',outingId:'o1',uploaderId:'zz',uri:'x',createdAt:iso(now),consents:{}}}).momentPhotos.length===0,'non-participant photo (reducer)');
+c=D(c,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now+5*H)}}); ok(c.requests[0].depositStatus==='returned','present returns');
+ok(D(s,{type:'ADD_MOMENT_PHOTO',payload:{id:'p0',outingId:'o1',uploaderId:'u1',uri:'x',createdAt:iso(now),consents:{h1:'pending'}}}).momentPhotos.length===0,'no photo before terminée');
+let ph=c; for(const i of [1,2,3]) ph=D(ph,{type:'ADD_MOMENT_PHOTO',payload:{id:'p'+i,outingId:'o1',uploaderId:'u1',uri:'x',createdAt:iso(now),consents:{h1:'pending'}}});
+ok(ph.momentPhotos.length===2,'max 2 photos');
+ok(MP.momentPhotoStatus(ph.momentPhotos[0],ph.outings[0],ph.requests)==='pending','pending');
+ph=D(ph,{type:'SET_MOMENT_PHOTO_CONSENT',payload:{photoId:'p1',userId:'h1',consent:'accepted'}});
+ok(MP.momentPhotoStatus(ph.momentPhotos[0],ph.outings[0],ph.requests)==='published','published after consent');
+// one active announcement
+ok(!P.canPartnerOrUserCreateOuting(host,iso(now+48*H),[o()],[]).ok,'1 active');
+ok(P.canPartnerOrUserCreateOuting(host,iso(now+48*H),[o({status:'completed'})],[]).ok,'completed frees slot');
+// urgent window / feed
+const u=o({urgentOnSite:true,startsAt:iso(now-20*60e3)});
+ok(OA.isVisibleOnAnnoncesFeed(u)&&OA.isOutingAcceptingRequests(u),'urgent visible H+20');
+ok(!OA.isVisibleOnAnnoncesFeed(o({urgentOnSite:true,startsAt:iso(now-31*60e3)})),'urgent hidden H+31');
+ok(!OA.isVisibleOnAnnoncesFeed(o({startsAt:iso(now-60e3)})),'normal hidden after start');
+ok(OA.shouldAutoPromoteUrgent(o({startsAt:iso(now+80*60e3)}),[]),'auto urgent H-90');
+// chat
+ok(!C.isChatUnlocked(iso(now+2*H),now)&&C.isChatUnlocked(iso(now+50*60e3),now),'chat H-1');
+ok(C.isChatUnlocked(iso(now+5*H),now,C.chatUnlockOptsFor({isPartnerListing:true})),'partner chat at confirm');
+// partner auto seat
+const po=o({isPartnerListing:true,capacity:1,spotsLeft:1});
+let ps=S({outings:[po],requests:[rq({status:'accepted',partnerAutoSeat:true,confirmDeadlineAt:iso(now+600e3)}),rq({id:'r2',userId:'u2',status:'accepted',partnerAutoSeat:true,confirmDeadlineAt:iso(now+600e3)})]});
+ps=D(ps,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now)}});
+ok(ps.outings[0].status==='closed'&&ps.requests[1].partnerNoSpot,'partner full → closed + plus de place');
+ok(D(S({outings:[po],requests:[rq()]}),{type:'ACCEPT_REQUEST',payload:{requestId:'r1'}}).requests[0].status==='pending','no accept on partner');
+ok(P.nextPartnerWarningState(1).closed&&!P.nextPartnerWarningState(0).closed,'2nd warning closes');
+// dates
+const t=parseFreeDate('12/10',Date.parse('2026-10-09T10:00:00Z')); ok(t.ok&&(t as any).ymd==='2026-10-12','JJ/MM');
+const t2=parseFreeDate('01/01',Date.parse('2026-10-09T10:00:00Z')); ok(t2.ok&&(t2 as any).ymd==='2027-01-01','rollover');
+ok(parisWallToUtc('2026-10-25',20,0).toISOString()==='2026-10-25T19:00:00.000Z','DST oct');
+ok(parisWallToUtc('2026-03-29',20,0).toISOString()==='2026-03-29T18:00:00.000Z','DST mar');
+ok(isParisTomorrow('2026-10-10T08:00:00Z',Date.parse('2026-10-09T22:30:00Z'))===false,'23h30 Paris: tomorrow = 11 oct');
+ok(nextParisMidnight(new Date('2026-10-24T23:30:00Z')).toISOString()==='2026-10-25T23:00:00.000Z','midnight DST day');
+// fil avant le compte : pas de demande / publication sans compte (reducer)
+ok(D(S({currentUser:null}),{type:'JOIN_OUTING',payload:rq()}).requests.length===0,'guest cannot join (reducer)');
+ok(D(S({currentUser:null,outings:[]}),{type:'CREATE_OUTING',payload:o({id:'o9',hostId:'u1'})}).outings.length===0,'guest cannot propose (reducer)');
+ok(D(S({slidesSeen:false,currentUser:null}),{type:'SEE_SLIDES'}).slidesSeen===true&&I.slidesSeen===false&&I.onboardingDone===false,'slides seen ≠ account');
+// hôte à table seulement s’il est venu
+ok(MP.momentParticipants(c.outings[0],c.requests).some((p:any)=>p.userId==='h1'),'host present counted');
+ok(!MP.momentParticipants({...c.outings[0],hostNoShowReported:true},c.requests).some((p:any)=>p.userId==='h1'),'host no-show not at table');
+ok(MP.momentParticipants({...c.outings[0],hostNoShowReported:true},c.requests).length===0,'guest alone after host no-show: no shared moment');
+// carte : bornes Paris + coordonnées dérivées
+{const a=G.outingCoords({id:'m1',neighborhood:'Montmartre'})!, b=G.outingCoords({id:'m1',neighborhood:'Montmartre'})!, c=G.outingCoords({id:'m2',neighborhood:'Montmartre'})!;
+ok(!!a&&G.isInParis(a)&&a.latitude===b.latitude&&(a.latitude!==c.latitude||a.longitude!==c.longitude),'geo: quartier → coords déterministes, décalées');
+ok(G.outingCoords({id:'x',neighborhood:'Versailles'})===null&&G.outingCoords({id:'x',neighborhood:'X',latitude:48.9,longitude:2.6})===null&&!G.isInParis({latitude:48.80,longitude:2.35}),'geo: hors Paris exclu');
+const r=G.clampRegion({latitude:49.5,longitude:2.35,latitudeDelta:1,longitudeDelta:1}); ok(r.latitudeDelta<=G.PARIS_MAX_DELTA&&G.isInParis(r),'geo: pas de vue 100 km');}
+
+// audit guards (fb14e0f lot)
+ok(Number.isNaN(parisWallToUtc('2027-03-28',2,30).getTime()),'DST spring gap refused');
+ok(parisWallToUtc('2026-10-25',2,30).toISOString()==='2026-10-25T00:30:00.000Z','DST autumn earlier instant');
+const feb=parseFreeDate('29/02',Date.parse('2028-03-01T10:00:00Z')); ok(!feb.ok&&(feb as any).reason==='invalid','29/02 rollover revalidated');
+{
+  const start=iso(now);
+  const uo=o({urgentOnSite:true,startsAt:start,status:'open'});
+  const late=iso(now+31*60e3);
+  const s0=S({outings:[uo],requests:[rq({status:'accepted',confirmDeadlineAt:iso(now+600e3)})]});
+  const s1=D(s0,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:late}});
+  ok(s1.requests[0].status==='accepted','urgent confirm after H+30 refused');
+}
+{
+  const start=iso(now+60*60e3); // H in 1h → before H−15
+  const s0=S({outings:[o({startsAt:start})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  const s1=D(s0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
+  ok(s1.requests[0].attendance!=='present'&&s1.requests[0].depositStatus==='held','presence before H−15 refused');
+  const s2=D(s0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now+50*60e3)}});
+  ok(s2.requests[0].attendance==='present'&&s2.requests[0].depositStatus==='returned','presence from H−15 ok');
+}
+{
+  const guest:any={...me,plan:'payg',outingCredits:1};
+  const s0=S({currentUser:guest,requests:[rq({status:'accepted',confirmDeadlineAt:iso(now+600e3)}),rq({id:'r2',userId:'u1',status:'accepted',confirmDeadlineAt:iso(now+600e3)})]});
+  const s1=D(s0,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now),consumeCredit:true}});
+  ok(s1.requests[0].status==='confirmed'&&(s1.currentUser.outingCredits??0)===0,'credit consumed on first confirm');
+  const s2=D(s1,{type:'CONFIRM_SLOT',payload:{requestId:'r2',confirmedAt:iso(now),consumeCredit:true}});
+  ok(s2.requests[1].status==='accepted'&&(s2.currentUser.outingCredits??0)===0,'second confirm refused without credit');
+}
+{
+  const start=iso(now+60*60e3);
+  const s0=S({outings:[o({startsAt:start})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  const s1=D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(now)}});
+  ok(s1.requests[0].attendance!=='absent'&&s1.requests[0].depositStatus==='held','no-show before H refused');
+}
+ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen(o({startsAt:iso(now+20*60e3)}),now),'presence window helper');
+
+// lot « Je quitte la table » + joker avant H
+{
+  const st=(startOffMs:number,x:any={})=>S({outings:[o({startsAt:iso(now+startOffMs),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held',...x})]});
+  const L=(s0:any,atMs:number,reason?:any,id='lv1')=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(atMs),reason,reportId:id}});
+  // 3. avant H+30 sans motif → perdue
+  let a=L(st(-10*60e3),now); ok(a.requests[0].depositStatus==='forfeited'&&a.requests[0].leftTableEarly===true&&a.confidentialLeaveReports.length===0,'leave <H+30 no reason forfeited');
+  ok(PR.DEPOSIT_FORFEIT_CHANCE_EUROS===6.9&&PR.DEPOSIT_FORFEIT_HOST_EUROS===13.1,'leave split 6.90/13.10');
+  // 6. après H+30 → libre
+  let b=L(st(-31*60e3),now); ok(b.requests[0].depositStatus==='returned'&&!b.requests[0].leftTableEarly,'leave ≥H+30 free');
+  ok(L(st(-30*60e3),now).requests[0].depositStatus==='returned','leave exactly H+30 free');
+  // 4. malaise → rendue + signalement confidentiel, hôte ne voit pas le motif
+  let c=L(st(-5*60e3),now,'discomfort');
+  ok(c.requests[0].depositStatus==='returned'&&!c.requests[0].leftTableEarly&&c.confidentialLeaveReports.length===1,'discomfort returned + confidential report');
+  ok(!('reason' in c.requests[0])&&!JSON.stringify(c.requests[0]).includes('discomfort'),'host-visible request has no motive');
+  ok(c.confidentialLeaveReports[0].hostId==='h1'&&c.confidentialLeaveReports[0].guestId==='u1'&&!c.currentUser.manualReviewRequired,'report fields, no review after 1');
+  // pas avant H, pas deux fois, pas l’hôte, pas un autre
+  ok(L(st(10*60e3),now).requests[0].leftTableAt===undefined,'no leave before H');
+  ok(L(a,now+60e3).requests[0].depositStatus==='forfeited'&&L(a,now+60e3).requests[0].leftTableAt===a.requests[0].leftTableAt,'leave idempotent');
+  ok(L({...st(-5*60e3),currentUser:{...me,id:'h1'}},now).requests[0].leftTableAt===undefined,'host cannot leave as guest');
+  ok(L(st(-5*60e3,{status:'cancelled'}),now).requests[0].leftTableAt===undefined,'cancelled request cannot leave');
+  // présent / caution déjà rendue → jamais re-perdue
+  ok(L(st(-5*60e3,{attendance:'present',depositStatus:'returned'}),now).requests[0].depositStatus==='returned','present returned not re-forfeited');
+  // 5. deux malaises en 3 mois → revue manuelle, motif plus proposé
+  const prior={id:'old',outingId:'o0',requestId:'r0',guestId:'u1',hostId:'h2',reason:'discomfort',createdAt:iso(now-40*24*H)};
+  let d=L({...st(-5*60e3),confidentialLeaveReports:[prior]},now,'discomfort');
+  ok(d.currentUser.manualReviewRequired===true&&d.confidentialLeaveReports.length===2&&d.requests[0].depositStatus==='returned','2nd discomfort → manual review');
+  const LT=require('../src/utils/leaveTable');
+  ok(!LT.isDiscomfortReasonOffered(d.confidentialLeaveReports,'u1',d.currentUser.manualReviewRequired,now),'discomfort no longer offered');
+  let e=L({...st(-5*60e3),currentUser:{...me,manualReviewRequired:true},confidentialLeaveReports:[prior,{...prior,id:'o2'}]},now,'discomfort');
+  ok(e.requests[0].depositStatus==='forfeited'&&e.confidentialLeaveReports.length===2,'discomfort refused when not offered → normal rule');
+  ok(LT.isDiscomfortReasonOffered([{...prior,createdAt:iso(now-100*24*H)}],'u1',false,now)&&LT.countRecentDiscomfort([{...prior,createdAt:iso(now-100*24*H)}],'u1',now)===0,'discomfort older than 3 months ignored');
+  ok(LT.countRecentDiscomfort([{...prior,concreteEvidence:true}],'u1',now)===0,'concrete evidence not counted');
+  // 1. joker seulement avant H, refusé si présent
+  const jk=(startOffMs:number,x:any={},usedAt=now)=>D(S({outings:[o({startsAt:iso(now+startOffMs)})],requests:[rq({status:'confirmed',depositStatus:'held',...x})],imprevuReports:[{id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'refused',createdAt:iso(now)}]}),{type:'USE_JOKER_ON_IMPREVU',payload:{imprevuId:'i1',requestId:'r1',monthKey:'2099-01',usedAt:iso(usedAt)}});
+  ok(jk(60*60e3).requests[0].depositStatus==='returned'&&jk(60*60e3).imprevuReports[0].jokerUsed===true,'joker before H ok');
+  ok(jk(-60e3).requests[0].depositStatus==='held'&&!jk(-60e3).imprevuReports[0].jokerUsed,'joker after start refused');
+  ok(jk(0).requests[0].depositStatus==='held','joker at H refused');
+  ok(jk(60*60e3,{attendance:'present'}).requests[0].depositStatus==='held','joker refused when present');
+  ok(jk(60*60e3,{guestArrivedAt:iso(now)}).requests[0].depositStatus==='held','joker refused when arrived');
+}
+console.log({pass,fail});
+if(fail) process.exitCode=1;
