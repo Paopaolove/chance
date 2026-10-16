@@ -105,6 +105,14 @@ import {
   shouldApplyGuestNoShowPenalty,
 } from '../utils/jokerExemption';
 import {
+  canGuestLeaveTable,
+  isDiscomfortReasonOffered,
+  isJokerAllowedNow,
+  resolveLeaveTable,
+  countRecentDiscomfort,
+  DISCOMFORT_REVIEW_THRESHOLD,
+} from '../utils/leaveTable';
+import {
   canActorBlockUser,
   canActorConfirmSlot,
   canActorMarkGuestPresent,
@@ -185,6 +193,7 @@ const initialState: AppState = {
   userReports: [],
   partnerWarningsByHost: {},
   momentPhotos: [],
+  confidentialLeaveReports: [],
 };
 
 /** Paris neighborhoods default for a demo venue. */
@@ -883,6 +892,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         userReports: [],
         partnerWarningsByHost: {},
         momentPhotos: [],
+        confidentialLeaveReports: [],
       };
 
     case 'ADD_CHAT_MESSAGE':
@@ -1043,6 +1053,25 @@ function reducer(state: AppState, action: AppAction): AppState {
         return state;
       }
       if (report.jokerUsed) return state;
+      // Joker seulement avant H, et jamais si l’invité est déjà présent.
+      {
+        const jo = state.outings.find((o) => o.id === report.outingId);
+        const jr = state.requests.find((r) => r.id === requestId);
+        const usedAtMs = action.payload.usedAt
+          ? new Date(action.payload.usedAt).getTime()
+          : Date.now();
+        if (
+          !jo ||
+          !isJokerAllowedNow({
+            startsAt: jo.startsAt,
+            attendance: jr?.attendance,
+            guestArrivedAt: jr?.guestArrivedAt,
+            nowMs: usedAtMs,
+          })
+        ) {
+          return state;
+        }
+      }
       let currentUser = state.currentUser;
       // Atomic monthly quota (lot 2): refuse if already consumed this Paris month
       // even when two dispatches race past the callback guard.
@@ -1061,6 +1090,81 @@ function reducer(state: AppState, action: AppAction): AppState {
         requests: state.requests.map((r) =>
           r.id === requestId
             ? { ...r, depositStatus: 'returned' as const }
+            : r,
+        ),
+      };
+    }
+
+    case 'LEAVE_TABLE': {
+      const { requestId, leftAt, reason, reportId } = action.payload;
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req) return state;
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing) return state;
+      const me = state.currentUser;
+      // Seul l’invité lui-même quitte la table.
+      if (!me || me.id !== req.userId || me.id === outing.hostId) return state;
+      const leftAtMs = new Date(leftAt).getTime();
+      if (!Number.isFinite(leftAtMs)) return state;
+      if (
+        !canGuestLeaveTable({
+          startsAt: outing.startsAt,
+          outingStatus: outing.status,
+          requestStatus: req.status,
+          attendance: req.attendance,
+          leftAt: req.leftTableAt,
+          nowMs: leftAtMs,
+        })
+      ) {
+        return state;
+      }
+      const discomfortAllowed = isDiscomfortReasonOffered(
+        state.confidentialLeaveReports,
+        me.id,
+        me.manualReviewRequired,
+        leftAtMs,
+      );
+      const outcome = resolveLeaveTable({
+        startsAt: outing.startsAt,
+        leftAtMs,
+        reason,
+        discomfortAllowed,
+      });
+      // Caution déjà rendue (présence, joker…) : jamais re-perdue.
+      const deposit =
+        req.depositStatus === 'held' ? outcome.deposit : req.depositStatus;
+      const reports = outcome.confidentialReport
+        ? [
+            {
+              id: reportId,
+              outingId: outing.id,
+              requestId: req.id,
+              guestId: me.id,
+              hostId: outing.hostId,
+              reason: 'discomfort' as const,
+              createdAt: leftAt,
+            },
+            ...state.confidentialLeaveReports,
+          ]
+        : state.confidentialLeaveReports;
+      const needsReview =
+        outcome.confidentialReport &&
+        countRecentDiscomfort(reports, me.id, leftAtMs) >=
+          DISCOMFORT_REVIEW_THRESHOLD;
+      return {
+        ...state,
+        currentUser: needsReview
+          ? { ...me, manualReviewRequired: true }
+          : me,
+        confidentialLeaveReports: reports,
+        requests: state.requests.map((r) =>
+          r.id === requestId
+            ? {
+                ...r,
+                leftTableAt: leftAt,
+                leftTableEarly: outcome.countsAgainstGuest || undefined,
+                depositStatus: deposit,
+              }
             : r,
         ),
       };
@@ -2312,6 +2416,19 @@ interface ChanceContextValue {
    * Après refus / auto_refus d’un imprévu (reporter = invité) :
    * caution returned, pas d’absence, hôte 0 €, joker consommé ce mois Paris.
    */
+  /** Motif « Je ne me sens pas à l’aise » encore proposé à l’utilisateur courant. */
+  isDiscomfortReasonOfferedForMe: () => boolean;
+  /**
+   * « Je quitte la table » (invité, pendant le moment). Motif facultatif.
+   * Malaise → caution rendue + signalement confidentiel (hôte ne voit pas le motif).
+   * Sans motif : avant H+30 caution perdue (6,90/13,10), après libre.
+   */
+  leaveTable: (
+    requestId: string,
+    reason?: 'discomfort',
+  ) =>
+    | { ok: true; deposit: 'returned' | 'forfeited' | 'none' | undefined; discomfort: boolean }
+    | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' };
   useJokerOnImprevu: (
     imprevuId: string,
   ) =>
@@ -2326,7 +2443,8 @@ interface ChanceContextValue {
           | 'already_used'
           | 'no_joker'
           | 'no_request'
-          | 'not_guest';
+          | 'not_guest'
+          | 'moment_started';
       };
   /**
    * Guest absence after confirm (acteur = hôte ou invité).
@@ -5337,7 +5455,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             | 'already_used'
             | 'no_joker'
             | 'no_request'
-            | 'not_guest';
+            | 'not_guest'
+            | 'moment_started';
         } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
@@ -5374,6 +5493,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
               r.depositStatus === 'forfeited'),
         )?.id;
       if (!requestId) return { ok: false, reason: 'no_request' };
+      {
+        const jr = state.requests.find((r) => r.id === requestId);
+        if (
+          !isJokerAllowedNow({
+            startsAt: outing.startsAt,
+            attendance: jr?.attendance,
+            guestArrivedAt: jr?.guestArrivedAt,
+          })
+        ) {
+          return { ok: false, reason: 'moment_started' };
+        }
+      }
 
       // Claim month synchronously before dispatch (atomic vs double-tap).
       jokerMonthLockRef.current = month;
@@ -5391,6 +5522,80 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       return { ok: true };
     },
     [state.currentUser, state.imprevuReports, state.outings, state.requests],
+  );
+
+  const isDiscomfortReasonOfferedForMe = useCallback((): boolean => {
+    const user = state.currentUser;
+    if (!user) return false;
+    return isDiscomfortReasonOffered(
+      state.confidentialLeaveReports,
+      user.id,
+      user.manualReviewRequired,
+    );
+  }, [state.currentUser, state.confidentialLeaveReports]);
+
+  const leaveTable = useCallback(
+    (
+      requestId: string,
+      reason?: 'discomfort',
+    ):
+      | {
+          ok: true;
+          deposit: 'returned' | 'forfeited' | 'none' | undefined;
+          discomfort: boolean;
+        }
+      | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const req = state.requests.find((r) => r.id === requestId);
+      const outing = req
+        ? state.outings.find((o) => o.id === req.outingId)
+        : undefined;
+      if (!req || !outing) return { ok: false, reason: 'not_found' };
+      const nowMs = Date.now();
+      if (
+        req.userId !== user.id ||
+        outing.hostId === user.id ||
+        !canGuestLeaveTable({
+          startsAt: outing.startsAt,
+          outingStatus: outing.status,
+          requestStatus: req.status,
+          attendance: req.attendance,
+          leftAt: req.leftTableAt,
+          nowMs,
+        })
+      ) {
+        return { ok: false, reason: 'not_allowed' };
+      }
+      const discomfortAllowed = isDiscomfortReasonOffered(
+        state.confidentialLeaveReports,
+        user.id,
+        user.manualReviewRequired,
+        nowMs,
+      );
+      const outcome = resolveLeaveTable({
+        startsAt: outing.startsAt,
+        leftAtMs: nowMs,
+        reason,
+        discomfortAllowed,
+      });
+      dispatch({
+        type: 'LEAVE_TABLE',
+        payload: {
+          requestId,
+          leftAt: new Date(nowMs).toISOString(),
+          reason: discomfortAllowed ? reason : undefined,
+          reportId: uid('leave'),
+        },
+      });
+      return {
+        ok: true,
+        deposit:
+          req.depositStatus === 'held' ? outcome.deposit : req.depositStatus,
+        discomfort: outcome.confidentialReport,
+      };
+    },
+    [state.currentUser, state.requests, state.outings, state.confidentialLeaveReports],
   );
 
   const reportGuestNoShow = useCallback(
@@ -6473,6 +6678,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       respondVenueAlternate,
       hasJokerAvailable,
       useJokerOnImprevu,
+      isDiscomfortReasonOfferedForMe,
+      leaveTable,
       reportGuestNoShow,
       reportHostNeverHonor,
       simulateConfirmRace,
@@ -6575,6 +6782,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       respondVenueAlternate,
       hasJokerAvailable,
       useJokerOnImprevu,
+      isDiscomfortReasonOfferedForMe,
+      leaveTable,
       reportGuestNoShow,
       reportHostNeverHonor,
       simulateConfirmRace,

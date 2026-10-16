@@ -25,6 +25,7 @@ import {
   normalizeImprevuReason,
 } from '../utils/imprevu';
 import { useOpenUserProfile } from '../utils/openUserProfile';
+import { isJokerAllowedNow } from '../utils/leaveTable';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Imprevu'>;
 type R = RouteProp<RootStackParamList, 'Imprevu'>;
@@ -47,6 +48,17 @@ export function ImprevuScreen() {
   const existing = getMyImprevu(outingId);
   const outing = getOutingById(outingId);
   const request = requestId ? getRequestById(requestId) : undefined;
+  const jokerReq =
+    request ??
+    (existing?.requestId ? getRequestById(existing.requestId) : undefined);
+  /** Joker refusé dès le début du moment ou si l’invité est présent. */
+  const jokerTooLate =
+    !outing ||
+    !isJokerAllowedNow({
+      startsAt: outing.startsAt,
+      attendance: jokerReq?.attendance,
+      guestArrivedAt: jokerReq?.guestArrivedAt,
+    });
   const me = state.currentUser;
   const isHost = !!outing && me?.id === outing.hostId;
   const otherUserId = outing
@@ -152,6 +164,11 @@ export function ImprevuScreen() {
         </View>
 
         {existing.jokerUsed ? null : (existing.status === 'refused' ||
+          existing.status === 'auto_refused') && jokerTooLate ? (
+          <Text style={[styles.body, { marginBottom: spacing.md }]}>
+            Joker possible seulement avant le début du moment.
+          </Text>
+        ) : (existing.status === 'refused' ||
           existing.status === 'auto_refused') && hasJokerAvailable() ? (
           <Button
             title="Utiliser mon joker"

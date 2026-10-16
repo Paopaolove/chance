@@ -177,6 +177,8 @@ export interface User {
    * Empty / other month → joker available again.
    */
   jokerUsedMonthKey?: string;
+  /** Revue manuelle Moment (ex. 2 malaises en 3 mois sans élément concret) — motif malaise plus proposé. */
+  manualReviewRequired?: boolean;
   /**
    * Compte lieu actif (partnerStatus === 'active'). Publier depuis ce compte
    * applique les règles partenaire (resto/bar : geste/remise ; culture :
@@ -369,6 +371,10 @@ export interface Request {
    * Reviews / sorties honorées use present, never confirmed alone.
    */
   attendance?: 'present' | 'absent';
+  /** ISO UTC — « Je quitte la table » (invité, pendant le moment). */
+  leftTableAt?: string;
+  /** Départ avant H+30 sans motif malaise (caution perdue). Le motif n’est jamais stocké ici (hôte). */
+  leftTableEarly?: boolean;
   /**
    * Annonce partenaire : demande créée directement « à confirmer » (10 min)
    * SANS réserver de chaise. La chaise est prise à la confirmation si
@@ -513,6 +519,22 @@ export type UserModerationReport = {
   createdAt: string;
 };
 
+/**
+ * Signalement confidentiel « Je ne me sens pas à l’aise » — visible par
+ * Moment seulement, jamais par l’hôte. concreteEvidence = élément concret
+ * retenu par Moment (démo : non renseigné).
+ */
+export interface ConfidentialLeaveReport {
+  id: string;
+  outingId: string;
+  requestId: string;
+  guestId: string;
+  hostId: string;
+  reason: 'discomfort';
+  createdAt: string;
+  concreteEvidence?: boolean;
+}
+
 export interface AppState {
   /** Compte créé (tunnel terminé). */
   onboardingDone: boolean;
@@ -545,6 +567,8 @@ export interface AppState {
   partnerWarningsByHost: Record<string, number>;
   /** Photos de moments passés (profil seulement, jamais dans le fil). */
   momentPhotos: MomentPhoto[];
+  /** Signalements confidentiels de départ (Moment seulement). */
+  confidentialLeaveReports: ConfidentialLeaveReport[];
 }
 
 export type DispoProfileUpdate = {
@@ -680,6 +704,17 @@ export type AppAction =
         imprevuId: string;
         requestId: string;
         monthKey: string;
+        /** ISO UTC — joker refusé à partir de H (défaut : maintenant). */
+        usedAt?: string;
+      };
+    }
+  | {
+      type: 'LEAVE_TABLE';
+      payload: {
+        requestId: string;
+        leftAt: string;
+        reason?: 'discomfort';
+        reportId: string;
       };
     }
   | { type: 'SET_TOAST'; payload: AppToast | null }

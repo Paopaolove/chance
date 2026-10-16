@@ -44,6 +44,11 @@ import {
   isUrgentOnSite,
 } from '../utils/outingActive';
 import { makeVenueKey } from '../utils/venue';
+import {
+  canGuestLeaveTable,
+  DISCOMFORT_REASON_LABEL,
+  isJokerAllowedNow,
+} from '../utils/leaveTable';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 import { CheckNote } from '../components/CheckNote';
@@ -79,6 +84,8 @@ export function OutingDetailScreen() {
     respondImprevu,
     hasJokerAvailable,
     useJokerOnImprevu,
+    isDiscomfortReasonOfferedForMe,
+    leaveTable,
     guestArrivedPartner,
     partnerMarkNoShow,
   } = useChance();
@@ -1093,6 +1100,21 @@ export function OutingDetailScreen() {
                 ) {
                   return null;
                 }
+                const jr =
+                  'id' in myRequest ? getRequestById(myRequest.id) : undefined;
+                if (
+                  !isJokerAllowedNow({
+                    startsAt: outing.startsAt,
+                    attendance: jr?.attendance,
+                    guestArrivedAt: jr?.guestArrivedAt,
+                  })
+                ) {
+                  return (
+                    <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                      Joker possible seulement avant le début du moment.
+                    </Text>
+                  );
+                }
                 if (!hasJokerAvailable()) {
                   return (
                     <Text style={[styles.hint, { marginTop: spacing.sm }]}>
@@ -1116,6 +1138,71 @@ export function OutingDetailScreen() {
                         'Caution rendue — ce n’est pas une absence. L’hôte ne touche rien.',
                       );
                     }}
+                    style={{ marginTop: spacing.sm }}
+                  />
+                );
+              })()}
+
+              {(() => {
+                if (!('id' in myRequest)) return null;
+                const lr = getRequestById(myRequest.id);
+                if (!lr) return null;
+                if (lr.leftTableAt) {
+                  return (
+                    <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                      Tu as quitté la table.
+                    </Text>
+                  );
+                }
+                if (
+                  !canGuestLeaveTable({
+                    startsAt: outing.startsAt,
+                    outingStatus: outing.status,
+                    requestStatus: lr.status,
+                    attendance: lr.attendance,
+                    leftAt: lr.leftTableAt,
+                  })
+                ) {
+                  return null;
+                }
+                const doLeave = (reason?: 'discomfort') => {
+                  const res = leaveTable(lr.id, reason);
+                  if (!res.ok) {
+                    Alert.alert('Impossible', 'Départ indisponible pour ce moment.');
+                    return;
+                  }
+                  Alert.alert(
+                    'Tu as quitté la table',
+                    res.discomfort
+                      ? 'Caution rendue, rien n’est compté. Moment est prévenu en toute confidentialité — l’hôte ne voit pas le motif.'
+                      : res.deposit === 'forfeited'
+                        ? `Départ avant 30 min : caution perdue (${describeDepositForfeitMoment()}).`
+                        : 'Caution rendue, rien n’est compté.',
+                  );
+                };
+                const buttons: {
+                  text: string;
+                  style?: 'cancel';
+                  onPress?: () => void;
+                }[] = [{ text: 'Retour', style: 'cancel' }];
+                if (isDiscomfortReasonOfferedForMe()) {
+                  buttons.push({
+                    text: DISCOMFORT_REASON_LABEL,
+                    onPress: () => doLeave('discomfort'),
+                  });
+                }
+                buttons.push({ text: 'Quitter', onPress: () => doLeave() });
+                return (
+                  <Button
+                    title="Je quitte la table"
+                    variant="secondary"
+                    onPress={() =>
+                      Alert.alert(
+                        'Je quitte la table',
+                        'Aucune justification obligatoire. Motif facultatif, confidentiel.',
+                        buttons,
+                      )
+                    }
                     style={{ marginTop: spacing.sm }}
                   />
                 );
