@@ -47,6 +47,7 @@ import { makeVenueKey } from '../utils/venue';
 import {
   canGuestLeaveTable,
   DISCOMFORT_REASON_LABEL,
+  hostLeaveView,
   isJokerAllowedNow,
 } from '../utils/leaveTable';
 import { useOpenUserProfile } from '../utils/openUserProfile';
@@ -85,6 +86,7 @@ export function OutingDetailScreen() {
     hasJokerAvailable,
     useJokerOnImprevu,
     isDiscomfortReasonOfferedForMe,
+    isMyLeaveDepositRefunded,
     leaveTable,
     guestArrivedPartner,
     partnerMarkNoShow,
@@ -760,7 +762,7 @@ export function OutingDetailScreen() {
                       {r.partnerDispute
                         ? `Litige · ${r.partnerDispute.note}`
                         : r.leftTableAt
-                          ? `${r.userName} · a quitté la table`
+                          ? [hostLeaveView(r)!.label, hostLeaveView(r)!.earningsLabel.replace('pour toi', 'pour ton lieu')].filter(Boolean).join(' · ')
                           : r.attendance === 'present'
                           ? `${r.userName} · arrivé · caution rendue après 30 min`
                           : r.attendance === 'absent'
@@ -836,7 +838,9 @@ export function OutingDetailScreen() {
                 {/* Départ : même mention avec ou sans motif (l’hôte ne le voit pas). */}
                 {!partner && r.leftTableAt ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                    {r.userName} · a quitté la table
+                    {[hostLeaveView(r)!.label, hostLeaveView(r)!.earningsLabel]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </Text>
                 ) : !partner && r.attendance === 'present' ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
@@ -1082,7 +1086,8 @@ export function OutingDetailScreen() {
                 />
               )}
               {'id' in myRequest &&
-              getRequestById(myRequest.id)?.depositStatus === 'returned' ? (
+              (getRequestById(myRequest.id)?.depositStatus === 'returned' ||
+                isMyLeaveDepositRefunded(myRequest.id)) ? (
                 <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
                   Caution remboursée (mock).
                 </CheckNote>

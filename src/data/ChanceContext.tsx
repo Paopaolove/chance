@@ -112,6 +112,8 @@ import {
   countRecentDiscomfort,
   DISCOMFORT_REVIEW_THRESHOLD,
   isLeaveBeforeH30,
+  hostLeaveShareEuros,
+  DEPOSIT_EUROS_LEAVE,
   presenceReturnsDepositNow,
 } from '../utils/leaveTable';
 import {
@@ -196,6 +198,7 @@ const initialState: AppState = {
   partnerWarningsByHost: {},
   momentPhotos: [],
   confidentialLeaveReports: [],
+  momentPaidHostLines: [],
 };
 
 /** Paris neighborhoods default for a demo venue. */
@@ -895,6 +898,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         partnerWarningsByHost: {},
         momentPhotos: [],
         confidentialLeaveReports: [],
+        momentPaidHostLines: [],
       };
 
     case 'ADD_CHAT_MESSAGE':
@@ -1021,6 +1025,9 @@ function reducer(state: AppState, action: AppAction): AppState {
             forfeitReporterDeposit &&
             r.userId === report.reporterId &&
             r.status === 'confirmed' &&
+            // Présent (H−15 → H) : pas de perte à H ; règle de présence / départ.
+            r.attendance !== 'present' &&
+            !r.leftTableAt &&
             (r.depositStatus === 'held' || !r.depositStatus)
           ) {
             return { ...r, depositStatus: 'forfeited' as const };
@@ -1132,9 +1139,20 @@ function reducer(state: AppState, action: AppAction): AppState {
         reason,
         discomfortAllowed,
       });
-      // Caution déjà rendue (présence, joker…) : jamais re-perdue.
+      const early = isLeaveBeforeH30(outing.startsAt, leftAtMs);
+      // Côté demande (visible hôte) : même statut avec ou sans malaise.
+      // Malaise avant H+30 → 'forfeited' affiché comme un départ sans motif ;
+      // le remboursement réel de l’invité est porté par le signalement
+      // confidentiel (guestDepositRefundedEuros), la part hôte par Moment.
+      // Caution déjà rendue (joker…) : jamais re-perdue.
       const deposit =
-        req.depositStatus === 'held' ? outcome.deposit : req.depositStatus;
+        req.depositStatus === 'held'
+          ? outcome.confidentialReport && early
+            ? ('forfeited' as const)
+            : outcome.deposit
+          : req.depositStatus;
+      const guestRefunded =
+        outcome.confidentialReport && req.depositStatus === 'held';
       const reports = outcome.confidentialReport
         ? [
             {
@@ -1145,6 +1163,7 @@ function reducer(state: AppState, action: AppAction): AppState {
               hostId: outing.hostId,
               reason: 'discomfort' as const,
               createdAt: leftAt,
+              guestDepositRefundedEuros: guestRefunded ? DEPOSIT_EUROS_LEAVE : undefined,
             },
             ...state.confidentialLeaveReports,
           ]
@@ -1153,12 +1172,31 @@ function reducer(state: AppState, action: AppAction): AppState {
         outcome.confidentialReport &&
         countRecentDiscomfort(reports, me.id, leftAtMs) >=
           DISCOMFORT_REVIEW_THRESHOLD;
+      const hostShare = hostLeaveShareEuros(outing.startsAt, leftAtMs);
+      // Malaise avant H+30 : Moment paie la part hôte (ligne interne), caution rendue.
+      const paidLines =
+        outcome.confidentialReport && hostShare > 0 && guestRefunded
+          ? [
+              {
+                id: `${reportId}-host`,
+                outingId: outing.id,
+                requestId: req.id,
+                hostId: outing.hostId,
+                amountEuros: hostShare,
+                reason: 'leave_discomfort' as const,
+                createdAt: leftAt,
+                momentKeepsEuros: 0 as const,
+              },
+              ...state.momentPaidHostLines,
+            ]
+          : state.momentPaidHostLines;
       return {
         ...state,
         currentUser: needsReview
           ? { ...me, manualReviewRequired: true }
           : me,
         confidentialLeaveReports: reports,
+        momentPaidHostLines: paidLines,
         requests: state.requests.map((r) =>
           r.id === requestId
             ? {
@@ -1167,6 +1205,7 @@ function reducer(state: AppState, action: AppAction): AppState {
                 // Même indicateur côté hôte avec ou sans malaise.
                 leftTableEarly:
                   isLeaveBeforeH30(outing.startsAt, leftAtMs) || undefined,
+                hostLeaveShareEuros: hostShare || undefined,
                 depositStatus: deposit,
               }
             : r,
@@ -1577,6 +1616,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Must be confirmed and not already present.
       if (!existing || existing.status !== 'confirmed') return state;
       if (existing.attendance === 'present') return state;
+      // Parti de la table (« Je quitte la table ») ≠ absent.
+      if (existing.leftTableAt) return state;
       // Lot 6: same absence event → no double strike / forfeit.
       if (existing.attendance === 'absent') return state;
       const outingNoShow = state.outings.find((o) => o.id === outingId);
@@ -2456,6 +2497,8 @@ interface ChanceContextValue {
    */
   /** Motif « Je ne me sens pas à l’aise » encore proposé à l’utilisateur courant. */
   isDiscomfortReasonOfferedForMe: () => boolean;
+  /** Invité seulement : caution rendue par Moment après un départ malaise (confidentiel). */
+  isMyLeaveDepositRefunded: (requestId: string) => boolean;
   /**
    * « Je quitte la table » (invité, pendant le moment). Motif facultatif.
    * Malaise → caution rendue + signalement confidentiel (hôte ne voit pas le motif).
@@ -5562,6 +5605,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.imprevuReports, state.outings, state.requests],
   );
 
+  const isMyLeaveDepositRefunded = useCallback(
+    (requestId: string): boolean => {
+      const user = state.currentUser;
+      if (!user) return false;
+      return state.confidentialLeaveReports.some(
+        (r) =>
+          r.requestId === requestId &&
+          r.guestId === user.id &&
+          (r.guestDepositRefundedEuros ?? 0) > 0,
+      );
+    },
+    [state.currentUser, state.confidentialLeaveReports],
+  );
+
   const isDiscomfortReasonOfferedForMe = useCallback((): boolean => {
     const user = state.currentUser;
     if (!user) return false;
@@ -6717,6 +6774,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       hasJokerAvailable,
       useJokerOnImprevu,
       isDiscomfortReasonOfferedForMe,
+      isMyLeaveDepositRefunded,
       leaveTable,
       reportGuestNoShow,
       reportHostNeverHonor,
@@ -6821,6 +6879,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       hasJokerAvailable,
       useJokerOnImprevu,
       isDiscomfortReasonOfferedForMe,
+      isMyLeaveDepositRefunded,
       leaveTable,
       reportGuestNoShow,
       reportHostNeverHonor,

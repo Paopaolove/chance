@@ -136,7 +136,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(L(st(-30*60e3),now).requests[0].depositStatus==='returned','leave exactly H+30 free');
   // 4. malaise → rendue + signalement confidentiel, hôte ne voit pas le motif
   let c=L(st(-5*60e3),now,'discomfort');
-  ok(c.requests[0].depositStatus==='returned'&&c.requests[0].leftTableEarly===true&&c.confidentialLeaveReports.length===1,'discomfort returned + confidential report');
+  ok(c.confidentialLeaveReports.length===1&&c.confidentialLeaveReports[0].guestDepositRefundedEuros===20&&c.requests[0].leftTableEarly===true,'discomfort: guest refunded 20 € (confidential) + report');
   // hôte : même indicateur avec ou sans malaise
   const hostView=(r:any)=>({leftTableAt:!!r.leftTableAt,leftTableEarly:r.leftTableEarly,attendance:r.attendance});
   ok(JSON.stringify(hostView(c.requests[0]))===JSON.stringify(hostView(L(st(-5*60e3),now).requests[0])),'host indicator identical with/without discomfort');
@@ -156,7 +156,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     const p0=D(st(-5*60e3),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now-60e3)}});
     ok(p0.requests[0].attendance==='present'&&p0.requests[0].depositStatus==='held','present before H+30: held');
     ok(L(p0,now).requests[0].depositStatus==='forfeited','present guest leaving <H+30 no reason forfeited');
-    ok(L(p0,now,'discomfort').requests[0].depositStatus==='returned','present guest leaving with discomfort returned');
+    ok(L(p0,now,'discomfort').confidentialLeaveReports[0].guestDepositRefundedEuros===20,'present guest leaving with discomfort refunded');
     const p1=D(st(-40*60e3),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
     ok(p1.requests[0].depositStatus==='returned'&&L(p1,now).requests[0].depositStatus==='returned','present after H+30: returned, leave free');
     // partenaire : arrivée avant H+30 → retenue, départ sans motif → perdue
@@ -170,7 +170,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   // 5. deux malaises en 3 mois → revue manuelle, motif plus proposé
   const prior={id:'old',outingId:'o0',requestId:'r0',guestId:'u1',hostId:'h2',reason:'discomfort',createdAt:iso(now-40*24*H)};
   let d=L({...st(-5*60e3),confidentialLeaveReports:[prior]},now,'discomfort');
-  ok(d.currentUser.manualReviewRequired===true&&d.confidentialLeaveReports.length===2&&d.requests[0].depositStatus==='returned','2nd discomfort → manual review');
+  ok(d.currentUser.manualReviewRequired===true&&d.confidentialLeaveReports.length===2&&d.confidentialLeaveReports[0].guestDepositRefundedEuros===20,'2nd discomfort → manual review');
   const LT=require('../src/utils/leaveTable');
   ok(!LT.isDiscomfortReasonOffered(d.confidentialLeaveReports,'u1',d.currentUser.manualReviewRequired,now),'discomfort no longer offered');
   let e=L({...st(-5*60e3),currentUser:{...me,manualReviewRequired:true},confidentialLeaveReports:[prior,{...prior,id:'o2'}]},now,'discomfort');
@@ -199,6 +199,50 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(jk(0).requests[0].depositStatus==='held','joker at H refused');
   ok(jk(60*60e3,{attendance:'present'}).requests[0].depositStatus==='held','joker refused when present');
   ok(jk(60*60e3,{guestArrivedAt:iso(now)}).requests[0].depositStatus==='held','joker refused when arrived');
+}
+
+// décision (b) : vue hôte identique, ligne payée par Moment pour le malaise seulement
+{
+  const LT=require('../src/utils/leaveTable');
+  const st=(off:number,x:any={})=>S({outings:[o({startsAt:iso(now+off),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held',...x})]});
+  const L=(s0:any,at:number,reason?:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(at),reason,reportId:'lv'}});
+  const a=L(st(-5*60e3),now), b=L(st(-5*60e3),now,'discomfort');
+  // tout ce qui est visible par l’hôte : la demande entière (hors ids), sa vue dérivée, les gains
+  const hostSees=(s:any)=>JSON.stringify({req:s.requests[0],view:LT.hostLeaveView(s.requests[0]),outing:s.outings[0]});
+  ok(hostSees(a)===hostSees(b),'host sees identical request/view/outing with or without discomfort');
+  ok(a.requests[0].depositStatus===b.requests[0].depositStatus,'depositStatus identical for host');
+  ok(LT.hostLeaveView(a.requests[0]).label==='Moi a quitté la table'&&LT.hostLeaveView(b.requests[0]).earningsEuros===13.1&&LT.hostLeaveView(a.requests[0]).earningsEuros===13.1,'host: « X a quitté la table » + 13,10 € both');
+  ok(b.momentPaidHostLines.length===1&&b.momentPaidHostLines[0].amountEuros===13.1&&b.momentPaidHostLines[0].momentKeepsEuros===0&&b.momentPaidHostLines[0].hostId==='h1','discomfort: line paid by Moment 13,10 €, Moment keeps 0');
+  ok(a.momentPaidHostLines.length===0,'no Moment-paid line without discomfort');
+  ok(!hostSees(b).includes('leave_discomfort')&&!hostSees(b).includes('discomfort'),'Moment-paid line absent from host view');
+  ok(b.confidentialLeaveReports[0].guestDepositRefundedEuros===20&&a.confidentialLeaveReports.length===0,'guest deposit fully refunded (discomfort only)');
+  const a2=L(st(-40*60e3),now), b2=L(st(-40*60e3),now,'discomfort');
+  ok(hostSees(a2)===hostSees(b2)&&a2.requests[0].depositStatus==='returned'&&LT.hostLeaveView(b2.requests[0]).earningsEuros===0&&b2.momentPaidHostLines.length===0,'after H+30: identical, no host share, no Moment line');
+}
+// imprévu d’un invité présent / no-show présent ou parti / clôture avant H+30
+{
+  const imp=(x:any={})=>({id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'pending',createdAt:iso(now),...x});
+  const base=(off:number,rx:any={})=>S({outings:[o({startsAt:iso(now+off),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held',...rx})],imprevuReports:[imp()]});
+  const auto=(s0:any)=>D(s0,{type:'RESPOND_IMPREVU',payload:{imprevuId:'i1',decision:'auto_refused',respondedAt:iso(now),forfeitReporterDeposit:true}});
+  const p=D(base(10*60e3),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
+  ok(p.requests[0].attendance==='present'&&p.requests[0].depositStatus==='held','imprévu guest marked present H−10: held');
+  const pa=auto(p); ok(pa.requests[0].depositStatus==='held'&&pa.imprevuReports[0].status==='auto_refused','auto-refuse at H does not forfeit a present guest');
+  ok(D(pa,{type:'COMPLETE_OUTING',payload:{outingId:'o1'}}).requests[0].depositStatus==='returned','present imprévu guest: returned at H+30/clôture');
+  const pr=D(p,{type:'RESPOND_IMPREVU',payload:{imprevuId:'i1',decision:'refused',respondedAt:iso(now),respondedByUserId:'h1',forfeitReporterDeposit:true}});
+  ok(pr.requests[0].depositStatus==='held','manual refuse does not forfeit a present guest');
+  ok(auto(base(10*60e3)).requests[0].depositStatus==='forfeited','auto-refuse still forfeits a non-present guest');
+  // départ avant H+30 sans motif après imprévu + présence → perdue
+  const pl={...pa,outings:[{...pa.outings[0],startsAt:iso(now-5*60e3)}]};
+  ok(D(pl,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reportId:'z'}}).requests[0].depositStatus==='forfeited','present imprévu guest leaving <H+30 no reason forfeited');
+  // no-show refusé pour présent / parti
+  const ns=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(now)}});
+  const pres=S({outings:[o({startsAt:iso(now-5*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held',attendance:'present'})]});
+  ok(ns(pres).requests[0].attendance==='present'&&ns(pres).requests[0].depositStatus==='held','no-show refused for present guest');
+  const left=D(S({outings:[o({startsAt:iso(now-40*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reportId:'z'}});
+  const nl=ns(left); ok(nl.requests[0].attendance===undefined&&nl.requests[0].depositStatus==='returned'&&!(nl.guestNoShowStrikes.u1),'no-show refused (reducer) for guest who left');
+  // clôture (COMPLETE_OUTING) avant H+30 : présent → rendue, départ ensuite refusé
+  const early=D(D(S({outings:[o({startsAt:iso(now-10*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}}),{type:'COMPLETE_OUTING',payload:{outingId:'o1'}});
+  ok(early.requests[0].depositStatus==='returned'&&D(early,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reportId:'z'}}).requests[0].leftTableAt===undefined,'clôture before H+30: present returned, leave refused');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

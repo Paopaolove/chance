@@ -11,6 +11,13 @@
  */
 import { parisYmd } from './parisTime';
 import { OUTING_AUTO_COMPLETE_AFTER_MS } from './outingActive';
+import {
+  DEPOSIT_EUROS,
+  DEPOSIT_FORFEIT_HOST_EUROS,
+  formatPriceEuros,
+} from '../data/pricing';
+
+export const DEPOSIT_EUROS_LEAVE = DEPOSIT_EUROS;
 
 /** H+30 : même borne que la fin automatique du moment (constante existante). */
 const LEAVE_FREE_AFTER_MS = OUTING_AUTO_COMPLETE_AFTER_MS;
@@ -146,4 +153,27 @@ export function isDiscomfortReasonOffered(
 ): boolean {
   if (manualReview) return false;
   return countRecentDiscomfort(reports, guestId, nowMs) < DISCOMFORT_REVIEW_THRESHOLD;
+}
+
+/** Part hôte d’un départ (13,10 € avant H+30, sinon 0) — même valeur avec ou sans motif. */
+export function hostLeaveShareEuros(startsAt: string, leftAtMs: number): number {
+  return isLeaveBeforeH30(startsAt, leftAtMs) ? DEPOSIT_FORFEIT_HOST_EUROS : 0;
+}
+
+/**
+ * Tout ce que l’hôte voit d’un départ (détail, historique, gains).
+ * Ne dépend QUE de champs identiques avec ou sans malaise.
+ */
+export function hostLeaveView(r: {
+  userName: string;
+  leftTableAt?: string;
+  hostLeaveShareEuros?: number;
+}): { label: string; earningsEuros: number; earningsLabel: string } | null {
+  if (!r.leftTableAt) return null;
+  const earningsEuros = r.hostLeaveShareEuros ?? 0;
+  return {
+    label: `${r.userName} a quitté la table`,
+    earningsEuros,
+    earningsLabel: earningsEuros > 0 ? `${formatPriceEuros(earningsEuros)} pour toi` : '',
+  };
 }

@@ -376,6 +376,12 @@ export interface Request {
   /** Départ avant H+30, avec ou sans motif (même indicateur côté hôte). Le motif n’est jamais stocké ici. */
   leftTableEarly?: boolean;
   /**
+   * Part hôte d’un départ avant H+30 (13,10 €), identique avec ou sans motif.
+   * Sans motif : issue de la caution perdue. Malaise : payée par Moment
+   * (ligne interne MomentPaidHostLine, jamais visible par l’hôte). Démo, pas de paiement réel.
+   */
+  hostLeaveShareEuros?: number;
+  /**
    * Annonce partenaire : demande créée directement « à confirmer » (10 min)
    * SANS réserver de chaise. La chaise est prise à la confirmation si
    * spotsLeft > 0 (premier confirmé gagne), sinon « Plus de place ».
@@ -533,6 +539,29 @@ export interface ConfidentialLeaveReport {
   reason: 'discomfort';
   createdAt: string;
   concreteEvidence?: boolean;
+  /**
+   * Caution de l’invité rendue intégralement par Moment (20 €). Côté demande
+   * (visible par l’hôte) la caution reste au même statut qu’un départ sans
+   * motif, pour que l’hôte ne puisse pas déduire le motif.
+   */
+  guestDepositRefundedEuros?: number;
+}
+
+/**
+ * Ligne interne « payée par Moment » (démo) : part hôte d’un départ malaise,
+ * caution de l’invité rendue en entier, Moment ne touche pas ses 6,90 €.
+ * Jamais exposée à l’hôte.
+ */
+export interface MomentPaidHostLine {
+  id: string;
+  outingId: string;
+  requestId: string;
+  hostId: string;
+  amountEuros: number;
+  reason: 'leave_discomfort';
+  createdAt: string;
+  /** Moment ne touche pas sa part (6,90 €) dans le cas malaise. */
+  momentKeepsEuros: 0;
 }
 
 export interface AppState {
@@ -569,6 +598,8 @@ export interface AppState {
   momentPhotos: MomentPhoto[];
   /** Signalements confidentiels de départ (Moment seulement). */
   confidentialLeaveReports: ConfidentialLeaveReport[];
+  /** Lignes internes payées par Moment (Moment seulement, jamais l’hôte). */
+  momentPaidHostLines: MomentPaidHostLine[];
 }
 
 export type DispoProfileUpdate = {
