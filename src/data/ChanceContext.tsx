@@ -1172,7 +1172,12 @@ function reducer(state: AppState, action: AppAction): AppState {
         outcome.confidentialReport &&
         countRecentDiscomfort(reports, me.id, leftAtMs) >=
           DISCOMFORT_REVIEW_THRESHOLD;
-      const hostShare = hostLeaveShareEuros(outing.startsAt, leftAtMs);
+      // Part hôte seulement si la caution était encore bloquée au départ
+      // (sinon ni perte ni ligne Moment) — identique avec ou sans malaise.
+      const hostShare =
+        req.depositStatus === 'held'
+          ? hostLeaveShareEuros(outing.startsAt, leftAtMs)
+          : 0;
       // Malaise avant H+30 : Moment paie la part hôte (ligne interne), caution rendue.
       const paidLines =
         outcome.confidentialReport && hostShare > 0 && guestRefunded
