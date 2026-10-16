@@ -759,8 +759,10 @@ export function OutingDetailScreen() {
                     <Text style={styles.hint}>
                       {r.partnerDispute
                         ? `Litige · ${r.partnerDispute.note}`
-                        : r.attendance === 'present'
-                          ? `${r.userName} · arrivé · caution rendue`
+                        : r.leftTableAt
+                          ? `${r.userName} · a quitté la table`
+                          : r.attendance === 'present'
+                          ? `${r.userName} · arrivé · caution rendue après 30 min`
                           : r.attendance === 'absent'
                             ? `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
                             : r.depositStatus === 'returned'
@@ -812,6 +814,7 @@ export function OutingDetailScreen() {
                 {!partner &&
                 outing.status !== 'cancelled' &&
                 !r.attendance &&
+                !r.leftTableAt &&
                 isPresenceWindowOpen(outing) ? (
                   <Button
                     title={`Marquer ${r.userName} présent`}
@@ -821,7 +824,7 @@ export function OutingDetailScreen() {
                       if (res.ok) {
                         Alert.alert(
                           'Présent',
-                          `Caution rendue pour ${r.userName} (mock). Confirmé ≠ présent.`,
+                          `Caution de ${r.userName} rendue après 30 min (mock). Confirmé ≠ présent.`,
                         );
                       } else {
                         Alert.alert('Impossible', res.reason);
@@ -830,9 +833,14 @@ export function OutingDetailScreen() {
                     style={{ marginTop: spacing.sm }}
                   />
                 ) : null}
-                {!partner && r.attendance === 'present' ? (
+                {/* Départ : même mention avec ou sans motif (l’hôte ne le voit pas). */}
+                {!partner && r.leftTableAt ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                    {r.userName} · présent · caution rendue
+                    {r.userName} · a quitté la table
+                  </Text>
+                ) : !partner && r.attendance === 'present' ? (
+                  <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                    {r.userName} · présent · caution rendue après 30 min
                   </Text>
                 ) : null}
                 {!partner && r.attendance === 'absent' ? (
@@ -843,6 +851,7 @@ export function OutingDetailScreen() {
                 {!partner &&
                 outing.status !== 'cancelled' &&
                 !r.attendance &&
+                !r.leftTableAt &&
                 isStartsAtPast(outing.startsAt) ? (
                   <Button
                     title={`Signaler absence de ${r.userName}`}
@@ -994,7 +1003,7 @@ export function OutingDetailScreen() {
                     if (full.guestArrivedAt) {
                       return (
                         <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
-                          Arrivée signalée — tu es présent, caution rendue.
+                          Arrivée signalée — tu es présent.
                         </CheckNote>
                       );
                     }
@@ -1016,7 +1025,7 @@ export function OutingDetailScreen() {
                         res.dispute ? 'Litige ouvert' : 'Bien arrivé',
                         res.dispute
                           ? 'Le lieu avait signalé « Pas venu » — litige ouvert, pas de sanction automatique.'
-                          : 'Tu es présent : caution rendue. Le lieu n’a rien à faire.',
+                          : 'Tu es présent : caution rendue après 30 min. Le lieu n’a rien à faire.',
                       );
                     };
                     return canArrive ? (

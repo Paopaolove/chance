@@ -111,6 +111,8 @@ import {
   resolveLeaveTable,
   countRecentDiscomfort,
   DISCOMFORT_REVIEW_THRESHOLD,
+  isLeaveBeforeH30,
+  presenceReturnsDepositNow,
 } from '../utils/leaveTable';
 import {
   canActorBlockUser,
@@ -1162,7 +1164,9 @@ function reducer(state: AppState, action: AppAction): AppState {
             ? {
                 ...r,
                 leftTableAt: leftAt,
-                leftTableEarly: outcome.countsAgainstGuest || undefined,
+                // Même indicateur côté hôte avec ou sans malaise.
+                leftTableEarly:
+                  isLeaveBeforeH30(outing.startsAt, leftAtMs) || undefined,
                 depositStatus: deposit,
               }
             : r,
@@ -1270,12 +1274,25 @@ function reducer(state: AppState, action: AppAction): AppState {
           }
           return { ...o, status: 'completed' as const, spotsLeft };
         }),
-        requests: state.requests.map((r) =>
-          r.outingId === outingId &&
-          (r.status === 'pending' || r.status === 'accepted')
-            ? { ...r, status: 'cancelled' as const }
-            : r,
-        ),
+        requests: state.requests.map((r) => {
+          if (
+            r.outingId === outingId &&
+            (r.status === 'pending' || r.status === 'accepted')
+          ) {
+            return { ...r, status: 'cancelled' as const };
+          }
+          // Fin du moment (H+30) : caution des présents restés rendue.
+          if (
+            r.outingId === outingId &&
+            r.status === 'confirmed' &&
+            r.attendance === 'present' &&
+            !r.leftTableAt &&
+            r.depositStatus === 'held'
+          ) {
+            return { ...r, depositStatus: 'returned' as const };
+          }
+          return r;
+        }),
       };
     }
 
@@ -1305,12 +1322,22 @@ function reducer(state: AppState, action: AppAction): AppState {
           if (r.attendance === 'absent' || r.attendance === 'present') {
             return r;
           }
+          // Présent ≠ rendu tout de suite : caution retenue jusqu’à H+30
+          // (ou départ / fin du moment), pour que « Je quitte la table » avant
+          // H+30 sans motif puisse encore la faire perdre.
+          const returnNow = presenceReturnsDepositNow({
+            startsAt: outingMark.startsAt,
+            outingStatus: outingMark.status,
+            atMs: new Date(markedAt).getTime(),
+          });
           return {
             ...r,
             attendance: 'present' as const,
             depositStatus:
               r.depositStatus === 'held' || !r.depositStatus
-                ? ('returned' as const)
+                ? returnNow
+                  ? ('returned' as const)
+                  : ('held' as const)
                 : r.depositStatus,
           };
         }),
@@ -1876,7 +1903,16 @@ function reducer(state: AppState, action: AppAction): AppState {
               },
             };
           }
-          // Arrivé + pas de « Pas venu » → présent, caution rendue.
+          // Arrivé + pas de « Pas venu » → présent ; caution rendue à H+30
+          // (ou fin du moment), retenue d’ici là (départ avant H+30).
+          const po = state.outings.find((o) => o.id === r.outingId);
+          const returnNow =
+            !po ||
+            presenceReturnsDepositNow({
+              startsAt: po.startsAt,
+              outingStatus: po.status,
+              atMs: new Date(arrivedAt).getTime(),
+            });
           return {
             ...r,
             attendance: 'present' as const,
@@ -1884,7 +1920,9 @@ function reducer(state: AppState, action: AppAction): AppState {
             ...photo,
             depositStatus:
               r.depositStatus === 'held' || !r.depositStatus
-                ? ('returned' as const)
+                ? returnNow
+                  ? ('returned' as const)
+                  : ('held' as const)
                 : r.depositStatus,
           };
         }),
@@ -5957,7 +5995,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           kind: 'system',
           text: dispute
             ? `${req.userName} dit être arrivé après un « Pas venu » du lieu — litige ouvert, pas de sanction automatique.`
-            : `${req.userName} est arrivé. Caution rendue.`,
+            : `${req.userName} est arrivé. Caution rendue après 30 min.`,
           createdAt: new Date().toISOString(),
         },
       });

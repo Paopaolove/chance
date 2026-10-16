@@ -373,7 +373,7 @@ export interface Request {
   attendance?: 'present' | 'absent';
   /** ISO UTC — « Je quitte la table » (invité, pendant le moment). */
   leftTableAt?: string;
-  /** Départ avant H+30 sans motif malaise (caution perdue). Le motif n’est jamais stocké ici (hôte). */
+  /** Départ avant H+30, avec ou sans motif (même indicateur côté hôte). Le motif n’est jamais stocké ici. */
   leftTableEarly?: boolean;
   /**
    * Annonce partenaire : demande créée directement « à confirmer » (10 min)

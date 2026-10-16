@@ -10,8 +10,10 @@
  *   drapeau revue manuelle.
  */
 import { parisYmd } from './parisTime';
+import { OUTING_AUTO_COMPLETE_AFTER_MS } from './outingActive';
 
-export const LEAVE_FREE_AFTER_MS = 30 * 60 * 1000; // H+30
+/** H+30 : même borne que la fin automatique du moment (constante existante). */
+const LEAVE_FREE_AFTER_MS = OUTING_AUTO_COMPLETE_AFTER_MS;
 export const DISCOMFORT_REASON_LABEL = 'Je ne me sens pas à l’aise';
 export const DISCOMFORT_REVIEW_THRESHOLD = 2;
 export const DISCOMFORT_WINDOW_MONTHS = 3;
@@ -53,7 +55,9 @@ export function canGuestLeaveTable(opts: {
   if (opts.requestStatus !== 'confirmed') return false;
   if (opts.leftAt) return false;
   if (opts.attendance === 'absent') return false;
-  if (opts.outingStatus === 'cancelled') return false;
+  if (opts.outingStatus === 'cancelled' || opts.outingStatus === 'completed') {
+    return false;
+  }
   return hasMomentStarted(opts.startsAt, opts.nowMs);
 }
 
@@ -74,26 +78,42 @@ export function resolveLeaveTable(opts: {
   if (opts.reason === 'discomfort' && opts.discomfortAllowed) {
     return { deposit: 'returned', countsAgainstGuest: false, confidentialReport: true };
   }
-  const s = startMsOf(opts.startsAt);
-  const early = Number.isFinite(s) && opts.leftAtMs < s + LEAVE_FREE_AFTER_MS;
-  return early
+  return isLeaveBeforeH30(opts.startsAt, opts.leftAtMs)
     ? { deposit: 'forfeited', countsAgainstGuest: true, confidentialReport: false }
     : { deposit: 'returned', countsAgainstGuest: false, confidentialReport: false };
 }
 
-/** Y-M-D Paris il y a `months` mois calendaires (jour borné à 28 pour éviter les débordements). */
-function parisYmdMonthsAgo(nowMs: number, months: number): string {
+/**
+ * Y-M-D Paris il y a `months` mois calendaires, jour compris.
+ * Débordement de fin de mois vers l’avant (31/05 − 3 mois → 03/03, pas 28/02),
+ * pour ne jamais élargir la fenêtre au-delà de 3 mois.
+ */
+export function parisYmdMonthsAgo(nowMs: number, months: number): string {
   const ymd = parisYmd(nowMs);
   if (!ymd) return '';
   const [y, m, d] = ymd.split('-').map(Number);
-  let mm = m - months;
-  let yy = y;
-  while (mm <= 0) {
-    mm += 12;
-    yy -= 1;
-  }
-  const dd = Math.min(d, 28);
-  return `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  const t = new Date(Date.UTC(y, m - 1 - months, d, 12, 0, 0));
+  return t.toISOString().slice(0, 10);
+}
+
+/** Départ avant H+30 (même indicateur côté hôte, quel que soit le motif). */
+export function isLeaveBeforeH30(startsAt: string, leftAtMs: number): boolean {
+  const s = startMsOf(startsAt);
+  return Number.isFinite(s) && leftAtMs < s + LEAVE_FREE_AFTER_MS;
+}
+
+/**
+ * Caution d’un invité marqué présent : rendue seulement à partir de H+30
+ * (ou à la fin du moment) ; avant, elle reste retenue jusqu’à H+30 ou au départ.
+ */
+export function presenceReturnsDepositNow(opts: {
+  startsAt: string;
+  outingStatus: string;
+  atMs: number;
+}): boolean {
+  if (opts.outingStatus === 'completed') return true;
+  const s = startMsOf(opts.startsAt);
+  return Number.isFinite(s) && opts.atMs >= s + LEAVE_FREE_AFTER_MS;
 }
 
 export type DiscomfortReportLite = {
