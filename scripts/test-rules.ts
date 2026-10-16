@@ -104,7 +104,9 @@ const feb=parseFreeDate('29/02',Date.parse('2028-03-01T10:00:00Z')); ok(!feb.ok&
   const s1=D(s0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
   ok(s1.requests[0].attendance!=='present'&&s1.requests[0].depositStatus==='held','presence before H−15 refused');
   const s2=D(s0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now+50*60e3)}});
-  ok(s2.requests[0].attendance==='present'&&s2.requests[0].depositStatus==='returned','presence from H−15 ok');
+  ok(s2.requests[0].attendance==='present'&&s2.requests[0].depositStatus==='held','presence from H−15 ok (caution retenue jusqu’à H+30)');
+  ok(D(s2,{type:'COMPLETE_OUTING',payload:{outingId:'o1'}}).requests[0].depositStatus==='returned','present: returned at end (H+30)');
+  ok(D(s0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now+90*60e3)}}).requests[0].depositStatus==='returned','presence marked at H+30 returns now');
 }
 {
   const guest:any={...me,plan:'payg',outingCredits:1};
@@ -134,7 +136,11 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(L(st(-30*60e3),now).requests[0].depositStatus==='returned','leave exactly H+30 free');
   // 4. malaise → rendue + signalement confidentiel, hôte ne voit pas le motif
   let c=L(st(-5*60e3),now,'discomfort');
-  ok(c.requests[0].depositStatus==='returned'&&!c.requests[0].leftTableEarly&&c.confidentialLeaveReports.length===1,'discomfort returned + confidential report');
+  ok(c.requests[0].depositStatus==='returned'&&c.requests[0].leftTableEarly===true&&c.confidentialLeaveReports.length===1,'discomfort returned + confidential report');
+  // hôte : même indicateur avec ou sans malaise
+  const hostView=(r:any)=>({leftTableAt:!!r.leftTableAt,leftTableEarly:r.leftTableEarly,attendance:r.attendance});
+  ok(JSON.stringify(hostView(c.requests[0]))===JSON.stringify(hostView(L(st(-5*60e3),now).requests[0])),'host indicator identical with/without discomfort');
+  ok(L(st(-40*60e3),now,'discomfort').requests[0].leftTableEarly===undefined&&L(st(-40*60e3),now).requests[0].leftTableEarly===undefined,'after H+30: same indicator both');
   ok(!('reason' in c.requests[0])&&!JSON.stringify(c.requests[0]).includes('discomfort'),'host-visible request has no motive');
   ok(c.confidentialLeaveReports[0].hostId==='h1'&&c.confidentialLeaveReports[0].guestId==='u1'&&!c.currentUser.manualReviewRequired,'report fields, no review after 1');
   // pas avant H, pas deux fois, pas l’hôte, pas un autre
@@ -143,7 +149,24 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(L({...st(-5*60e3),currentUser:{...me,id:'h1'}},now).requests[0].leftTableAt===undefined,'host cannot leave as guest');
   ok(L(st(-5*60e3,{status:'cancelled'}),now).requests[0].leftTableAt===undefined,'cancelled request cannot leave');
   // présent / caution déjà rendue → jamais re-perdue
-  ok(L(st(-5*60e3,{attendance:'present',depositStatus:'returned'}),now).requests[0].depositStatus==='returned','present returned not re-forfeited');
+  // caution déjà rendue par une autre voie (joker, imprévu accepté…) : jamais re-perdue
+  ok(L(st(-5*60e3,{depositStatus:'returned'}),now).requests[0].depositStatus==='returned','already-returned deposit not re-forfeited');
+  // invité présent qui part sans motif avant H+30 → perdue ; via MARK_GUEST_PRESENT réel
+  {
+    const p0=D(st(-5*60e3),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now-60e3)}});
+    ok(p0.requests[0].attendance==='present'&&p0.requests[0].depositStatus==='held','present before H+30: held');
+    ok(L(p0,now).requests[0].depositStatus==='forfeited','present guest leaving <H+30 no reason forfeited');
+    ok(L(p0,now,'discomfort').requests[0].depositStatus==='returned','present guest leaving with discomfort returned');
+    const p1=D(st(-40*60e3),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
+    ok(p1.requests[0].depositStatus==='returned'&&L(p1,now).requests[0].depositStatus==='returned','present after H+30: returned, leave free');
+    // partenaire : arrivée avant H+30 → retenue, départ sans motif → perdue
+    const pa=D(S({outings:[o({startsAt:iso(now-5*60e3),isPartnerListing:true,status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(now)}});
+    ok(pa.requests[0].attendance==='present'&&pa.requests[0].depositStatus==='held'&&L(pa,now).requests[0].depositStatus==='forfeited','partner arrival <H+30 held, early leave forfeited');
+  }
+  // départ exactement à H : autorisé, avant H+30 → perdue sans motif
+  { const h0=L(st(0),now); ok(!!h0.requests[0].leftTableAt&&h0.requests[0].depositStatus==='forfeited','leave exactly at H allowed, forfeited'); }
+  ok(L(st(-1),now-2).requests[0].leftTableAt===undefined,'leave 1 ms before H refused');
+  ok(L(st(-5*60e3),now).requests[0].leftTableAt&&L({...st(-5*60e3),outings:[o({startsAt:iso(now-5*60e3),status:'completed'})]},now).requests[0].leftTableAt===undefined,'no leave on completed moment');
   // 5. deux malaises en 3 mois → revue manuelle, motif plus proposé
   const prior={id:'old',outingId:'o0',requestId:'r0',guestId:'u1',hostId:'h2',reason:'discomfort',createdAt:iso(now-40*24*H)};
   let d=L({...st(-5*60e3),confidentialLeaveReports:[prior]},now,'discomfort');
@@ -154,6 +177,21 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(e.requests[0].depositStatus==='forfeited'&&e.confidentialLeaveReports.length===2,'discomfort refused when not offered → normal rule');
   ok(LT.isDiscomfortReasonOffered([{...prior,createdAt:iso(now-100*24*H)}],'u1',false,now)&&LT.countRecentDiscomfort([{...prior,createdAt:iso(now-100*24*H)}],'u1',now)===0,'discomfort older than 3 months ignored');
   ok(LT.countRecentDiscomfort([{...prior,concreteEvidence:true}],'u1',now)===0,'concrete evidence not counted');
+  // bornes fenêtre 3 mois (calendrier Paris, jour compris)
+  {
+    const N=Date.parse('2026-10-16T10:00:00Z'), rp=(d:string)=>({...prior,createdAt:d});
+    ok(LT.parisYmdMonthsAgo(N,3)==='2026-07-16','3 months ago = 16/07');
+    ok(LT.countRecentDiscomfort([rp('2026-07-16T08:00:00Z')],'u1',N)===1,'window start day included');
+    ok(LT.countRecentDiscomfort([rp('2026-07-15T21:00:00Z')],'u1',N)===0,'day before window excluded (23h Paris)');
+    ok(LT.countRecentDiscomfort([rp('2026-07-15T22:30:00Z')],'u1',N)===1,'00h30 Paris on start day included');
+    // fin de mois : 31/05 → 03/03 (pas 28/02)
+    const M=Date.parse('2026-05-31T10:00:00Z');
+    ok(LT.parisYmdMonthsAgo(M,3)==='2026-03-03','31/05 − 3 mois = 03/03');
+    ok(LT.countRecentDiscomfort([rp('2026-02-28T12:00:00Z')],'u1',M)===0&&LT.countRecentDiscomfort([rp('2026-03-02T12:00:00Z')],'u1',M)===0,'end of month: 28/02 and 02/03 excluded');
+    ok(LT.countRecentDiscomfort([rp('2026-03-03T12:00:00Z')],'u1',M)===1,'end of month: 03/03 included');
+    ok(LT.parisYmdMonthsAgo(Date.parse('2026-01-15T10:00:00Z'),3)==='2025-10-15','year rollover');
+    ok(LT.parisYmdMonthsAgo(Date.parse('2026-08-31T10:00:00Z'),3)==='2026-05-31','31/08 → 31/05');
+  }
   // 1. joker seulement avant H, refusé si présent
   const jk=(startOffMs:number,x:any={},usedAt=now)=>D(S({outings:[o({startsAt:iso(now+startOffMs)})],requests:[rq({status:'confirmed',depositStatus:'held',...x})],imprevuReports:[{id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'refused',createdAt:iso(now)}]}),{type:'USE_JOKER_ON_IMPREVU',payload:{imprevuId:'i1',requestId:'r1',monthKey:'2099-01',usedAt:iso(usedAt)}});
   ok(jk(60*60e3).requests[0].depositStatus==='returned'&&jk(60*60e3).imprevuReports[0].jokerUsed===true,'joker before H ok');
