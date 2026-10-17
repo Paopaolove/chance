@@ -173,7 +173,6 @@ export function addParisDays(ymd: string, days: number): string {
   return parisYmd(noonMs) || ymd;
 }
 
-/** True if `startsAt` ISO instant is strictly before `nowMs` (Paris-aware storage is UTC). */
 /** True from H inclusive (startsAt ≤ now) — ex. clôture par l’hôte « à partir de H ». */
 export function isStartsAtReached(startsAtIso: string, nowMs = Date.now()): boolean {
   const t = new Date(startsAtIso).getTime();
@@ -181,6 +180,7 @@ export function isStartsAtReached(startsAtIso: string, nowMs = Date.now()): bool
   return t <= nowMs;
 }
 
+/** True if `startsAt` ISO instant is strictly before `nowMs` (Paris-aware storage is UTC). */
 export function isStartsAtPast(startsAtIso: string, nowMs = Date.now()): boolean {
   const t = new Date(startsAtIso).getTime();
   if (!Number.isFinite(t)) return false;

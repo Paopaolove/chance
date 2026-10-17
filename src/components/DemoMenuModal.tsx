@@ -224,7 +224,13 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 }
                 const outingId = firstConfirmedOuting.id;
                 // terminée ≠ présent (lot 6) — la simu marque present explicitement.
-                completeOuting(outingId);
+                if (!completeOuting(outingId)) {
+                  Alert.alert(
+                    'Clôture refusée',
+                    'Seul l’hôte peut clôturer le moment, à partir de l’heure prévue. Présences et avis non simulés.',
+                  );
+                  return;
+                }
                 const marked = demoMarkConfirmedPresent(outingId);
                 onClose();
                 // State updates flush before next paint; navigate after tick.

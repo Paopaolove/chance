@@ -2346,7 +2346,8 @@ interface ChanceContextValue {
     outingId: string,
     minutesAhead?: number,
   ) => void;
-  completeOuting: (outingId: string) => void;
+  /** true si la clôture a été envoyée (hôte, à partir de H), sinon false. */
+  completeOuting: (outingId: string) => boolean;
   /**
    * Explicit presence (host / check-in). Confirmé ≠ présent.
    * Sets attendance present + returns held deposit. Idempotent.
@@ -4525,14 +4526,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
 
-  const completeOuting = useCallback((outingId: string) => {
+  const completeOuting = useCallback((outingId: string): boolean => {
     const outing = state.outings.find((o) => o.id === outingId);
     if (
       !outing ||
       outing.status === 'completed' ||
       outing.status === 'cancelled'
     ) {
-      return;
+      return false;
     }
     // Seul l’hôte, à partir de H (même garde que le reducer).
     const nowMs = Date.now();
@@ -4541,7 +4542,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       state.currentUser.id !== outing.hostId ||
       !isStartsAtReached(outing.startsAt, nowMs)
     ) {
-      return;
+      return false;
     }
     // terminée only — does not mark confirmés present (use markGuestPresent).
     dispatch({
@@ -4568,6 +4569,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       });
       if (!push.pushOk) Alert.alert(toast.title, toast.body);
     })();
+    return true;
   }, [state.outings, state.currentUser]);
 
   const getDisplayName = useCallback(
