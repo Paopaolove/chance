@@ -1363,7 +1363,7 @@ export function OutingDetailScreen() {
           <Button title="Demander à rejoindre" onPress={onJoin} />
         </View>
       )}
-      {/* Point d’entrée discret : membres de la table, dès la confirmation. */}
+      {/* Point d’entrée discret : membres de la table, dès l’ouverture du chat de la table (même règle que le chat). */}
       {canReportOnOuting(outing.id) ? (
         <Pressable
           onPress={() =>

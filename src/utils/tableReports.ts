@@ -2,8 +2,15 @@
  * Signalement et revue (DECISIONS 16/10 + GO 17/10) — démo, aucun vrai
  * message, aucun paiement.
  * - Tout membre de la table (hôte ou invité confirmé, partis compris, annulés
- *   exclus) peut signaler un autre membre dès la confirmation (ouverture du
- *   chat), pendant ou après le moment.
+ *   exclus) peut signaler un autre membre dès que le chat de la table s’ouvre
+ *   (même règle que le chat : H−1, ou dès la confirmation pour l’urgent « déjà
+ *   sur place » et les annonces partenaires), pendant ou après le moment.
+ * - Catégorie obligatoire (une parmi 8), phrase libre facultative. Le départ
+ *   malaise n’est pas une catégorie (circuit séparé, inchangé).
+ * - Effet de l’abus (3 mois glissants, calendrier Paris) : 1er « abusif » →
+ *   avertissement (compteur warnings + trace abusiveReportAt) ; à partir du 2e
+ *   dans la fenêtre → chaque nouveau signalement exige une revue manuelle
+ *   préalable (requiresManualReviewFirst). Pas de suspension pour ce motif.
  * - File côté Moment : Ouvert → Contact signaleur → Contact concerné → Clos,
  *   une étape à la fois ; un signalement clos est figé.
  * - Issues (registre) : sans suite / avertissement / suspension / signalement
@@ -18,6 +25,7 @@
  *   Paris que l’invité) → revue de l’hôte (drapeau confidentiel).
  */
 import type { Outing, Request, Review } from '../data/types';
+import { isOutingChatOpen } from './chat';
 import { parisYmd } from './parisTime';
 import {
   DISCOMFORT_REVIEW_THRESHOLD,
@@ -49,6 +57,34 @@ export const ABUSIVE_REASON_LABELS: Record<AbusiveReason, string> = {
   reporter_admitted_false: 'Le signaleur reconnaît que c’était faux',
   repeated_unconfirmed: 'Plusieurs signalements de sa part, aucun confirmé',
 };
+
+/** Catégories (décision Paolo 17/10) : une seule, obligatoire. */
+export const TABLE_REPORT_CATEGORIES = [
+  'inappropriate_advance',
+  'racism',
+  'sexism',
+  'insults_aggression',
+  'threats',
+  'not_the_person',
+  'solicitation',
+  'other',
+] as const;
+export type TableReportCategory = (typeof TABLE_REPORT_CATEGORIES)[number];
+
+export const TABLE_REPORT_CATEGORY_LABELS: Record<TableReportCategory, string> = {
+  inappropriate_advance: 'Proposition ou geste déplacé',
+  racism: 'Racisme',
+  sexism: 'Sexisme',
+  insults_aggression: 'Insultes ou agressivité',
+  threats: 'Menaces',
+  not_the_person: 'Ce n’était pas la personne',
+  solicitation: 'Démarchage',
+  other: 'Autre',
+};
+
+export function isTableReportCategory(x: unknown): x is TableReportCategory {
+  return (TABLE_REPORT_CATEGORIES as readonly unknown[]).includes(x);
+}
 
 /** Avis négatif (choix minimal) : note rencontre ≤ 2 sur 5. */
 export const NEGATIVE_REVIEW_MAX_RATING = 2;
@@ -97,9 +133,13 @@ export type TableReportLite = {
   outingId: string;
   reporterId: string;
   targetUserId: string;
+  category?: TableReportCategory;
   note?: string;
   createdAt: string;
   status: TableReportStatus;
+  /** Signaleur avec 2 « abusif » en 3 mois : revue manuelle avant toute étape. */
+  requiresManualReviewFirst?: boolean;
+  manualReviewClearedAt?: string;
   messages: TableReportMessage[];
   outcome?: TableReportOutcome;
   /** Motif établi, seulement avec l’issue « abusif ». */
@@ -138,13 +178,16 @@ export function isAbusiveReasonEstablished(
 
 /**
  * Drapeau de revue : la personne visée a déjà fait un « Pas venu » contre le
- * signaleur (hôte qui l’a marqué absent) ou laissé un avis négatif contre lui,
- * au même moment (choix minimal).
+ * signaleur (hôte qui l’a marqué absent, ou invité qui a déclaré l’hôte
+ * « Pas venu ») ou laissé un avis négatif contre lui (≤ 2/5), au même moment
+ * (choix minimal). Pas une preuve, jamais de sanction automatique.
  */
 export function followsNoShowOrNegativeReview(input: {
   outing: Pick<Outing, 'id' | 'hostId'>;
   requests: Pick<Request, 'outingId' | 'userId' | 'status' | 'attendance'>[];
   reviews: Pick<Review, 'outingId' | 'fromUserId' | 'toUserId' | 'rating'>[];
+  /** Auteur du « Pas venu » invité → hôte, par moment. */
+  hostNoShowReporters?: Record<string, string>;
   reporterId: string;
   targetUserId: string;
 }): boolean {
@@ -157,6 +200,9 @@ export function followsNoShowOrNegativeReview(input: {
         r.userId === reporterId &&
         r.attendance === 'absent',
     );
+  const guestNoShowOnHost =
+    reporterId === outing.hostId &&
+    input.hostNoShowReporters?.[outing.id] === targetUserId;
   const negative = reviews.some(
     (rv) =>
       rv.outingId === outing.id &&
@@ -164,7 +210,7 @@ export function followsNoShowOrNegativeReview(input: {
       rv.toUserId === reporterId &&
       rv.rating <= NEGATIVE_REVIEW_MAX_RATING,
   );
-  return noShow || negative;
+  return noShow || guestNoShowOnHost || negative;
 }
 
 /**
@@ -182,29 +228,38 @@ export function tableMemberIds(
   return [...ids];
 }
 
+type ReportOuting = Pick<
+  Outing,
+  'id' | 'hostId' | 'status' | 'startsAt' | 'urgentOnSite' | 'isPartnerListing'
+>;
+
 /**
- * Peut ouvrir l’écran « Signaler » : membre, moment non annulé, et la table
- * existe (au moins un invité confirmé) — dès la confirmation, sans attendre H.
+ * Peut ouvrir l’écran « Signaler » : membre, moment non annulé, la table
+ * existe (au moins un invité confirmé) et le chat de la table est ouvert
+ * (pas de signalement avant un échange possible — même règle que le chat).
  */
 export function canOpenTableReport(
-  outing: Pick<Outing, 'id' | 'hostId' | 'status'>,
+  outing: ReportOuting,
   requests: Pick<Request, 'outingId' | 'userId' | 'status'>[],
   reporterId: string,
+  nowMs = Date.now(),
 ): boolean {
   if (outing.status === 'cancelled') return false;
   const members = tableMemberIds(outing, requests);
   if (members.length < 2) return false; // personne de confirmé : pas de table
-  return members.includes(reporterId);
+  if (!members.includes(reporterId)) return false;
+  return isOutingChatOpen(outing, nowMs);
 }
 
 export function canSubmitTableReport(
-  outing: Pick<Outing, 'id' | 'hostId' | 'status'>,
+  outing: ReportOuting,
   requests: Pick<Request, 'outingId' | 'userId' | 'status'>[],
   reporterId: string,
   targetUserId: string,
+  nowMs = Date.now(),
 ): boolean {
   if (!reporterId || reporterId === targetUserId) return false;
-  if (!canOpenTableReport(outing, requests, reporterId)) return false;
+  if (!canOpenTableReport(outing, requests, reporterId, nowMs)) return false;
   return tableMemberIds(outing, requests).includes(targetUserId);
 }
 
@@ -229,6 +284,8 @@ export function advanceTableReport<T extends TableReportLite>(
   },
 ): T | null {
   if (report.status === 'closed') return null;
+  // Revue manuelle préalable non levée : rien au-delà de « Ouvert ».
+  if (report.requiresManualReviewFirst) return null;
   const i = TABLE_REPORT_STATUS_ORDER.indexOf(report.status);
   if (TABLE_REPORT_STATUS_ORDER[i + 1] !== to) return null;
   const reason = abuse?.reason;
@@ -270,6 +327,25 @@ export function tableReportMessagesFor(
     }
   }
   return out;
+}
+
+/** « Abusif » établis contre ce signaleur sur 3 mois glissants (calendrier Paris). */
+export function countRecentAbusive(
+  abusiveReportAt: string[] | undefined,
+  nowMs = Date.now(),
+): number {
+  const from = parisYmdMonthsAgo(nowMs, DISCOMFORT_WINDOW_MONTHS);
+  return (abusiveReportAt ?? []).filter((d) => parisYmd(d) >= from).length;
+}
+
+/** Seuil : à partir du 2e « abusif » dans la fenêtre → revue manuelle préalable. */
+export const ABUSIVE_MANUAL_REVIEW_THRESHOLD = 2;
+
+export function reporterNeedsManualReviewFirst(
+  abusiveReportAt: string[] | undefined,
+  nowMs = Date.now(),
+): boolean {
+  return countRecentAbusive(abusiveReportAt, nowMs) >= ABUSIVE_MANUAL_REVIEW_THRESHOLD;
 }
 
 export type HostDiscomfortReportLite = {

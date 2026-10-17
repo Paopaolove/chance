@@ -584,8 +584,22 @@ export interface TableReport {
   outingId: string;
   reporterId: string;
   targetUserId: string;
+  /** Catégorie obligatoire (une parmi 8, cf. TABLE_REPORT_CATEGORIES). */
+  category?:
+    | 'inappropriate_advance'
+    | 'racism'
+    | 'sexism'
+    | 'insults_aggression'
+    | 'threats'
+    | 'not_the_person'
+    | 'solicitation'
+    | 'other';
   /** Mot facultatif du signaleur. */
   note?: string;
+  /** Signaleur avec 2 « abusif » en 3 mois : revue manuelle avant toute étape. */
+  requiresManualReviewFirst?: boolean;
+  /** Revue manuelle préalable levée (côté Moment). */
+  manualReviewClearedAt?: string;
   createdAt: string;
   status: 'open' | 'contact_reporter' | 'contact_target' | 'closed';
   /** Messages simulés (aucun envoi réel). */
@@ -615,6 +629,11 @@ export interface MemberModeration {
   suspended?: boolean;
   /** Revue de l’hôte : 2 départs malaise à ses tables en 3 mois. */
   hostReview?: boolean;
+  /**
+   * Dates des « abusif » établis contre ce membre comme signaleur (trace
+   * dédiée, fenêtre 3 mois). Le 1er dans la fenêtre ajoute aussi 1 à warnings.
+   */
+  abusiveReportAt?: string[];
 }
 
 export interface AppState {
@@ -657,6 +676,11 @@ export interface AppState {
   tableReports: TableReport[];
   /** Suivi confidentiel par membre (côté Moment, démo). */
   memberModeration: Record<string, MemberModeration>;
+  /**
+   * Auteur d’un « Pas venu » déclaré par un invité contre l’hôte, par moment
+   * (côté Moment seulement — sert au drapeau de revue du signalement).
+   */
+  hostNoShowReporters: Record<string, string>;
 }
 
 export type DispoProfileUpdate = {
@@ -811,9 +835,15 @@ export type AppAction =
         id: string;
         outingId: string;
         targetUserId: string;
+        category?: TableReport['category'];
         note?: string;
         createdAt: string;
       };
+    }
+  | {
+      /** Revue manuelle préalable : lève requiresManualReviewFirst (côté Moment). */
+      type: 'CLEAR_TABLE_REPORT_MANUAL_REVIEW';
+      payload: { reportId: string; at: string };
     }
   | {
       type: 'ADVANCE_TABLE_REPORT';
@@ -874,6 +904,8 @@ export type AppAction =
         hostId: string;
         strike: number;
         banned: boolean;
+        /** Invité confirmé qui déclare le « Pas venu » (trace côté Moment). */
+        reportedBy?: string;
       };
     }
   | {

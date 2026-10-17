@@ -14,14 +14,21 @@ import { Button } from '../components/Button';
 import { useChance } from '../data/ChanceContext';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
-import { TABLE_REPORT_NOTE_MAX_CHARS, tableMemberIds } from '../utils/tableReports';
+import {
+  TABLE_REPORT_CATEGORIES,
+  TABLE_REPORT_CATEGORY_LABELS,
+  TABLE_REPORT_NOTE_MAX_CHARS,
+  TableReportCategory,
+  tableMemberIds,
+} from '../utils/tableReports';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'ReportTable'>;
 type R = RouteProp<RootStackParamList, 'ReportTable'>;
 
 /**
  * « Signaler » — tout membre de la table (hôte ou invité confirmé, partis
- * compris), dès la confirmation, pendant ou après le moment. Confidentiel : la personne concernée ne saura pas qui
+ * compris), dès l’ouverture du chat de la table, pendant ou après le moment.
+ * Catégorie obligatoire (une parmi 8), un mot facultatif. Confidentiel : la personne concernée ne saura pas qui
  * a signalé. Démo : aucun vrai message envoyé.
  */
 export function ReportTableScreen() {
@@ -31,6 +38,8 @@ export function ReportTableScreen() {
     useChance();
   const outing = getOutingById(route.params.outingId);
   const [targetId, setTargetId] = useState<string | null>(null);
+  // Catégorie obligatoire, une seule parmi 8 (le départ malaise n’en est pas une).
+  const [category, setCategory] = useState<TableReportCategory | null>(null);
   const [note, setNote] = useState('');
 
   const others = useMemo(() => {
@@ -54,8 +63,8 @@ export function ReportTableScreen() {
     return (
       <View style={[styles.scroll, styles.content]}>
         <Text style={styles.body}>
-          Signalement possible pour les membres de la table, dès la
-          confirmation.
+          Signalement possible pour les membres de la table, dès que le chat
+          de la table est ouvert.
         </Text>
       </View>
     );
@@ -91,6 +100,26 @@ export function ReportTableScreen() {
       </View>
 
       <Text style={[styles.section, { marginTop: spacing.xl }]}>
+        Ce qui s’est passé
+      </Text>
+      <View style={styles.list}>
+        {TABLE_REPORT_CATEGORIES.map((c) => {
+          const on = c === category;
+          return (
+            <Pressable
+              key={c}
+              onPress={() => setCategory(c)}
+              style={[styles.card, on && styles.cardOn]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: on }}
+            >
+              <Text style={styles.name}>{TABLE_REPORT_CATEGORY_LABELS[c]}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Text style={[styles.section, { marginTop: spacing.xl }]}>
         Un mot (facultatif)
       </Text>
       <TextInput
@@ -105,10 +134,10 @@ export function ReportTableScreen() {
 
       <Button
         title="Envoyer le signalement"
-        disabled={!targetId}
+        disabled={!targetId || !category}
         onPress={() => {
-          if (!targetId) return;
-          const res = submitTableReport(outing.id, targetId, note);
+          if (!targetId || !category) return;
+          const res = submitTableReport(outing.id, targetId, category, note);
           if (!res.ok) {
             Alert.alert('Impossible', 'Signalement indisponible pour ce moment.');
             return;

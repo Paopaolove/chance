@@ -129,7 +129,10 @@ import {
   canOpenTableReport,
   followsNoShowOrNegativeReview,
   hostNeedsReview,
+  isTableReportCategory,
   normalizeTableReportNote,
+  reporterNeedsManualReviewFirst,
+  countRecentAbusive,
 } from '../utils/tableReports';
 import {
   canActorBlockUser,
@@ -216,6 +219,7 @@ const initialState: AppState = {
   momentPaidHostLines: [],
   tableReports: [],
   memberModeration: {},
+  hostNoShowReporters: {},
 };
 
 /** Paris neighborhoods default for a demo venue. */
@@ -945,6 +949,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         momentPaidHostLines: [],
         tableReports: [],
         memberModeration: {},
+        hostNoShowReporters: {},
       };
     }
 
@@ -1278,16 +1283,26 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'SUBMIT_TABLE_REPORT': {
-      const { id, outingId, targetUserId, note, createdAt } = action.payload;
+      const { id, outingId, targetUserId, category, note, createdAt } =
+        action.payload;
       const me = state.currentUser;
       const outing = state.outings.find((o) => o.id === outingId);
       if (!me || !outing) return state;
       if (state.tableReports.some((r) => r.id === id)) return state;
+      // Catégorie obligatoire, une parmi 8.
+      if (!isTableReportCategory(category)) return state;
       const atMs = new Date(createdAt).getTime();
       if (!Number.isFinite(atMs)) return state;
-      if (!canSubmitTableReport(outing, state.requests, me.id, targetUserId)) {
+      if (
+        !canSubmitTableReport(outing, state.requests, me.id, targetUserId, atMs)
+      ) {
         return state;
       }
+      // 2 « abusif » en 3 mois contre ce signaleur : revue manuelle préalable.
+      const manualFirst = reporterNeedsManualReviewFirst(
+        state.memberModeration[me.id]?.abusiveReportAt,
+        atMs,
+      );
       return {
         ...state,
         tableReports: [
@@ -1296,15 +1311,18 @@ function reducer(state: AppState, action: AppAction): AppState {
             outingId,
             reporterId: me.id,
             targetUserId,
+            category,
             note: normalizeTableReportNote(note),
             createdAt,
             status: 'open',
             messages: [],
+            ...(manualFirst ? { requiresManualReviewFirst: true } : {}),
             // Drapeau de revue côté Moment — pas une preuve, ne suffit pas à « abusif ».
             ...(followsNoShowOrNegativeReview({
               outing,
               requests: state.requests,
               reviews: state.reviews,
+              hostNoShowReporters: state.hostNoShowReporters,
               reporterId: me.id,
               targetUserId,
             })
@@ -1338,16 +1356,43 @@ function reducer(state: AppState, action: AppAction): AppState {
           bump(next.targetUserId, (m) => ({ ...m, warnings: (m.warnings ?? 0) + 1 }));
         } else if (next.outcome === 'suspension') {
           bump(next.targetUserId, (m) => ({ ...m, suspended: true }));
+        } else if (next.outcome === 'abusive') {
+          // Effet de l’abus (3 mois glissants, calendrier Paris) : trace dédiée ;
+          // le 1er dans la fenêtre = avertissement (compteur warnings existant) ;
+          // à partir du 2e, les nouveaux signalements exigent une revue
+          // manuelle préalable (calculé à la création). Pas de suspension.
+          const atMs = new Date(at).getTime();
+          bump(next.reporterId, (m) => {
+            const abusiveReportAt = [...(m.abusiveReportAt ?? []), at];
+            const first = countRecentAbusive(abusiveReportAt, atMs) === 1;
+            return {
+              ...m,
+              abusiveReportAt,
+              ...(first ? { warnings: (m.warnings ?? 0) + 1 } : {}),
+            };
+          });
         }
         // 'sans_suite' : clos sans trace sur le concerné.
-        // 'abusive' (motif établi exigé) : enregistré sans aucun effet —
-        // pas d’avertissement, pas de retrait, rien sur le signaleur.
         // La règle des malaises côté invité ne change pas.
       }
       return {
         ...state,
         memberModeration,
         tableReports: state.tableReports.map((r) => (r.id === reportId ? next : r)),
+      };
+    }
+
+    case 'CLEAR_TABLE_REPORT_MANUAL_REVIEW': {
+      const { reportId, at } = action.payload;
+      const report = state.tableReports.find((r) => r.id === reportId);
+      if (!report || !report.requiresManualReviewFirst) return state;
+      return {
+        ...state,
+        tableReports: state.tableReports.map((r) =>
+          r.id === reportId
+            ? { ...r, requiresManualReviewFirst: false, manualReviewClearedAt: at }
+            : r,
+        ),
       };
     }
 
@@ -1608,10 +1653,14 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'REPORT_HOST_NO_SHOW': {
-      const { outingId, hostId, strike, banned } = action.payload;
+      const { outingId, hostId, strike, banned, reportedBy } = action.payload;
       const outing = state.outings.find((o) => o.id === outingId);
       // Lot 6: same outing / event → no double strike.
       if (outing?.hostNoShowReported) return state;
+      // Auteur (côté Moment seulement) — aucune autre règle ne change.
+      const hostNoShowReporters = reportedBy
+        ? { ...state.hostNoShowReporters, [outingId]: reportedBy }
+        : state.hostNoShowReporters;
       let currentUser = state.currentUser;
       if (currentUser && currentUser.id === hostId) {
         currentUser = {
@@ -1626,6 +1675,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         currentUser,
+        hostNoShowReporters,
         hostNoShowStrikes: {
           ...state.hostNoShowStrikes,
           [hostId]: strike,
@@ -2705,14 +2755,17 @@ interface ChanceContextValue {
    */
   /** Motif « Je ne me sens pas à l’aise » encore proposé à l’utilisateur courant. */
   isDiscomfortReasonOfferedForMe: () => boolean;
-  /** Écran « Signaler » accessible (membre de la table, dès la confirmation). */
+  /** Écran « Signaler » accessible (membre de la table, dès l’ouverture du chat de la table). */
   canReportOnOuting: (outingId: string) => boolean;
   /** Signalement d’un membre de la table (démo, confidentiel côté Moment). */
   submitTableReport: (
     outingId: string,
     targetUserId: string,
+    category: string | null,
     note?: string,
-  ) => { ok: true } | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' };
+  ) =>
+    | { ok: true }
+    | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' | 'no_category' };
   /** Invité seulement : caution rendue par Moment après un départ malaise (confidentiel). */
   isMyLeaveDepositRefunded: (requestId: string) => boolean;
   /**
@@ -5570,6 +5623,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             hostId,
             strike: state.hostNoShowStrikes[hostId] ?? 0,
             banned: false,
+            reportedBy: user.id,
           },
         });
         const toast: AppToast = {
@@ -5588,7 +5642,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const { banned } = hostSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_HOST_NO_SHOW',
-        payload: { outingId, hostId, strike, banned },
+        payload: { outingId, hostId, strike, banned, reportedBy: user.id },
       });
       dispatch({
         type: 'RETURN_DEPOSITS_FOR_OUTING',
@@ -5872,7 +5926,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const user = state.currentUser;
       const outing = state.outings.find((o) => o.id === outingId);
       if (!user || !outing) return false;
-      return canOpenTableReport(outing, state.requests, user.id);
+      return canOpenTableReport(outing, state.requests, user.id, Date.now());
     },
     [state.currentUser, state.outings, state.requests],
   );
@@ -5881,16 +5935,25 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       outingId: string,
       targetUserId: string,
+      category: string | null,
       note?: string,
     ):
       | { ok: true }
-      | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' } => {
+      | {
+          ok: false;
+          reason: 'no_user' | 'not_found' | 'not_allowed' | 'no_category';
+        } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
+      if (!isTableReportCategory(category)) {
+        return { ok: false, reason: 'no_category' };
+      }
       const nowMs = Date.now();
-      if (!canSubmitTableReport(outing, state.requests, user.id, targetUserId)) {
+      if (
+        !canSubmitTableReport(outing, state.requests, user.id, targetUserId, nowMs)
+      ) {
         return { ok: false, reason: 'not_allowed' };
       }
       dispatch({
@@ -5899,6 +5962,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           id: uid('report'),
           outingId,
           targetUserId,
+          category,
           note,
           createdAt: new Date(nowMs).toISOString(),
         },

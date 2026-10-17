@@ -514,7 +514,18 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const start=now-10*60e3;
   const g2:any={id:'u2',firstName:'Bea'};
   const base=(user:any,x:any={})=>S({currentUser:user,outings:[o({startsAt:iso(start),status:'closed',...x})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'}),rq({id:'r3',userId:'u3',userName:'Cle',status:'pending'})]});
-  const SUB=(s0:any,target:string,at=now,id='t1',note?:string)=>D(s0,{type:'SUBMIT_TABLE_REPORT',payload:{id,outingId:'o1',targetUserId:target,note,createdAt:iso(at)}});
+  const SUB=(s0:any,target:string,at=now,id='t1',note?:string,category:any='other')=>D(s0,{type:'SUBMIT_TABLE_REPORT',payload:{id,outingId:'o1',targetUserId:target,category,note,createdAt:iso(at)}});
+  // catégorie obligatoire (une parmi 8)
+  ok(D(base(me),{type:'SUBMIT_TABLE_REPORT',payload:{id:'t0',outingId:'o1',targetUserId:'h1',createdAt:iso(now)}}).tableReports.length===0&&SUB(base(me),'h1',now,'t1',undefined,null).tableReports.length===0,'category required');
+  ok(SUB(base(me),'h1',now,'t1',undefined,'rien_dans_le_chat').tableReports.length===0&&SUB(base(me),'h1',now,'t1',undefined,'discomfort').tableReports.length===0,'unknown category refused (malaise is not a category)');
+  ok(JSON.stringify(Object.values(TR.TABLE_REPORT_CATEGORY_LABELS))===JSON.stringify(['Proposition ou geste déplacé','Racisme','Sexisme','Insultes ou agressivité','Menaces','Ce n’était pas la personne','Démarchage','Autre'])&&TR.TABLE_REPORT_CATEGORIES.length===8,'8 categories, exact labels');
+  for(const c of TR.TABLE_REPORT_CATEGORIES){ const x=SUB(base(me),'h1',now,'t-'+c,undefined,c); ok(x.tableReports.length===1&&x.tableReports[0].category===c,'category accepted: '+c); }
+  {
+    // le départ malaise reste séparé : aucun signalement créé, circuit confidentiel inchangé
+    const st0={...base(me),outings:[o({startsAt:iso(now-5*60e3),status:'closed'})]};
+    const lvD=D(st0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason:'discomfort',reportId:'lvd'}});
+    ok(lvD.tableReports.length===0&&lvD.confidentialLeaveReports.length===1&&lvD.confidentialLeaveReports[0].reason==='discomfort','discomfort leave: separate confidential report, no table report / category');
+  }
   // droit de signaler
   ok(SUB(base(me),'h1').tableReports.length===1,'guest member can report host');
   ok(SUB(base(host),'u1').tableReports.length===1,'host can report guest');
@@ -523,22 +534,32 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(SUB(base({...me,id:'zz'}),'h1').tableReports.length===0,'outsider cannot report');
   ok(SUB(base(me),'u3').tableReports.length===0&&SUB(base(me),'zz').tableReports.length===0,'target must be a table member');
   ok(SUB(base(me),'u1').tableReports.length===0,'cannot report oneself');
-  // dès la confirmation (ouverture du chat), sans attendre H ; refusé avant la confirmation
+  // ouverture = chat de la table (même règle) ; refusé avant la confirmation
   {
-    const fut=(user:any,reqs:any[])=>S({currentUser:user,outings:[o({startsAt:iso(now+5*H),status:'open'})],requests:reqs});
+    const fut=(user:any,reqs:any[],x:any={})=>S({currentUser:user,outings:[o({startsAt:iso(now+5*H),status:'open',...x})],requests:reqs});
     const acc=rq({status:'accepted',acceptedAt:iso(now),confirmDeadlineAt:iso(now+10*60e3)});
     ok(SUB(fut(me,[acc]),'h1').tableReports.length===0,'before confirmation (accepted) refused');
     ok(SUB(fut(me,[rq()]),'h1').tableReports.length===0,'pending refused');
     ok(SUB(fut(host,[acc]),'u1').tableReports.length===0&&!TR.canOpenTableReport(fut(host,[acc]).outings[0],[acc],'h1'),'host: no confirmed guest yet → refused');
     const conf=D(fut(me,[acc]),{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+60e3)}});
-    ok(conf.requests[0].status==='confirmed'&&SUB(conf,'h1',now+2*60e3).tableReports.length===1,'from confirmation ok, 5h before H');
-    ok(SUB({...conf,currentUser:host},'u1',now+2*60e3).tableReports.length===1&&TR.canOpenTableReport(conf.outings[0],conf.requests,'h1'),'host can report from confirmation');
-    ok(TR.canOpenTableReport(conf.outings[0],conf.requests,'u1')&&!TR.canOpenTableReport(conf.outings[0],conf.requests,'zz'),'link « Signaler un souci » visible for members from confirmation');
+    // table normale : confirmé mais chat fermé (avant H−1) → refusé ; à H−1 → accepté
+    const h1=now+4*H; // H−1 (start = now+5H)
+    ok(conf.requests[0].status==='confirmed'&&SUB(conf,'h1',now+2*60e3).tableReports.length===0&&!TR.canOpenTableReport(conf.outings[0],conf.requests,'u1',now+2*60e3),'normal table: confirmed but chat closed → refused');
+    ok(SUB(conf,'h1',h1-1).tableReports.length===0&&!C.isChatUnlocked(conf.outings[0].startsAt,h1-1),'normal table: 1 ms before H−1 refused (chat closed)');
+    ok(C.isChatUnlocked(conf.outings[0].startsAt,h1)&&SUB(conf,'h1',h1).tableReports.length===1,'normal table: accepted when chat opens (H−1)');
+    ok(SUB({...conf,currentUser:host},'u1',h1).tableReports.length===1&&TR.canOpenTableReport(conf.outings[0],conf.requests,'h1',h1),'host can report from chat opening');
+    ok(TR.canOpenTableReport(conf.outings[0],conf.requests,'u1',h1)&&!TR.canOpenTableReport(conf.outings[0],conf.requests,'zz',h1),'link « Signaler un souci » visible for members from chat opening');
+    for(const k of [{urgentOnSite:true},{isPartnerListing:true}]){
+      const cf=D(fut(me,[acc],k),{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+60e3)}});
+      ok(cf.requests[0].status==='confirmed'&&C.isOutingChatOpen(cf.outings[0],now+2*60e3)&&SUB(cf,'h1',now+2*60e3).tableReports.length===1,'chat opens at confirmation ('+Object.keys(k)[0]+') → report ok');
+      ok(SUB(fut(me,[acc],k),'h1',now+2*60e3).tableReports.length===0,'chat-at-confirmation case still refused before confirmation ('+Object.keys(k)[0]+')');
+    }
+    ok(TR.canOpenTableReport(conf.outings[0],conf.requests,'u1',h1)===C.isChatUnlocked(conf.outings[0].startsAt,h1,C.chatUnlockOptsFor(conf.outings[0]))&&TR.canOpenTableReport(conf.outings[0],conf.requests,'u1',now)===C.isChatUnlocked(conf.outings[0].startsAt,now,C.chatUnlockOptsFor(conf.outings[0])),'report gate = chat rule (same function)');
     // annulé exclu (signaleur et cible) ; parti compris
     const can=D(conf,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+2*60e3),by:'guest'}});
-    ok(can.requests[0].status==='cancelled'&&SUB(can,'h1',now+3*60e3).tableReports.length===0&&!TR.tableMemberIds(can.outings[0],can.requests).includes('u1'),'cancelled guest: not a member, cannot report');
+    ok(can.requests[0].status==='cancelled'&&SUB(can,'h1',h1).tableReports.length===0&&!TR.tableMemberIds(can.outings[0],can.requests).includes('u1'),'cancelled guest: not a member, cannot report');
     const two=fut(host,[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'cancelled'})]);
-    ok(SUB(two,'u2').tableReports.length===0&&SUB(two,'u1').tableReports.length===1,'cancelled guest cannot be reported (not a member)');
+    ok(SUB(two,'u2',h1).tableReports.length===0&&SUB(two,'u1',h1).tableReports.length===1,'cancelled guest cannot be reported (not a member)');
     ok(JSON.stringify(TR.tableMemberIds(two.outings[0],two.requests))==='["h1","u1"]','members = host + confirmed (cancelled excluded)');
   }
   ok(SUB(base(me,{status:'completed'}),'h1',now+5*H).tableReports.length===1,'after the moment ok');
@@ -575,8 +596,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(A(r2,'closed','abusive','nothing_in_chat').tableReports[0].status==='contact_target'&&A(r2,'closed','abusive','bogus').tableReports[0].status==='contact_target','abusive with invalid reason refused');
   ok(A(r2,'closed','sans_suite','reporter_absent').tableReports[0].status==='contact_target'&&A(r1,'contact_target',undefined,'reporter_absent').tableReports[0].status==='contact_reporter','reason only with abusive closure');
   ok(A(r2,'closed','sans_suite').tableReports[0].outcome==='sans_suite','doubt → sans suite closes normally');
-  const abus=A(r2,'closed','abusive','reporter_absent'); ok(abus.tableReports[0].status==='closed'&&abus.tableReports[0].outcome==='abusive'&&abus.tableReports[0].abusiveReason==='reporter_absent'&&JSON.stringify(abus.memberModeration)==='{}','abusive (reporter_absent): recorded, no effect (nobody flagged)');
-  const abus2=A(r2,'closed','abusive','reporter_admitted_false'); ok(abus2.tableReports[0].abusiveReason==='reporter_admitted_false'&&JSON.stringify(abus2.memberModeration)==='{}'&&JSON.stringify(abus2.currentUser)===JSON.stringify(r2.currentUser),'abusive (admitted false): no warning, no removal, nothing on reporter');
+  const abus=A(r2,'closed','abusive','reporter_absent'); ok(abus.tableReports[0].status==='closed'&&abus.tableReports[0].outcome==='abusive'&&abus.tableReports[0].abusiveReason==='reporter_absent'&&abus.memberModeration.u1.warnings===1&&abus.memberModeration.u1.abusiveReportAt.length===1&&!abus.memberModeration.h1,'abusive (reporter_absent): 1st → warning on reporter, target untouched');
+  const abus2=A(r2,'closed','abusive','reporter_admitted_false'); ok(abus2.tableReports[0].abusiveReason==='reporter_admitted_false'&&abus2.memberModeration.u1.warnings===1&&!abus2.memberModeration.u1.suspended&&JSON.stringify(abus2.currentUser)===JSON.stringify(r2.currentUser),'abusive (admitted false): warning only, no suspension, account untouched');
   // repeated_unconfirmed : ≥ 2 autres signalements du même signaleur, clos, aucun avertissement/suspension
   {
     const cl=(id:string,outcome:string,reporterId='u1',status='closed')=>({id,outingId:'o0',reporterId,targetUserId:'h9',createdAt:iso(now-30*24*H),status,messages:[],outcome:status==='closed'?outcome:undefined});
@@ -588,7 +609,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(A(withOthers([cl('a','sans_suite'),cl('b','warning')]),'closed','abusive','repeated_unconfirmed').tableReports[0].status==='contact_target','repeated: one confirmed (warning) → refused');
     ok(A(withOthers([cl('a','sans_suite'),cl('b','sans_suite'),cl('c','suspension')]),'closed','abusive','repeated_unconfirmed').tableReports[0].status==='contact_target','repeated: one confirmed (suspension) → refused');
     const rep=A(withOthers([cl('a','sans_suite'),cl('b','abusive')]),'closed','abusive','repeated_unconfirmed');
-    ok(rep.tableReports[0].status==='closed'&&rep.tableReports[0].abusiveReason==='repeated_unconfirmed'&&JSON.stringify(rep.memberModeration)==='{}','repeated: 2 others closed, none confirmed → abusive ok, no effect');
+    ok(rep.tableReports[0].status==='closed'&&rep.tableReports[0].abusiveReason==='repeated_unconfirmed'&&rep.memberModeration.u1.warnings===1,'repeated: 2 others closed, none confirmed → abusive ok (warning)');
   }
   // drapeau de revue : après « Pas venu » ou avis négatif de la personne visée contre le signaleur (même moment)
   {
@@ -618,7 +639,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const LV=(s0:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason:'discomfort',reportId:'lvx'}});
   const lv=LV(ab2), lvRef=LV(pl2);
   ok(lv.requests[0].depositStatus===lvRef.requests[0].depositStatus&&lv.requests[0].depositStatus!=='forfeited'&&lv.confidentialLeaveReports.length===1,'abusive reporter: discomfort leave accepted as before (caution not lost)');
-  ok(JSON.stringify({r:lv.requests,c:lv.confidentialLeaveReports,u:lv.currentUser,p:lv.momentPaidHostLines,m:lv.memberModeration})===JSON.stringify({r:lvRef.requests,c:lvRef.confidentialLeaveReports,u:lvRef.currentUser,p:lvRef.momentPaidHostLines,m:lvRef.memberModeration}),'abusive: leave outcome identical to no report');
+  ok(JSON.stringify({r:lv.requests,c:lv.confidentialLeaveReports,u:lv.currentUser,p:lv.momentPaidHostLines})===JSON.stringify({r:lvRef.requests,c:lvRef.confidentialLeaveReports,u:lvRef.currentUser,p:lvRef.momentPaidHostLines}),'abusive: leave outcome identical to no report');
   {
     const fs=require('node:fs'), path=require('node:path');
     const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
@@ -645,6 +666,70 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(hostSees(hr)===hostSees(hs([])),'host review flag invisible in host view');
   ok(hostSees(r2)===hostSees(base(me))&&!/report|signal/i.test(hostSees(r2)),'reports invisible in host view');
   ok(TR.tableReportMessagesFor(r2.tableReports,'h1').length===1&&TR.tableReportMessagesFor(r.tableReports,'h1').length===0,'host gets only the neutral message, after contact step');
+}
+
+// Effet de l’abus (3 mois glissants Paris) + revue manuelle préalable + auteur du « Pas venu » invité → hôte (17/10 12 h 29)
+{
+  const TR=require('../src/utils/tableReports');
+  const LT=require('../src/utils/leaveTable');
+  const st0=S({currentUser:me,outings:[o({startsAt:iso(now-10*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const SUB=(s0:any,id:string,at=now,target='h1')=>D(s0,{type:'SUBMIT_TABLE_REPORT',payload:{id,outingId:'o1',targetUserId:target,category:'insults_aggression',createdAt:iso(at)}});
+  const ADV=(s0:any,id:string,to:string,at=now,outcome?:string,abusiveReason?:string)=>D(s0,{type:'ADVANCE_TABLE_REPORT',payload:{reportId:id,to,at:iso(at),outcome,abusiveReason}});
+  const closeAbusive=(s0:any,id:string,at=now)=>ADV(ADV(ADV(s0,id,'contact_reporter',at),id,'contact_target',at),id,'closed',at,'abusive','reporter_admitted_false');
+  const rp=(st:any,id:string)=>st.tableReports.find((x:any)=>x.id===id);
+  // 1er abusif = avertissement (compteur warnings existant) + trace dédiée
+  let a1=closeAbusive(SUB(st0,'a1'),'a1');
+  ok(a1.memberModeration.u1.warnings===1&&a1.memberModeration.u1.abusiveReportAt.length===1&&!a1.memberModeration.u1.suspended,'abuse 1st: warning (+ dated trace), no suspension');
+  let n1=SUB(a1,'n1'); ok(rp(n1,'n1')&&!rp(n1,'n1').requiresManualReviewFirst,'abuse 1st: next report has no manual-review flag');
+  // 2e dans les 3 mois = drapeau sur les suivants, transitions bloquées puis levées
+  let a2=closeAbusive(n1,'n1');
+  ok(a2.memberModeration.u1.warnings===1&&a2.memberModeration.u1.abusiveReportAt.length===2&&!a2.memberModeration.u1.suspended&&a2.currentUser.banned!==true,'abuse 2nd in window: no extra warning, no suspension, no ban');
+  let f=SUB(a2,'f1'); ok(rp(f,'f1')&&rp(f,'f1').requiresManualReviewFirst===true&&rp(f,'f1').status==='open','abuse 2nd: reporter keeps right to report, new report flagged');
+  let f2=SUB(f,'f2',now,'u2'); ok(rp(f2,'f2').requiresManualReviewFirst===true,'abuse 2nd: every new report flagged');
+  ok(rp(ADV(f,'f1','contact_reporter'),'f1').status==='open'&&rp(ADV(f,'f1','closed',now,'sans_suite'),'f1').status==='open','flagged: no transition beyond Ouvert');
+  ok(rp(a2,'a1').requiresManualReviewFirst===undefined&&rp(a2,'n1').requiresManualReviewFirst===undefined,'flag only on new reports (past ones untouched)');
+  let cl=D(f,{type:'CLEAR_TABLE_REPORT_MANUAL_REVIEW',payload:{reportId:'f1',at:iso(now)}});
+  ok(rp(cl,'f1').requiresManualReviewFirst===false&&rp(cl,'f1').manualReviewClearedAt===iso(now),'manual review clears the flag');
+  ok(rp(ADV(cl,'f1','contact_reporter'),'f1').status==='contact_reporter','after clearing: transitions possible');
+  ok(D(st0,{type:'CLEAR_TABLE_REPORT_MANUAL_REVIEW',payload:{reportId:'zz',at:iso(now)}})===st0||JSON.stringify(D(st0,{type:'CLEAR_TABLE_REPORT_MANUAL_REVIEW',payload:{reportId:'zz',at:iso(now)}}))===JSON.stringify(st0),'clear: unknown report no-op');
+  // 2e hors fenêtre = seulement un avertissement
+  const old=now-120*24*H;
+  let o1=closeAbusive(SUB(st0,'o1x'),'o1x',old);
+  ok(o1.memberModeration.u1.warnings===1,'old abuse: warning');
+  let o2=closeAbusive(SUB(o1,'o2x'),'o2x');
+  ok(o2.memberModeration.u1.warnings===2&&o2.memberModeration.u1.abusiveReportAt.length===2,'2nd outside window: only a warning (counts as 1st in window)');
+  ok(!rp(SUB(o2,'o3x'),'o3x').requiresManualReviewFirst,'2nd outside window: no manual-review flag');
+  // fenêtre Paris calendaire : même calcul que les autres
+  {
+    const M=Date.parse('2026-05-31T10:00:00Z');
+    ok(TR.countRecentAbusive(['2026-03-03T12:00:00Z','2026-05-30T12:00:00Z'],M)===2&&TR.countRecentAbusive(['2026-03-02T12:00:00Z','2026-05-30T12:00:00Z'],M)===1,'abuse window: Paris calendar (31/05 → 03/03), like discomfort');
+    ok(TR.reporterNeedsManualReviewFirst(['2026-03-03T12:00:00Z','2026-05-30T12:00:00Z'],M)&&!TR.reporterNeedsManualReviewFirst(['2026-03-02T12:00:00Z','2026-05-30T12:00:00Z'],M),'manual review threshold on same window');
+  }
+  // confidentiel : rien côté hôte ni personne visée
+  const hostSees=(st:any)=>JSON.stringify({reqs:st.requests.map(LT.projectRequestForHost),views:st.requests.map(LT.hostLeaveView),outings:st.outings});
+  ok(hostSees(f2)===hostSees(st0),'abuse effects invisible in host view');
+  ok(TR.tableReportMessagesFor(f2.tableReports,'h1').every((m:any)=>m.body===TR.REPORT_TARGET_MESSAGE)&&TR.tableReportMessagesFor(f2.tableReports,'u2').length===0&&!/abus|warning|manual/i.test(JSON.stringify(TR.tableReportMessagesFor(a2.tableReports,'h1'))),'target receives nothing about abuse / review');
+  // abus : règle malaise côté invité inchangée
+  ok(LT.isDiscomfortReasonOffered(a2.confidentialLeaveReports,'u1',a2.currentUser.manualReviewRequired,now)===true,'abuse: discomfort reason unchanged');
+  // auteur du « Pas venu » invité → hôte enregistré + drapeau dans ce sens
+  {
+    const hn=D(st0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedBy:'u1'}});
+    ok(hn.hostNoShowReporters.o1==='u1'&&hn.outings[0].hostNoShowReported===true&&hn.hostNoShowStrikes.h1===1,'host no-show: author recorded, strike unchanged');
+    const hnLegacy=D(st0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}});
+    ok(JSON.stringify({...hn,hostNoShowReporters:{}})===JSON.stringify(hnLegacy),'host no-show: no other rule changes');
+    ok(D(hn,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:2,banned:false,reportedBy:'u2'}}).hostNoShowReporters.o1==='u1','host no-show: idempotent, first author kept');
+    ok(!/hostNoShowReporters|u1/.test(JSON.stringify(hn.outings)),'host no-show author not on the outing (Moment side only)');
+    const hostRep=SUB({...hn,currentUser:host},'hr1',now,'u1');
+    ok(rp(hostRep,'hr1').followsNoShowOrNegativeReview===true,'flag: host reports the guest who declared him « Pas venu »');
+    ok(rp(SUB({...hn,currentUser:host},'hr2',now,'u2'),'hr2').followsNoShowOrNegativeReview===undefined,'flag: other guest → no flag');
+    ok(rp(SUB({...st0,currentUser:host},'hr3',now,'u1'),'hr3').followsNoShowOrNegativeReview===undefined,'flag: no host no-show → no flag');
+    ok(rp(SUB(hn,'hr4',now,'h1'),'hr4').followsNoShowOrNegativeReview===undefined,'flag: guest reporting host after his own no-show declaration → no flag (direction)');
+    // avis : ≤ 2/5 négatif, 3 non (drapeau seulement)
+    const rv=(rating:number)=>({...st0,currentUser:host,reviews:[{id:'rv',outingId:'o1',fromUserId:'u1',toUserId:'h1',rating,venueKey:'k',createdAt:iso(now)}]});
+    ok(rp(SUB(rv(2),'rv2',now,'u1'),'rv2').followsNoShowOrNegativeReview===true&&rp(SUB(rv(3),'rv3',now,'u1'),'rv3').followsNoShowOrNegativeReview===undefined&&TR.NEGATIVE_REVIEW_MAX_RATING===2,'negative review: 2/5 flag, 3/5 no flag');
+    const flagged=SUB(rv(1),'rv1',now,'u1');
+    ok(JSON.stringify(flagged.memberModeration)===JSON.stringify(st0.memberModeration)&&flagged.currentUser.banned!==true,'negative-review flag: no automatic sanction');
+  }
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

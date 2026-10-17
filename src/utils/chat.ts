@@ -55,6 +55,18 @@ export function isChatUnlocked(
 }
 
 /**
+ * Chat de la table ouvert pour ce moment (même règle que les écrans de chat) :
+ * H−1, ou dès la confirmation pour l’urgent « déjà sur place » et les annonces
+ * partenaires. Réutilisé par le signalement (17/10).
+ */
+export function isOutingChatOpen(
+  outing: { startsAt: string; urgentOnSite?: boolean; isPartnerListing?: boolean },
+  nowMs = Date.now(),
+): boolean {
+  return isChatUnlocked(outing.startsAt, nowMs, chatUnlockOptsFor(outing));
+}
+
+/**
  * French countdown until chat opens.
  * Under 1 h → « Chat dans {mm} min »; otherwise hours (+ minutes).
  * Urgent on-site → already open.
