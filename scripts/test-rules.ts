@@ -990,19 +990,19 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const R6=(s0:any)=>D(s0,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(now)}});
   const HNS=(s0:any)=>D(D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}}),{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}});
   const h6=R6(st());
-  ok(h6.requests.every((r:any)=>r.depositReturnCause==='h6')&&DH.hostReturnedDepositLine(h6.requests[0])==='Moi · caution rendue 6 h après le début','H+6 return: cause recorded, H+6 line');
+  ok(h6.requests.every((r:any)=>r.depositReturnCause==='h6')&&DH.hostReturnedDepositLine(h6.requests[0],h6.outings[0])==='Moi · caution rendue 6 h après le début','H+6 return: cause recorded, H+6 line');
   const hn=HNS(st());
   ok(hn.requests.every((r:any)=>r.depositStatus==='returned'&&r.depositReturnCause===undefined),'host « Pas venu »: returned, no H+6 cause (even past H+6)');
-  ok(hn.requests.every((r:any)=>!/6 h/.test(DH.hostReturnedDepositLine(r)??''))&&DH.hostReturnedDepositLine(hn.requests[0])==='Moi · caution rendue','host « Pas venu »: no H+6 line, neutral label');
+  ok(hn.requests.every((r:any)=>!/6 h/.test(DH.hostReturnedDepositLine(r,hn.outings[0])??''))&&DH.hostReturnedDepositLine(hn.requests[0],hn.outings[0])==='Moi · caution rendue','host « Pas venu »: no H+6 line, neutral label');
   const hn6=R6(hn);
   ok(JSON.stringify(hn6.requests)===JSON.stringify(hn.requests),'host « Pas venu » then H+6 tick: cause unchanged');
-  ok(DH.hostReturnedDepositLine({userName:'X',depositStatus:'returned'})==='X · caution rendue','other return cause: neutral label');
+  ok(DH.hostReturnedDepositLine({userName:'X',depositStatus:'returned'},o({startsAt:iso(T)}))==='X · caution rendue','other return cause at/after H+6: neutral label');
   // malaise : vue hôte identique à un départ simple
   const sl=S({currentUser:me,outings:[o({startsAt:iso(now-10*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
   const L=(reason?:any)=>D(sl,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lv'}});
   const LT=require('../src/utils/leaveTable');
   const a=R6({...L(),outings:[{...L().outings[0],startsAt:iso(T)}]}), b=R6({...L('discomfort'),outings:[{...L('discomfort').outings[0],startsAt:iso(T)}]});
-  ok(DH.hostReturnedDepositLine(LT.projectRequestForHost(a.requests[0]))===null&&DH.hostReturnedDepositLine(LT.projectRequestForHost(b.requests[0]))===null&&JSON.stringify(LT.projectRequestForHost(a.requests[0]))===JSON.stringify(LT.projectRequestForHost(b.requests[0])),'malaise vs plain leave: same host view, no deposit line, untouched by H+6');
+  ok(DH.hostReturnedDepositLine(LT.projectRequestForHost(a.requests[0]),a.outings[0])===null&&DH.hostReturnedDepositLine(LT.projectRequestForHost(b.requests[0]),b.outings[0])===null&&JSON.stringify(LT.projectRequestForHost(a.requests[0]))===JSON.stringify(LT.projectRequestForHost(b.requests[0])),'malaise vs plain leave: same host view, no deposit line, untouched by H+6');
   // codes bruts → français
   const codes=['too_late','host_no_show','too_early','not_participant','not_confirmed','not_found','outing_cancelled','already_present','no_user','not_allowed_now','demo_disabled','outing_not_found','invalid_start'];
   ok(codes.every((c)=>RL.REFUSAL_CODES.includes(c)&&!/[a-z]+_[a-z]+/.test(RL.refusalLabel(c))&&RL.refusalLabel(c).length>5),'refusal labels: every code in clear French');
@@ -1013,7 +1013,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const od=rd('screens/OutingDetailScreen.tsx'), dm=rd('components/DemoMenuModal.tsx');
   const raw=(src:string,call:string)=>{const out:string[]=[];let i=-1;while((i=src.indexOf(call,i+1))>=0){const nx=src.indexOf('onPress',i+1);const w=src.slice(i,nx>0?nx:i+1500);if(/Alert\.alert\([^)]*\b(res|r)\.reason\)/.test(w)&&!/refusalLabel\((res|r)\.reason\)/.test(w))out.push(String(i));if(/\$\{(res|r)\.reason\}/.test(w))out.push('tpl'+i);}return out;};
   ok(raw(od,'reportGuestNoShow(').length===0&&raw(od,'partnerMarkNoShow(').length===0&&raw(dm,'reportGuestNoShow(').length===0&&raw(dm,'demoSimulateDepositH6(').length===0,'static: no raw code in « Pas venu » / H+6 alerts');
-  ok(!od.includes('isAtOrAfterH6(outing)')&&od.includes('hostReturnedDepositLine(r)'),'static: host line driven by recorded cause, not by the clock');
+  ok(!od.includes('isAtOrAfterH6(outing)')&&od.includes('hostReturnedDepositLine(r, outing)'),'static: host line driven by recorded cause, not by the clock');
 }
 
 // libellés d’alerte par parcours (remarques Testeur 1, 2, 3, 5)
@@ -1034,6 +1034,38 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const after=(call:string)=>{const i=od.indexOf(call);const nx=od.indexOf('onPress',i+1);return od.slice(i,nx>0?nx:i+1500);};
   ok(/refusalLabel\(res\.reason, 'presence'\)/.test(after('markGuestPresent(r.id)'))&&!/Alert\.alert\('Impossible', res\.reason\)/.test(after('markGuestPresent(r.id)')),'« Marquer présent »: refusal through refusalLabels');
   ok((od.match(/partnerMarkNoShow\(r\.id\);\s*if \(!res\.ok\) Alert\.alert\('Impossible', refusalLabel\(res\.reason, 'partner_noshow'\)\)/g)||[]).length===2,'partnerMarkNoShow alerts: partner flow labels');
+}
+
+// ligne hôte « X · caution rendue » : à partir de H+6 ou si l’hôte est déclaré « Pas venu » ; rien avant H+6 (joker invisible)
+{
+  const DH=require('../src/utils/depositH6');
+  const LT=require('../src/utils/leaveTable');
+  const MIN=60e3;
+  const imp=(x:any={})=>({id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'pending',createdAt:iso(now-2*H),...x});
+  const T=now+2*H; // moment à venir : imprévu refusé + joker avant H
+  const s0=S({currentUser:me,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],imprevuReports:[imp({status:'refused',respondedAt:iso(now-H),respondedByUserId:'h1'})]});
+  // état joker : caution rendue, aucune présence ni départ, pas de cause H+6
+  const j=D(s0,{type:'USE_JOKER_ON_IMPREVU',payload:{imprevuId:'i1',requestId:'r1',monthKey:'2026-10',usedAt:iso(now)}});
+  ok(j.imprevuReports[0].jokerUsed===true,'setup: joker used on refused imprévu (real action)');
+  const jr=j.requests[0];
+  const jo={...s0.outings[0]};
+  ok(jr.depositStatus==='returned'&&!jr.attendance&&!jr.leftTableAt&&!jr.depositReturnCause,'setup: joker-returned deposit, no presence / leave / H+6 cause');
+  ok(DH.hostReturnedDepositLine(LT.projectRequestForHost(jr),jo,now)===null,'joker (imprévu refused) before H: no host line');
+  ok(DH.hostReturnedDepositLine(jr,jo,T+6*H-MIN)===null,'joker: no host line at H+6 − 1 min');
+  ok(DH.hostReturnedDepositLine(jr,jo,T+6*H)==='Moi · caution rendue','at H+6: neutral line shown');
+  ok(DH.hostReturnedDepositLine({...jr,depositReturnCause:'h6'},jo,T+6*H)==='Moi · caution rendue 6 h après le début','H+6 cause line unchanged');
+  ok(DH.hostReturnedDepositLine(jr,{...jo,hostNoShowReported:true},now)==='Moi · caution rendue','host declared « Pas venu » before H+6: line shown');
+  ok(DH.hostReturnedDepositLine(jr,{...jo,isPartnerListing:true},T+7*H)===null,'partner listing: never the neutral line from H+6 rule');
+  ok([{attendance:'present'},{attendance:'absent'},{leftTableAt:iso(now)},{depositStatus:'held'}].every((x:any)=>DH.hostReturnedDepositLine({...jr,...x},jo,T+7*H)===null),'presence / absence / leave / held: no returned line (their own lines unchanged)');
+  // malaise vs départ simple : vue hôte identique, avant et après H+6
+  const sl=S({currentUser:me,outings:[o({startsAt:iso(now-10*MIN),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  const L=(reason?:any)=>D(sl,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lv'}});
+  const a=L(), b=L('discomfort');
+  const view=(x:any,at:number)=>JSON.stringify({p:LT.projectRequestForHost(x.requests[0]),line:DH.hostReturnedDepositLine(LT.projectRequestForHost(x.requests[0]),x.outings[0],at),leave:LT.hostLeaveView(x.requests[0])});
+  ok(view(a,now)===view(b,now)&&view(a,now+7*H)===view(b,now+7*H),'host view identical with / without malaise (before and after H+6)');
+  const fs=require('node:fs'), path=require('node:path');
+  const od=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
+  ok((od.match(/hostReturnedDepositLine\(r, outing\)/g)||[]).length===2,'static: screen passes the outing (H+6 / host no-show gate)');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

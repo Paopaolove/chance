@@ -867,10 +867,10 @@ export function OutingDetailScreen() {
                     {r.userName} · absence · caution perdue
                   </Text>
                 ) : null}
-                {!partner && hostReturnedDepositLine(r) ? (
+                {!partner && hostReturnedDepositLine(r, outing) ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
                     {/* Libellé H+6 seulement si la règle H+6 a rendu la caution ; sinon neutre. */}
-                    {hostReturnedDepositLine(r)}
+                    {hostReturnedDepositLine(r, outing)}
                   </Text>
                 ) : null}
                 {!partner &&
