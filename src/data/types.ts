@@ -381,7 +381,7 @@ export interface Request {
   noShowContest?: {
     note: string;
     contestedAt: string;
-    outcome?: 'noshow_confirmed' | 'contest_accepted';
+    outcome?: 'noshow_confirmed' | 'contest_accepted' | 'review_expired';
     resolvedAt?: string;
     /** Contestation par déclaration de l’hôte absent (pas de phrase). */
     viaHostNoShow?: boolean;
@@ -906,6 +906,8 @@ export type AppAction =
   | { type: 'CONTEST_NO_SHOW'; payload: { requestId: string; note: string; at: string } }
   /** Sans contestation à 24 h : caution perdue. Refusée avant l’échéance. */
   | { type: 'EXPIRE_NO_SHOW_CONTEST'; payload: { requestId: string; at: string } }
+  /** Revue sans décision 7 jours après la contestation : caution rendue, absence non comptée. Refusée avant l’heure. */
+  | { type: 'EXPIRE_NO_SHOW_REVIEW'; payload: { requestId: string; at: string } }
   /** Revue : « Pas venu confirmé » → caution perdue (6,90 / 13,10). */
   | { type: 'CONFIRM_NO_SHOW_AFTER_REVIEW'; payload: { requestId: string; at: string } }
   /** Revue : « contestation acceptée » → caution rendue. */

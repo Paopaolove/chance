@@ -82,6 +82,31 @@ export function contestRefusalLabel(reason: string | undefined): string {
   );
 }
 
+/** Délai maximum de revue d’une contestation : 7 jours après l’entrée en revue. */
+export const NOSHOW_REVIEW_MAX_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function reviewDeadlineMs(r: Pick<Request, 'noShowContest'>): number {
+  const t = r.noShowContest?.contestedAt ? new Date(r.noShowContest.contestedAt).getTime() : NaN;
+  return Number.isFinite(t) ? t + NOSHOW_REVIEW_MAX_MS : NaN;
+}
+
+/** Revue sans décision à 7 jours : caution rendue (absence non retenue). */
+export function shouldReturnAfterReviewTimeout(
+  r: Pick<Request, 'depositStatus' | 'noShowContest'>,
+  nowMs = Date.now(),
+): boolean {
+  if (r.depositStatus !== 'contested' || !r.noShowContest || r.noShowContest.outcome) return false;
+  const d = reviewDeadlineMs(r);
+  return Number.isFinite(d) && nowMs >= d;
+}
+
+export function requestsDueForReviewTimeout(
+  requests: (Pick<Request, 'id' | 'depositStatus' | 'noShowContest'>)[],
+  nowMs = Date.now(),
+): string[] {
+  return requests.filter((r) => shouldReturnAfterReviewTimeout(r, nowMs)).map((r) => r.id);
+}
+
 /** Message à l’invité quand l’absence devient définitive. */
 export const NOSHOW_FINAL_NOTICE_TEXT = 'Ton absence est retenue. La caution est perdue.';
 

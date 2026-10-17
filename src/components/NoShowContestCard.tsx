@@ -33,7 +33,7 @@ export function NoShowContestCard({ request }: { request: Request }) {
         <Text style={styles.title}>Contestation envoyée</Text>
         <Text style={styles.body}>
           Ta caution de {DEPOSIT_EUROS} € est en attente de revue. Ni perdue ni rendue tant que
-          Moment n’a pas tranché.
+          Moment n’a pas tranché ; sans décision sous 7 jours, elle t’est rendue.
         </Text>
       </View>
     );

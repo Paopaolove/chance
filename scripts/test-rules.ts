@@ -1111,7 +1111,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const fs=require('node:fs'), path=require('node:path');
   const rd=(f:string)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8');
   const ctx=rd('data/ChanceContext.tsx'), od=rd('screens/OutingDetailScreen.tsx'), card=rd('components/NoShowContestCard.tsx');
-  ok(/requestsDueForContestExpiry\(state\.requests, now\)[\s\S]{0,300}EXPIRE_NO_SHOW_CONTEST[\s\S]{0,300}setInterval\(tick, 60_000\)[\s\S]{0,200}'active'/.test(ctx),'static: local 24 h timer (interval + foreground)');
+  ok(/requestsDueForContestExpiry\(state\.requests, now\)[\s\S]{0,300}EXPIRE_NO_SHOW_CONTEST[\s\S]{0,900}setInterval\(tick, 60_000\)[\s\S]{0,200}'active'/.test(ctx),'static: local 24 h timer (interval + foreground)');
   ok(/reportedByUserId: user\.id/.test(ctx),'static: reportGuestNoShow passes the author');
   ok(od.includes('<NoShowContestCard')&&card.includes('title="Contester"')&&card.includes('variant="secondary"')&&card.includes('contestTimeLeftLabel')&&!/shadow|elevation/i.test(card),'static: guest « Contester » card, time left, secondary button, no shadow');
   ok(od.includes('absence signalée · caution en attente'),'static: host sees « caution en attente »');
@@ -1352,6 +1352,39 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const cb=ctx.slice(ctx.indexOf('const reportGuestNoShow = useCallback('),ctx.indexOf('const reportGuestNoShow = useCallback(')+5000);
   const jb=cb.slice(cb.indexOf('if (!shouldApplyGuestNoShowPenalty(jokerExempted))'),cb.indexOf('if (!shouldApplyGuestNoShowPenalty(jokerExempted))')+300);
   ok(/reason: 'not_declarable'/.test(jb)&&!/Joker/.test(jb)&&!/dispatch/.test(jb),'C: joker refusal neutral, nothing sent, no toast');
+}
+
+// délai maximum de revue : 7 jours après l’entrée en revue → caution rendue, absence non retenue
+{
+  const NC=require('../src/utils/noShowContest');
+  const LT=require('../src/utils/leaveTable');
+  const DH=require('../src/utils/depositH6');
+  const MIN=60e3, D7=7*24*H, T=now-2*H, NSAT=T+H, CAT=NSAT+3*H;
+  const guest:any={...me};
+  const st=()=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const NS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const c=D(NS(st()),{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'Phrase zq8',at:iso(CAT)}});
+  const ER=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_REVIEW',payload:{requestId:'r1',at:iso(at)}});
+  ok(NC.NOSHOW_REVIEW_MAX_MS===D7,'review max: named constant = 7 days');
+  ok(ER(c,CAT+D7-MIN).requests[0].depositStatus==='contested','review timeout refused at 7 d − 1 min');
+  const e=ER(c,CAT+D7);
+  ok(e.requests[0].depositStatus==='returned'&&e.requests[0].attendance===undefined&&e.requests[0].noShowNotRetained===true&&e.requests[0].noShowContest.outcome==='review_expired','7 d without decision: returned, absence not retained');
+  ok(!e.guestNoShowStrikes.u1&&!e.toast,'7 d timeout: nothing counted, no « absence retenue » message');
+  ok(JSON.stringify(ER(e,CAT+D7+H))===JSON.stringify(e),'review timeout idempotent');
+  ok(D(e,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(CAT+D7+H)}}).requests[0].depositStatus==='returned','late review after timeout: no effect');
+  ok(D(c,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(CAT+D7)}}).requests[0].depositStatus==='contested','review at 7 d (unprocessed timeout): refused, timeout wins');
+  ok(D(c,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(CAT+D7-MIN)}}).requests[0].depositStatus==='forfeited','review at 7 d − 1 min: still possible');
+  ok(NC.reviewDeadlineMs(c.requests[0])===CAT+D7,'7 days counted from the contest (entry into review)');
+  ok(JSON.stringify(NC.requestsDueForReviewTimeout(c.requests,CAT+D7))==='["r1"]'&&NC.requestsDueForReviewTimeout(c.requests,CAT+D7-MIN).length===0,'timer helper: due at 7 d only');
+  ok(DH.hostReturnedDepositLine(LT.projectRequestForHost(e.requests[0]),e.outings[0])==='Moi · absence non retenue'&&!/zq8/.test(JSON.stringify(e.requests.map(LT.projectRequestForHost))),'host: « absence non retenue », sentence never visible');
+  // contestation via « hôte absent » : 7 jours aussi, règle B
+  const hc=D(D(NS(st()),{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedAt:iso(CAT),reportedByUserId:'u1'}}),{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}});
+  ok(ER(hc,CAT+D7-MIN).requests[0].depositStatus==='contested'&&ER(hc,CAT+D7).requests[0].depositStatus==='returned'&&ER(hc,CAT+D7).requests[0].noShowVoided===true,'host-absent contest: 7 d timeout → returned (B)');
+  const fs=require('node:fs'), path=require('node:path');
+  const ctx=fs.readFileSync(path.join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
+  const card=fs.readFileSync(path.join(__dirname,'..','src','components','NoShowContestCard.tsx'),'utf8');
+  ok(/requestsDueForReviewTimeout\(state\.requests, now\)[\s\S]{0,300}EXPIRE_NO_SHOW_REVIEW[\s\S]{0,400}setInterval\(tick, 60_000\)/.test(ctx),'static: local timer for the 7-day review timeout');
+  ok(card.includes('sans décision sous 7 jours, elle t’est rendue'),'guest card mentions the 7-day limit');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

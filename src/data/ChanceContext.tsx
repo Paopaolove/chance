@@ -128,6 +128,8 @@ import {
   normalizeContestNote,
   noShowOpensContest,
   requestsDueForContestExpiry,
+  requestsDueForReviewTimeout,
+  shouldReturnAfterReviewTimeout,
   shouldForfeitUncontested,
   type ContestRefusal,
 } from '../utils/noShowContest';
@@ -2442,12 +2444,35 @@ function reducer(state: AppState, action: AppAction): AppState {
       );
     }
 
+    case 'EXPIRE_NO_SHOW_REVIEW': {
+      // 7 jours sans décision : caution rendue, absence traitée comme non retenue.
+      const { requestId, at } = action.payload;
+      const req = state.requests.find((r) => r.id === requestId);
+      const atMs = new Date(at).getTime();
+      if (!req || !Number.isFinite(atMs) || !shouldReturnAfterReviewTimeout(req, atMs)) {
+        return state;
+      }
+      return {
+        ...state,
+        requests: state.requests.map((r) => {
+          if (r.id !== requestId) return r;
+          const { attendance: _absent, ...rest } = r;
+          const contest = { ...r.noShowContest!, outcome: 'review_expired' as const, resolvedAt: at };
+          return r.noShowContest!.viaHostNoShow
+            ? { ...rest, depositStatus: 'returned' as const, noShowVoided: true, noShowContest: contest }
+            : { ...rest, depositStatus: 'returned' as const, noShowNotRetained: true, noShowContest: contest };
+        }),
+      };
+    }
+
     case 'CONFIRM_NO_SHOW_AFTER_REVIEW':
     case 'ACCEPT_NO_SHOW_CONTEST': {
       // Revue Moment d’une contestation : seulement sur une caution contestée.
       const { requestId, at } = action.payload;
       const req = state.requests.find((r) => r.id === requestId);
       if (!req || req.depositStatus !== 'contested' || !req.noShowContest) return state;
+      // Au-delà de 7 jours, la revue n’a plus d’effet (caution rendue d’office).
+      if (shouldReturnAfterReviewTimeout(req, new Date(at).getTime())) return state;
       const accepted = action.type === 'ACCEPT_NO_SHOW_CONTEST';
       const reviewed: AppState = {
         ...state,
@@ -4974,6 +4999,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       for (const requestId of requestsDueForContestExpiry(state.requests, now)) {
         dispatch({
           type: 'EXPIRE_NO_SHOW_CONTEST',
+          payload: { requestId, at: new Date(now).toISOString() },
+        });
+      }
+      // Revue sans décision à 7 jours : caution rendue.
+      for (const requestId of requestsDueForReviewTimeout(state.requests, now)) {
+        dispatch({
+          type: 'EXPIRE_NO_SHOW_REVIEW',
           payload: { requestId, at: new Date(now).toISOString() },
         });
       }
