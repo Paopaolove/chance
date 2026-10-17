@@ -1908,25 +1908,6 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (outingNoShow.hostNoShowReported) return state;
       // Absence non retenue après contestation : pas de nouvelle déclaration.
       if (existing.noShowNotRetained) return state;
-      // Hôte d’une table normale : 24 h pour contester, rien n’est compté avant que ce soit définitif.
-      if (noShowOpensContest(outingNoShow, reportedByUserId)) {
-        return {
-          ...state,
-          requests: state.requests.map((r) =>
-            r.id === requestId
-              ? {
-                  ...r,
-                  attendance: 'absent' as const,
-                  depositStatus: 'noshow_pending' as const,
-                  noShowReportedAt: reportedAt,
-                }
-              : r,
-          ),
-          outings: state.outings.map((o) =>
-            o.id === outingId ? { ...o, status: 'closed' as const } : o,
-          ),
-        };
-      }
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -1949,6 +1930,26 @@ function reducer(state: AppState, action: AppAction): AppState {
                         : r.depositStatus,
                 }
               : r,
+          ),
+        };
+      }
+      // Après le joker et les autres gardes (ordre de fbe3f51).
+      // Hôte d’une table normale : 24 h pour contester, rien n’est compté avant que ce soit définitif.
+      if (noShowOpensContest(outingNoShow, reportedByUserId)) {
+        return {
+          ...state,
+          requests: state.requests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  attendance: 'absent' as const,
+                  depositStatus: 'noshow_pending' as const,
+                  noShowReportedAt: reportedAt,
+                }
+              : r,
+          ),
+          outings: state.outings.map((o) =>
+            o.id === outingId ? { ...o, status: 'closed' as const } : o,
           ),
         };
       }

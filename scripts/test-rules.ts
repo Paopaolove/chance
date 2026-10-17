@@ -1243,5 +1243,22 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const od=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
   ok((od.match(/hostReturnedDepositLine\(r, outing\)/g)||[]).length===2,'static: screen passes the outing (H+6 / host no-show gate)');
 }
+
+// correction : le joker passe avant la contestation dans REPORT_GUEST_NO_SHOW
+{
+  const T=now+2*H;
+  const imp={id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'refused',respondedAt:iso(now-H),respondedByUserId:'h1',createdAt:iso(now-2*H)};
+  const s0=S({currentUser:me,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],imprevuReports:[imp]});
+  const j=D(s0,{type:'USE_JOKER_ON_IMPREVU',payload:{imprevuId:'i1',requestId:'r1',monthKey:'2026-10',usedAt:iso(now)}});
+  ok(j.imprevuReports[0].jokerUsed===true&&j.requests[0].depositStatus==='returned','setup: joker active');
+  const ns=D({...j,currentUser:host},{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(T+H),reportedByUserId:'h1'}});
+  const r=ns.requests[0];
+  ok(r.depositStatus==='returned'&&r.attendance!=='absent'&&!r.noShowReportedAt&&!r.noShowContest&&!ns.guestNoShowStrikes.u1,'joker active: host « Pas venu » with author refused, no contest created');
+  const fs=require('node:fs'), path=require('node:path');
+  const ctx=fs.readFileSync(path.join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
+  const c=ctx.indexOf("case 'REPORT_GUEST_NO_SHOW'");
+  const body=ctx.slice(c,ctx.indexOf("case 'REPORT_HOST_NEVER_HONOR'",c));
+  ok(body.indexOf('isJokerExempted(')>0&&body.indexOf('isJokerExempted(')<body.indexOf('noShowOpensContest(outingNoShow'),'static: joker checked before the contest branch');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
