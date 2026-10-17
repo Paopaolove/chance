@@ -1979,11 +1979,27 @@ function reducer(state: AppState, action: AppAction): AppState {
         requests: state.requests.map((r) => {
           if (r.outingId !== outingId || !r.noShowContestPausedAt) return r;
           const { noShowContestPausedAt: pausedAt, ...rest } = r;
-          return {
+          const resumed = {
             ...rest,
             noShowContestPausedMs:
               (r.noShowContestPausedMs ?? 0) + Math.max(0, atMs - new Date(pausedAt).getTime()),
           };
+          // Partenaire (L69.6) : « Je suis arrivé » enregistré pendant la pause
+          // vaut contestation à la reprise (revue, pas de perte à l’échéance).
+          if (
+            isPartnerListing(o) &&
+            r.guestArrivedAt &&
+            r.attendance === 'absent' &&
+            r.depositStatus === 'noshow_pending' &&
+            !r.noShowContest
+          ) {
+            return {
+              ...resumed,
+              depositStatus: 'contested' as const,
+              noShowContest: { note: '« Je suis arrivé »', contestedAt: at, viaArrival: true },
+            };
+          }
+          return resumed;
         }),
       };
       // Invité « Pas venu » qui avait déclaré l’hôte absent : l’hôte était là,

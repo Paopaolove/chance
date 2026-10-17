@@ -1670,5 +1670,41 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const arr=D(pp,{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(NSAT+3*H)}});
   ok(arr.requests[0].depositStatus==='noshow_pending'&&arr.requests[0].partnerDispute?.trigger==='arrival_after_absent','B6: partner arrival during the pause → dispute only, no contest');
 }
+
+// QA : arrivée partenaire pendant la pause = contestation à la reprise (L69.6)
+{
+  const NC=require('../src/utils/noShowContest');
+  const LT=require('../src/utils/leaveTable');
+  const MIN=60e3, D1=24*H, D7=7*D1, T=now-2*H, NSAT=T+H;
+  const guest:any={...me};
+  const mk=()=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const NS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const HN=(s0:any,at:number)=>D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedAt:iso(at),reportedByUserId:'u2'}});
+  const ARR=(s0:any,at:number)=>D(s0,{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(at)}});
+  const CH=(s0:any,at:number)=>({...D({...s0,currentUser:{...host}},{type:'CONTEST_HOST_NO_SHOW',payload:{outingId:'o1',note:'Le lieu était ouvert',at:iso(at)}}),currentUser:guest});
+  const ACCH=(s0:any,at:number)=>D(s0,{type:'ACCEPT_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(at)}});
+  const EXP=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(at)}});
+  const paused=ARR(HN(NS(mk()),NSAT+2*H),NSAT+3*H);
+  ok(paused.requests[0].depositStatus==='noshow_pending'&&paused.requests[0].guestArrivedAt===iso(NSAT+3*H)&&paused.requests[0].partnerDispute?.trigger==='arrival_after_absent','Z: arrival during the pause recorded (dispute), still pending');
+  ok(ARR(paused,NSAT+4*H).requests[0].guestArrivedAt===iso(NSAT+3*H),'Z: second tap ignored (unchanged)');
+  const RES=NSAT+10*H;
+  const res=ACCH(CH(paused,NSAT+4*H),RES);
+  const r0=res.requests[0];
+  ok(r0.depositStatus==='contested'&&r0.noShowContest.viaArrival===true&&r0.noShowContest.contestedAt===iso(RES)&&!r0.noShowContestPausedAt,'Z: on resume (venue present), arrival = contest under review');
+  const dl=NC.contestDeadlineMs(r0,RES);
+  ok(EXP(res,dl).requests[0].depositStatus==='contested'&&EXP(res,dl+D1).requests[0].depositStatus==='contested'&&!EXP(res,dl).guestNoShowStrikes.u1,'Z: no loss at the 24 h deadline');
+  ok(NC.reviewDeadlineMs(r0)===RES+D7,'Z: 7-day review counted from the resume');
+  ok(!/Je suis arrivé|viaArrival/.test(JSON.stringify(res.requests.map(LT.projectRequestForHost))),'Z: contest invisible to the venue');
+  // lieu retenu absent : règle B comme avant
+  const ret=D(paused,{type:'EXPIRE_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(NSAT+2*H+D1)}});
+  ok(ret.outings[0].hostNoShowCase.status==='retained'&&ret.requests[0].depositStatus==='returned'&&ret.requests[0].attendance===undefined&&ret.requests[0].noShowVoided===true&&!ret.guestNoShowStrikes.u1,'Z: arrival during the pause, venue retained absent → deposit returned (B)');
+  // sans arrivée : reprise normale du délai (inchangé)
+  const noArr=ACCH(CH(HN(NS(mk()),NSAT+2*H),NSAT+4*H),RES);
+  ok(noArr.requests[0].depositStatus==='noshow_pending'&&!noArr.requests[0].noShowContest,'Z: no arrival → plain resume, no contest');
+  // table normale : aucune arrivée partenaire, rien ne change
+  const fs=require('node:fs'), path=require('node:path');
+  const ctx=fs.readFileSync(path.join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
+  ok(/isPartnerListing\(o\) &&\s*r\.guestArrivedAt[\s\S]{0,700}viaArrival: true/.test(ctx),'static: arrival contest only on partner listings');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
