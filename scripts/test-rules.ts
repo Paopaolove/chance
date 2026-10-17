@@ -921,5 +921,13 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     (globalThis as any).__DEV__=true;
   }
 }
+
+// profil : phrase « Pas pour draguer… » retirée (Paolo 17/10, 15 h 44)
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const ep=fs.readFileSync(path.join(__dirname,'..','src','screens','EditProfileScreen.tsx'),'utf8');
+  ok(!/draguer/.test(ep)&&!ep.includes('il sert à l’option'),'edit profile: « Pas pour draguer » sentence removed');
+  ok(/<Text style=\{styles\.label\}>Genre \(optionnel\)<\/Text>\s*<GenderPills/.test(ep),'edit profile: gender label directly followed by pills (no empty hint)');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

@@ -207,9 +207,6 @@ export function EditProfileScreen() {
       />
 
       <Text style={styles.label}>Genre (optionnel)</Text>
-      <Text style={styles.fieldHint}>
-        Pas pour draguer : il sert à l’option « Femmes uniquement ».
-      </Text>
       <GenderPills
         gender={gender}
         detail={genderDetail}
