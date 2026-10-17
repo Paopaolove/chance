@@ -1363,7 +1363,7 @@ export function OutingDetailScreen() {
           <Button title="Demander à rejoindre" onPress={onJoin} />
         </View>
       )}
-      {/* Point d’entrée discret : membres de la table, à partir de H. */}
+      {/* Point d’entrée discret : membres de la table, dès la confirmation. */}
       {canReportOnOuting(outing.id) ? (
         <Pressable
           onPress={() =>

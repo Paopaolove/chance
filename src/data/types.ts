@@ -595,7 +595,15 @@ export interface TableReport {
     body: string;
     at: string;
   }[];
-  outcome?: 'nothing' | 'warning' | 'suspension' | 'abusive';
+  /** Issue (registre) : sans suite / avertissement / suspension / signalement abusif. */
+  outcome?: 'sans_suite' | 'warning' | 'suspension' | 'abusive';
+  /** Motif établi exigé pour « abusif » (jamais « rien dans le chat »). */
+  abusiveReason?: 'reporter_absent' | 'reporter_admitted_false' | 'repeated_unconfirmed';
+  /**
+   * Drapeau de revue (côté Moment seulement) : créé après un « Pas venu » ou
+   * un avis négatif de la personne visée contre le signaleur. Pas une preuve.
+   */
+  followsNoShowOrNegativeReview?: boolean;
   closedAt?: string;
 }
 
@@ -605,8 +613,6 @@ export interface MemberModeration {
   warnings?: number;
   /** Suspendu (issue « suspension »). */
   suspended?: boolean;
-  /** Accès au motif malaise retiré (issue « signalement abusif »). */
-  discomfortAccessRevoked?: boolean;
   /** Revue de l’hôte : 2 départs malaise à ses tables en 3 mois. */
   hostReview?: boolean;
 }
@@ -816,6 +822,8 @@ export type AppAction =
         to: TableReport['status'];
         at: string;
         outcome?: TableReport['outcome'];
+        /** Exigé (et seulement) avec l’issue « abusif ». */
+        abusiveReason?: TableReport['abusiveReason'];
       };
     }
   | { type: 'SET_TOAST'; payload: AppToast | null }

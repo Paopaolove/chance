@@ -127,6 +127,7 @@ import {
   advanceTableReport,
   canSubmitTableReport,
   canOpenTableReport,
+  followsNoShowOrNegativeReview,
   hostNeedsReview,
   normalizeTableReportNote,
 } from '../utils/tableReports';
@@ -1176,8 +1177,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       const discomfortAllowed = isDiscomfortReasonOffered(
         state.confidentialLeaveReports,
         me.id,
-        me.manualReviewRequired ||
-          state.memberModeration[me.id]?.discomfortAccessRevoked,
+        me.manualReviewRequired,
         leftAtMs,
       );
       const outcome = resolveLeaveTable({
@@ -1285,9 +1285,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (state.tableReports.some((r) => r.id === id)) return state;
       const atMs = new Date(createdAt).getTime();
       if (!Number.isFinite(atMs)) return state;
-      if (
-        !canSubmitTableReport(outing, state.requests, me.id, targetUserId, atMs)
-      ) {
+      if (!canSubmitTableReport(outing, state.requests, me.id, targetUserId)) {
         return state;
       }
       return {
@@ -1302,6 +1300,16 @@ function reducer(state: AppState, action: AppAction): AppState {
             createdAt,
             status: 'open',
             messages: [],
+            // Drapeau de revue côté Moment — pas une preuve, ne suffit pas à « abusif ».
+            ...(followsNoShowOrNegativeReview({
+              outing,
+              requests: state.requests,
+              reviews: state.reviews,
+              reporterId: me.id,
+              targetUserId,
+            })
+              ? { followsNoShowOrNegativeReview: true }
+              : {}),
           },
           ...state.tableReports,
         ],
@@ -1310,10 +1318,13 @@ function reducer(state: AppState, action: AppAction): AppState {
 
     case 'ADVANCE_TABLE_REPORT': {
       // Côté Moment (démo) : une étape à la fois, clos = figé.
-      const { reportId, to, at, outcome } = action.payload;
+      const { reportId, to, at, outcome, abusiveReason } = action.payload;
       const report = state.tableReports.find((r) => r.id === reportId);
       if (!report) return state;
-      const next = advanceTableReport(report, to, at, outcome);
+      const next = advanceTableReport(report, to, at, outcome, {
+        reason: abusiveReason,
+        allReports: state.tableReports,
+      });
       if (!next) return state;
       let memberModeration = state.memberModeration;
       if (next.status === 'closed') {
@@ -1327,11 +1338,11 @@ function reducer(state: AppState, action: AppAction): AppState {
           bump(next.targetUserId, (m) => ({ ...m, warnings: (m.warnings ?? 0) + 1 }));
         } else if (next.outcome === 'suspension') {
           bump(next.targetUserId, (m) => ({ ...m, suspended: true }));
-        } else if (next.outcome === 'abusive') {
-          // Mécanisme existant : accès au motif malaise retiré au signaleur.
-          bump(next.reporterId, (m) => ({ ...m, discomfortAccessRevoked: true }));
         }
-        // 'nothing' : clos sans trace sur le concerné.
+        // 'sans_suite' : clos sans trace sur le concerné.
+        // 'abusive' (motif établi exigé) : enregistré sans aucun effet —
+        // pas d’avertissement, pas de retrait, rien sur le signaleur.
+        // La règle des malaises côté invité ne change pas.
       }
       return {
         ...state,
@@ -2694,7 +2705,7 @@ interface ChanceContextValue {
    */
   /** Motif « Je ne me sens pas à l’aise » encore proposé à l’utilisateur courant. */
   isDiscomfortReasonOfferedForMe: () => boolean;
-  /** Écran « Signaler » accessible (membre de la table, à partir de H). */
+  /** Écran « Signaler » accessible (membre de la table, dès la confirmation). */
   canReportOnOuting: (outingId: string) => boolean;
   /** Signalement d’un membre de la table (démo, confidentiel côté Moment). */
   submitTableReport: (
@@ -5879,9 +5890,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       const nowMs = Date.now();
-      if (
-        !canSubmitTableReport(outing, state.requests, user.id, targetUserId, nowMs)
-      ) {
+      if (!canSubmitTableReport(outing, state.requests, user.id, targetUserId)) {
         return { ok: false, reason: 'not_allowed' };
       }
       dispatch({
@@ -5905,10 +5914,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     return isDiscomfortReasonOffered(
       state.confidentialLeaveReports,
       user.id,
-      user.manualReviewRequired ||
-        state.memberModeration[user.id]?.discomfortAccessRevoked,
+      user.manualReviewRequired,
     );
-  }, [state.currentUser, state.confidentialLeaveReports, state.memberModeration]);
+  }, [state.currentUser, state.confidentialLeaveReports]);
 
   const leaveTable = useCallback(
     (
@@ -5946,8 +5954,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const discomfortAllowed = isDiscomfortReasonOffered(
         state.confidentialLeaveReports,
         user.id,
-        user.manualReviewRequired ||
-          state.memberModeration[user.id]?.discomfortAccessRevoked,
+        user.manualReviewRequired,
         nowMs,
       );
       const outcome = resolveLeaveTable({
@@ -5976,13 +5983,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         discomfort: outcome.confidentialReport,
       };
     },
-    [
-      state.currentUser,
-      state.requests,
-      state.outings,
-      state.confidentialLeaveReports,
-      state.memberModeration,
-    ],
+    [state.currentUser, state.requests, state.outings, state.confidentialLeaveReports],
   );
 
   const reportGuestNoShow = useCallback(

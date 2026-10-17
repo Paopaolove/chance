@@ -20,8 +20,8 @@ type Nav = NativeStackNavigationProp<RootStackParamList, 'ReportTable'>;
 type R = RouteProp<RootStackParamList, 'ReportTable'>;
 
 /**
- * « Signaler » — tout membre de la table (hôte ou invité confirmé), pendant
- * ou après le moment. Confidentiel : la personne concernée ne saura pas qui
+ * « Signaler » — tout membre de la table (hôte ou invité confirmé, partis
+ * compris), dès la confirmation, pendant ou après le moment. Confidentiel : la personne concernée ne saura pas qui
  * a signalé. Démo : aucun vrai message envoyé.
  */
 export function ReportTableScreen() {
@@ -54,8 +54,8 @@ export function ReportTableScreen() {
     return (
       <View style={[styles.scroll, styles.content]}>
         <Text style={styles.body}>
-          Signalement possible pour les membres de la table, à partir de
-          l’heure du moment.
+          Signalement possible pour les membres de la table, dès la
+          confirmation.
         </Text>
       </View>
     );
