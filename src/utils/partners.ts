@@ -292,8 +292,11 @@ export function canGuestSelfArrivePartner(
   return isParisSameDay(outing.startsAt, nowMs);
 }
 
+/** Fenêtre de déclaration d’absence : 6 h après le début (même borne que depositH6). */
+const PARTNER_ABSENCE_DECLARATION_MS = 6 * 60 * 60 * 1000;
+
 /**
- * Lieu : « Pas venu » seulement si chaise vide, le soir même (après l’heure).
+ * Lieu : « Pas venu » seulement si chaise vide, de H à H+6.
  * Si l’invité a tapé « Je suis arrivé » → litige (voir canPartnerFlagDispute).
  */
 export function canPartnerMarkGuestAbsent(
@@ -307,11 +310,13 @@ export function canPartnerMarkGuestAbsent(
   if (actorId !== outing.hostId) return false;
   if (request.status !== 'confirmed') return false;
   if (request.attendance || request.partnerDispute) return false;
+  // Gel 17/10 (point 2) : une seule déclaration d’absence par personne et par moment.
+  if (request.noShowNotRetained || request.noShowVoided) return false;
   if (request.guestArrivedAt) return false;
-  if (!isParisSameDay(outing.startsAt, nowMs)) return false;
+  // Gel 17/10 (point 1) : de H à H+6, comme toute déclaration d’absence.
   const startMs = new Date(outing.startsAt).getTime();
   if (!Number.isFinite(startMs)) return false;
-  return nowMs >= startMs;
+  return nowMs > startMs && nowMs < startMs + PARTNER_ABSENCE_DECLARATION_MS;
 }
 
 /** Lieu : invité « arrivé » mais chaise vide → litige (soir même). */

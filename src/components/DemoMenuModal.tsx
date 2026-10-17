@@ -728,7 +728,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 simulateOutingInMinutes(myPartnerOuting.id, -5);
                 Alert.alert(
                   'Démo',
-                  'Ouvre ton annonce : « Pas venu » apparaît pour chaque chaise vide (soir même).',
+                  'Ouvre ton annonce : « Pas venu » apparaît pour chaque chaise vide (jusqu’à 6 h après le début).',
                 );
               })
             }

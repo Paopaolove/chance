@@ -32,11 +32,11 @@ const LABELS: Record<string, string> = {
 
 const FLOW_LABELS: Record<RefusalFlow, Record<string, string>> = {
   noshow: {},
-  // Lieu partenaire : règle inchangée (le jour du moment, sans « Je suis arrivé »).
+  // Lieu partenaire : de H à H+6 (gel 17/10), sans « Je suis arrivé ».
   partner_noshow: {
     not_participant: 'Seul le lieu qui publie l’annonce peut signaler cette absence.',
     not_allowed_now:
-      '« Pas venu » n’est possible que le jour du moment, à partir de l’heure prévue, si la personne n’a pas signalé son arrivée.',
+      '« Pas venu » n’est possible qu’à partir de l’heure prévue et avant 6 h après le début, si la personne n’a pas signalé son arrivée.',
   },
   // Hôte déclaré absent par un invité.
   host_noshow: {

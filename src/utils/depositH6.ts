@@ -34,6 +34,21 @@ export function isNoShowWindowOpen(outing: H6Outing, nowMs = Date.now()): boolea
   return !isAtOrAfterH6(outing, nowMs);
 }
 
+/**
+ * Gel de la contestation (17/10, point 1) : toute déclaration d’absence
+ * (invité, hôte, lieu partenaire) seulement de H à H+6 (H+6 exclu),
+ * pour toutes les annonces, partenaires compris.
+ */
+export function isAbsenceDeclarationWindowOpen(
+  outing: Pick<Outing, 'startsAt'>,
+  nowMs = Date.now(),
+): boolean {
+  const s = startMs(outing);
+  if (!Number.isFinite(s)) return false;
+  // Borne basse alignée sur isStartsAtPast (« Pas venu » existant) : après H.
+  return nowMs > s && nowMs < s + DEPOSIT_SILENCE_RETURN_AFTER_MS;
+}
+
 /** Caution à rendre à H+6 : confirmé, non « Pas venu », encore held, table normale non annulée. */
 export function shouldReturnDepositH6(
   outing: H6Outing & Pick<Outing, 'status'> & Partial<Pick<Outing, 'hostNoShowCase'>>,

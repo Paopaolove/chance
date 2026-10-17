@@ -144,6 +144,7 @@ import {
 } from '../utils/hostNoShowContest';
 import {
   h6AtIso,
+  isAbsenceDeclarationWindowOpen,
   isNoShowWindowOpen,
   outingsDueForH6,
   shouldReturnDepositH6,
@@ -380,14 +381,20 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
     const next = Math.max(0, (guestNoShowStrikes[req.userId] ?? 0) - 1);
     guestNoShowStrikes = { ...guestNoShowStrikes, [req.userId]: next };
     if (currentUser && currentUser.id === req.userId) {
-      // L70 : priorité baissée et mention profil liées à cette absence annulées,
-      // quel que soit le nombre d’absences restantes.
+      // Gel 17/10 (point 4, L69.1) : priorité baissée et mention profil
+      // recalculées sur le nombre d’absences restantes (elles ne viennent que des absences).
+      const left = guestSanctionFromStrike(next);
+      const stillBanned = req.noShowCausedBan ? false : !!currentUser.banned;
       currentUser = {
         ...currentUser,
         guestNoShowCount: Math.max(0, (currentUser.guestNoShowCount ?? 1) - 1),
         ...(req.noShowCausedBan ? { banned: false, bannedReason: undefined } : {}),
-        lowerPriority: false,
-        profileMention: undefined,
+        lowerPriority: left.lowerPriority,
+        profileMention: left.lowerPriority
+          ? stillBanned && left.banned
+            ? currentUser.profileMention
+            : 'Absence après confirmation (démo)'
+          : undefined,
       };
     }
   }
@@ -1849,11 +1856,12 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'REPORT_HOST_NO_SHOW': {
       const { outingId, reportedAt, reportedByUserId } = action.payload;
       const outing = state.outings.find((o) => o.id === outingId);
-      // Lot 6: same outing / event → no double strike.
-      if (!outing || outing.hostNoShowReported) return state;
+      // Lot 6: same outing / event → no double strike. Gel 17/10 (point 2) : une
+      // seule déclaration par moment (même effacée ou non tranchée, pas de nouvelle).
+      if (!outing || outing.hostNoShowReported || outing.hostNoShowCase) return state;
       const reportedAtMs = reportedAt ? new Date(reportedAt).getTime() : Date.now();
-      // Table normale : strictement avant H+6 (partenaires non concernés).
-      if (!isNoShowWindowOpen(outing, reportedAtMs)) return state;
+      // Gel 17/10 (point 1) : de H à H+6, table normale comme lieu partenaire.
+      if (!isAbsenceDeclarationWindowOpen(outing, reportedAtMs)) return state;
       // Invité lui-même « Pas venu » : seulement pendant ses 24 h ; cela vaut contestation.
       const declarer = reportedByUserId
         ? state.requests.find(
@@ -1986,6 +1994,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           };
           // Partenaire (L69.6) : « Je suis arrivé » enregistré pendant la pause
           // vaut contestation à la reprise (revue, pas de perte à l’échéance).
+          // Depuis le gel du 17/10, l’arrivée conteste tout de suite : filet pour un ancien état.
           if (
             isPartnerListing(o) &&
             r.guestArrivedAt &&
@@ -2217,14 +2226,15 @@ function reducer(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
-      // Table normale : plus de « Pas venu » à partir de H+6 (caution rendue d’office).
-      if (!isNoShowWindowOpen(outingNoShow, new Date(reportedAt).getTime())) {
+      // Gel 17/10 (point 1) : plus de « Pas venu » à partir de H+6, partenaires compris.
+      if (!isAbsenceDeclarationWindowOpen(outingNoShow, new Date(reportedAt).getTime())) {
         return state;
       }
       // Hôte déclaré « Pas venu » : cautions des invités rendues, plus de « Pas venu » invité.
       if (outingNoShow.hostNoShowReported) return state;
-      // Absence non retenue après contestation : pas de nouvelle déclaration.
-      if (existing.noShowNotRetained) return state;
+      // Absence non retenue après contestation, ou effacée : pas de nouvelle
+      // déclaration (gel 17/10, point 2 : une seule par personne et par moment).
+      if (existing.noShowNotRetained || existing.noShowVoided) return state;
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -2552,7 +2562,7 @@ function reducer(state: AppState, action: AppAction): AppState {
             // « Pas venu » déjà tapé puis « Je suis arrivé » → litige, pas de sanction auto,
             // et contestation (17/10) tant que la caution est en attente.
             const contest =
-              r.depositStatus === 'noshow_pending' && !r.noShowContest && !r.noShowContestPausedAt
+              r.depositStatus === 'noshow_pending' && !r.noShowContest
                 ? {
                     depositStatus: 'contested' as const,
                     noShowContest: {
@@ -3269,7 +3279,7 @@ interface ChanceContextValue {
     | { ok: true; dispute: boolean }
     | { ok: false; reason: string };
   /**
-   * Lieu : « Pas venu » (chaise vide, soir même). Sans « Je suis arrivé » →
+   * Lieu : « Pas venu » (chaise vide, de H à H+6). Sans « Je suis arrivé » →
    * lapin (6,90 / 13,10). Après « Je suis arrivé » → litige, pas de sanction.
    */
   partnerMarkNoShow: (
@@ -6221,6 +6231,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outing.status === 'cancelled') {
         return { ok: false, reason: 'outing_cancelled' };
       }
+      // Gel 17/10 (point 2) : absence déjà déclarée puis effacée ou non tranchée,
+      // pas de nouvelle déclaration.
+      if (outing.hostNoShowCase && !outing.hostNoShowReported) {
+        return { ok: false, reason: 'not_declarable' };
+      }
       // Lot 6: same event idempotent.
       if (outing.hostNoShowReported) {
         const prev = state.hostNoShowStrikes[outing.hostId] ?? 0;
@@ -6242,8 +6257,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       const reportedAt = new Date().toISOString();
       const reportedAtMs = new Date(reportedAt).getTime();
-      // Table normale : strictement avant H+6 (partenaires non concernés).
-      if (!isNoShowWindowOpen(outing, reportedAtMs)) {
+      // Gel 17/10 (point 1) : de H à H+6, table normale comme lieu partenaire.
+      if (!isStartsAtPast(outing.startsAt, reportedAtMs)) {
+        return { ok: false, reason: 'too_early' };
+      }
+      if (!isAbsenceDeclarationWindowOpen(outing, reportedAtMs)) {
         return { ok: false, reason: 'too_late' };
       }
       const declarerReq = state.requests.find(
@@ -6724,8 +6742,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!isStartsAtPast(outing.startsAt, new Date(reportedAt).getTime())) {
         return { ok: false, reason: 'too_early' };
       }
-      // Table normale : à partir de H+6, plus de « Pas venu ».
-      if (!isNoShowWindowOpen(outing, new Date(reportedAt).getTime())) {
+      // Gel 17/10 (point 1) : à partir de H+6, plus de « Pas venu », partenaires compris.
+      if (!isAbsenceDeclarationWindowOpen(outing, new Date(reportedAt).getTime())) {
         return { ok: false, reason: 'too_late' };
       }
       if (outing.hostNoShowReported) {
@@ -6742,6 +6760,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       if (req.noShowNotRetained) {
         return { ok: false, reason: 'not_retained' };
+      }
+      // Gel 17/10 (point 2) : absence déjà déclarée puis effacée, pas de nouvelle.
+      if (req.noShowVoided) {
+        return { ok: false, reason: 'not_declarable' };
       }
       // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité) ;
       // l’absence n’est comptée qu’une fois définitive.
