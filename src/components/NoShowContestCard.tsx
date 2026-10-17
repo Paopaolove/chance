@@ -12,6 +12,7 @@ import {
   normalizeContestNote,
 } from '../utils/noShowContest';
 import { DEPOSIT_EUROS, describeDepositForfeitSplit } from '../data/pricing';
+import { isPartnerListing } from '../utils/partners';
 
 /**
  * Encart invité « Contester » un « Pas venu » déclaré par l’hôte :
@@ -19,7 +20,8 @@ import { DEPOSIT_EUROS, describeDepositForfeitSplit } from '../data/pricing';
  * bouton secondaire (un seul bouton plein par écran).
  */
 export function NoShowContestCard({ request }: { request: Request }) {
-  const { contestNoShow } = useChance();
+  const { contestNoShow, state } = useChance();
+  const partner = isPartnerListing(state.outings.find((o) => o.id === request.outingId));
   const [note, setNote] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -42,7 +44,7 @@ export function NoShowContestCard({ request }: { request: Request }) {
   const open = isContestWindowOpen(request, nowMs);
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>L’hôte t’a signalé « Pas venu »</Text>
+      <Text style={styles.title}>{partner ? 'Le lieu' : 'L’hôte'} t’a signalé « Pas venu »</Text>
       <Text style={styles.body}>
         {open
           ? `Tu étais là ? Il te reste ${contestTimeLeftLabel(request, nowMs)} pour contester, avec une phrase. Sans contestation, la caution est perdue (${describeDepositForfeitSplit()}).`

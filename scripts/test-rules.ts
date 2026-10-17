@@ -1094,9 +1094,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(LT.hostDepositStatus(p0.requests[0])==='noshow_pending'&&LT.hostDepositStatus(c0.requests[0])==='noshow_pending','host: same view during 24 h and review');
   ok(!/contest|J’étais|noShowContest/.test(hv(c0)),'host projection: no contest field / sentence');
   ok(hv(p0)===hv(c0),'host view identical contested / not contested');
-  // hors périmètre : départ sans motif, malaise, partenaire
+  // hors périmètre : départ sans motif, malaise ; partenaire : même contestation (17/10)
   const pst=NS(st({isPartnerListing:true}));
-  ok(pst.requests[0].depositStatus==='forfeited'&&CT(pst,NSAT+MIN).requests[0].depositStatus==='forfeited','partner « Pas venu »: unchanged (no contest)');
+  ok(pst.requests[0].depositStatus==='noshow_pending'&&CT(pst,NSAT+MIN).requests[0].depositStatus==='contested','partner « Pas venu »: same contest (24 h, sentence)');
   {
     const sl=S({currentUser:me,outings:[o({startsAt:iso(now-10*MIN),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
     const L=(s0:any,reason?:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lvc'}});
@@ -1457,6 +1457,49 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(/outingsDueForHostContestExpiry\(state\.outings, now\)[\s\S]{0,600}EXPIRE_HOST_NO_SHOW_REVIEW[\s\S]{0,300}setInterval\(tick, 60_000\)[\s\S]{0,200}'active'/.test(ctx),'static: local timer for host contest (interval + foreground)');
   ok(!/shadow|elevation/.test(card)&&/variant="secondary"/.test(card)&&/borderColor: colors\.border/.test(card)&&/hostContestRefusalLabel\(res\.reason\)/.test(card),'host card: Hermès (no shadow, secondary, refusalLabels)');
   ok(!/hostNoShowContestNotes/.test(card),'host card never displays the stored sentence');
+}
+
+// partenaires : même contestation que les tables normales (24 h, phrase, revue 7 jours)
+{
+  const NC=require('../src/utils/noShowContest');
+  const LT=require('../src/utils/leaveTable');
+  const PU=require('../src/utils/partners');
+  const MIN=60e3, D1=24*H, D7=7*24*H, T=now-2*H, NSAT=T+H, CT=NSAT+2*H;
+  const guest:any={...me};
+  const st=(more:any={})=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'})],...more});
+  const NS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const C=(s0:any,at:number,note='J’étais en terrasse zq7')=>D(s0,{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note,at:iso(at)}});
+  const EXP=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(at)}});
+  const ER=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_REVIEW',payload:{requestId:'r1',at:iso(at)}});
+  const p=NS(st());
+  ok(p.requests[0].depositStatus==='noshow_pending'&&p.requests[0].attendance==='absent'&&!p.guestNoShowStrikes.u1,'partner « Pas venu »: pending 24 h, nothing counted (no immediate loss)');
+  ok(C(p,NSAT+D1-MIN).requests[0].depositStatus==='contested'&&C(p,NSAT+D1).requests[0].depositStatus==='noshow_pending','partner contest: 24 h − 1 min ok, 24 h refused');
+  ok(C(p,CT,'  ').requests[0].depositStatus==='noshow_pending','partner contest: sentence mandatory');
+  ok(EXP(p,NSAT+D1-MIN).requests[0].depositStatus==='noshow_pending','partner: no loss at 24 h − 1 min');
+  const lost=EXP(p,NSAT+D1);
+  ok(lost.requests[0].depositStatus==='forfeited'&&lost.guestNoShowStrikes.u1===1&&lost.requests[0].noShowFinalNotice.text===NC.NOSHOW_FINAL_NOTICE_TEXT,'partner: lost at 24 h without contest, absence counted, final message');
+  const c=C(p,CT);
+  ok(!PU.shouldAutoRefundPartnerSilence(c.outings[0],c.requests[0],T+48*H)&&!PU.shouldAutoRefundPartnerSilence(p.outings[0],p.requests[0],T+48*H)&&D(c,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='contested','« le lendemain » never settles a pending or contested partner deposit');
+  ok(ER(c,CT+D7-MIN).requests[0].depositStatus==='contested','partner review: 7 d − 1 min still pending');
+  const tx=ER(c,CT+D7);
+  ok(tx.requests[0].depositStatus==='returned'&&tx.requests[0].noShowNotRetained===true&&!tx.guestNoShowStrikes.u1,'partner review: 7 d without decision → returned, not counted');
+  const acc=D(c,{type:'ACCEPT_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(CT+H)}});
+  const conf=D(c,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(CT+H)}});
+  ok(acc.requests[0].depositStatus==='returned'&&acc.requests[0].attendance===undefined&&!acc.guestNoShowStrikes.u1,'partner: contest accepted → returned, absence erased');
+  ok(conf.requests[0].depositStatus==='forfeited'&&conf.guestNoShowStrikes.u1===1,'partner: contest rejected → lost and counted');
+  // « Je suis arrivé » après « Pas venu » : litige comme aujourd’hui
+  const arr=D(p,{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(CT)}});
+  ok(arr.requests[0].partnerDispute?.trigger==='arrival_after_absent'&&arr.requests[0].depositStatus==='noshow_pending','« Je suis arrivé » after « Pas venu »: dispute opened as today');
+  // confidentialité vis-à-vis du lieu
+  const hv=JSON.stringify(c.requests.map(LT.projectRequestForHost));
+  ok(!/zq7|noShowContest/.test(hv)&&LT.hostDepositStatus(c.requests[0])==='noshow_pending'&&LT.hostDepositStatus(p.requests[0])==='noshow_pending','partner sees « caution en attente », never the sentence');
+  // auto-déclaration : perte immédiate (inchangé)
+  const self=D(st(),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
+  ok(self.requests[0].depositStatus==='forfeited','partner: self-declared absence still immediate');
+  const fs=require('node:fs'), path=require('node:path');
+  const scr=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
+  const card=fs.readFileSync(path.join(__dirname,'..','src','components','NoShowContestCard.tsx'),'utf8');
+  ok(/la personne a 24 h pour contester/.test(scr)&&/absence signalée · caution en attente`\n/.test(scr)&&/'Le lieu' : 'L’hôte'/.test(card),'partner screens: 24 h contest wording');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

@@ -6746,9 +6746,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           reportedByUserId: user.id,
         },
       });
+      const shareWho = isPartnerListing(outing) ? 'lieu' : 'hôte';
       const lossText = pending
-        ? 'caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € hôte).'
-        : 'caution perdue (6,90 € Moment / 13,10 € hôte).';
+        ? `caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € ${shareWho}).`
+        : `caution perdue (6,90 € Moment / 13,10 € ${shareWho}).`;
       const note: ChatMessage = {
         id: uid('msg'),
         threadKey: chatThreadKey(outingId, requestId),

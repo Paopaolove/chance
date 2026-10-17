@@ -795,7 +795,11 @@ export function OutingDetailScreen() {
                           : r.attendance === 'present'
                           ? `${r.userName} · arrivé · caution rendue après 30 min`
                           : r.attendance === 'absent'
-                            ? `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
+                            ? hostDepositStatus(r) === 'noshow_pending'
+                              ? `${r.userName} · absence signalée · caution en attente`
+                              : `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
+                            : r.noShowNotRetained
+                              ? `${r.userName} · absence non retenue`
                             : r.depositStatus === 'returned'
                               ? `${r.userName} · caution rendue (silence le lendemain)`
                               : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, le soir même.'}
@@ -807,7 +811,7 @@ export function OutingDetailScreen() {
                         onPress={() => {
                           Alert.alert(
                             'Chaise vide ?',
-                            `${r.userName} n’a pas signalé son arrivée. « Pas venu » = lapin : caution perdue (6,90 € Moment / 13,10 € pour ton lieu).`,
+                            `${r.userName} n’a pas signalé son arrivée. « Pas venu » : la personne a 24 h pour contester ; sans contestation, caution perdue (6,90 € Moment / 13,10 € pour ton lieu).`,
                             [
                               { text: 'Retour', style: 'cancel' },
                               {

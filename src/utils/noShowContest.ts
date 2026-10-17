@@ -7,10 +7,10 @@
  * - Revue : « Pas venu confirmé » = perdue ; « contestation acceptée » = rendue.
  * - La règle H+6 ne rend jamais une caution en délai ou contestée.
  * - Statuts internes : l’hôte voit la même chose pendant le délai et la revue.
- * Hors périmètre : départ sans motif, malaise, auto-déclaration, partenaires.
+ * Partenaires : même contestation (24 h, phrase, revue 7 jours).
+ * Hors périmètre : départ sans motif, malaise, auto-déclaration.
  */
 import type { Outing, Request } from '../data/types';
-import { isPartnerListing } from './partners';
 import { DEPOSIT_FORFEIT_HOST_EUROS } from '../data/pricing';
 
 /** Délai pour contester un « Pas venu » : 24 h après la déclaration de l’hôte. */
@@ -20,16 +20,15 @@ export const NOSHOW_CONTEST_NOTE_MAX_CHARS = 280;
 
 type ContestRequest = Pick<Request, 'userId' | 'depositStatus' | 'noShowReportedAt'>;
 
-/** « Pas venu » ouvert à contestation : déclaré par l’hôte, table normale. */
+/**
+ * « Pas venu » ouvert à contestation : déclaré par l’hôte, table normale ou
+ * partenaire (même contestation, 17/10). L’auto-déclaration n’en ouvre pas.
+ */
 export function noShowOpensContest(
   outing: Pick<Outing, 'hostId'> & Partial<Outing>,
   reportedByUserId: string | undefined,
 ): boolean {
-  return (
-    !!reportedByUserId &&
-    reportedByUserId === outing.hostId &&
-    !isPartnerListing(outing as Outing)
-  );
+  return !!reportedByUserId && reportedByUserId === outing.hostId;
 }
 
 export function contestDeadlineMs(r: Pick<Request, 'noShowReportedAt'>): number {
