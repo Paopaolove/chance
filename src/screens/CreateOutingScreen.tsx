@@ -51,6 +51,7 @@ import { useFirstMomentGate } from '../components/FirstMomentSheet';
 import { GenderPills } from '../components/GenderPills';
 import { PillsWithOther } from '../components/PillsWithOther';
 import { useOpenUserProfile } from '../utils/openUserProfile';
+import { isDemoEnabled } from '../utils/devMode';
 import {
   formatYmdShort,
   freeDateHint,
@@ -647,7 +648,7 @@ function CreateOutingScreenInner() {
       inviteeName ? 'Proposition envoyée' : 'Annonce publiée',
       inviteeName
         ? `Proposition pour ${inviteeName} — visible dans ses Demandes (démo : quand currentUser = destinataire). Pas publiée sur Annonces.`
-        : 'Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation. (Démo : 5 taps sur Moment → Simuler demande Juliette.)',
+        : `Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation.${isDemoEnabled() ? ' (Démo : 5 taps sur Moment → Simuler demande Juliette.)' : ''}`,
     );
     setVenueName('');
     setMessage('');
