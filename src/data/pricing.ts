@@ -135,6 +135,8 @@ export const DEPOSIT_STATUS_LABELS = {
   held: 'Caution bloquée',
   returned: 'Caution rendue',
   forfeited: 'Caution perdue',
+  /** Vue invité seulement (l’hôte voit la projection hostDepositStatus). */
+  returned_discomfort_leave: 'Caution remboursée',
 } as const;
 
 export type DepositStatusKey = keyof typeof DEPOSIT_STATUS_LABELS;
@@ -151,10 +153,18 @@ export function describeDepositOutcome(
       return `Caution ${DEPOSIT_EUROS} € bloquée à la confirmation. Rendue si tu annules au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant, si l’hôte annule / ne vient pas, si un imprévu est accepté (ou joker), ou si tu refuses un lieu alternatif. Perdue si annulation trop tard ou absence.`;
     case 'returned':
       return `Caution ${DEPOSIT_EUROS} € rendue.`;
+    case 'returned_discomfort_leave':
+      // Vue invité : départ malaise, caution rendue intégralement.
+      return `Caution ${DEPOSIT_EUROS} € remboursée.`;
     case 'forfeited':
       return describeDepositForfeitMoment();
     case 'none':
-    default:
+    case undefined:
       return 'Aucune caution bloquée.';
+    default: {
+      // Exhaustivité : tout nouveau statut doit être traité ci-dessus.
+      const unhandled: never = status;
+      return unhandled;
+    }
   }
 }

@@ -177,3 +177,44 @@ export function hostLeaveView(r: {
     earningsLabel: earningsEuros > 0 ? `${formatPriceEuros(earningsEuros)} pour toi` : '',
   };
 }
+
+/** Statut caution tel que l’hôte le voit (avant projection). */
+export type HostVisibleDepositStatus = 'none' | 'held' | 'returned' | 'forfeited';
+
+/**
+ * Projection hôte du statut caution : le départ malaise (interne
+ * `returned_discomfort_leave`) s’affiche exactement comme un départ sans
+ * motif au même instant — « perdue » avant H+30, « rendue » après.
+ */
+export function hostDepositStatus(r: {
+  depositStatus?: string;
+  leftTableEarly?: boolean;
+}): HostVisibleDepositStatus | undefined {
+  switch (r.depositStatus) {
+    case 'returned_discomfort_leave':
+      return r.leftTableEarly ? 'forfeited' : 'returned';
+    case 'none':
+    case 'held':
+    case 'returned':
+    case 'forfeited':
+    case undefined:
+      return r.depositStatus;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Demande telle que l’hôte la voit : statut caution projeté, aucun champ
+ * qui distingue un départ malaise d’un départ sans motif.
+ */
+export function projectRequestForHost<
+  T extends { depositStatus?: string; leftTableEarly?: boolean },
+>(r: T): Omit<T, 'depositStatus'> & { depositStatus?: HostVisibleDepositStatus } {
+  return { ...r, depositStatus: hostDepositStatus(r) };
+}
+
+/** Caution rendue (y compris départ malaise) — vue invité. */
+export function isDepositReturnedForGuest(status: string | undefined): boolean {
+  return status === 'returned' || status === 'returned_discomfort_leave';
+}

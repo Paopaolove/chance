@@ -39,7 +39,12 @@ export function canConsumeMonthlyJoker(
   return Boolean(monthKey) && jokerUsedMonthKey !== monthKey;
 }
 
-export type DepositStatusLite = 'none' | 'held' | 'returned' | 'forfeited';
+export type DepositStatusLite =
+  | 'none'
+  | 'held'
+  | 'returned'
+  | 'forfeited'
+  | 'returned_discomfort_leave';
 
 /**
  * Guest cancel on a confirmed seat — deposit outcome.
@@ -52,6 +57,10 @@ export function resolveGuestCancelDeposit(opts: {
   jokerExempted: boolean;
   currentDeposit?: DepositStatusLite;
 }): DepositStatusLite {
+  // Départ malaise : caution déjà rendue, jamais de nouvelle perte.
+  if (opts.currentDeposit === 'returned_discomfort_leave') {
+    return opts.currentDeposit;
+  }
   if (opts.by === 'host') {
     return opts.currentDeposit === 'held' || !opts.currentDeposit
       ? 'returned'

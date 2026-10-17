@@ -16,6 +16,7 @@ import { ALL_CATEGORIES, mockHosts, mockOutings } from './mockOutings';
 import { mockReviews } from './mockReviews';
 import {
   AppAction,
+  RequestDepositStatus,
   AppState,
   AppToast,
   ChatMessage,
@@ -383,6 +384,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
+      // Parti de la table : plus d’annulation (pas de nouvelle perte / remboursement).
+      if (req.leftTableAt) return state;
       const outing = state.outings.find((o) => o.id === req.outingId);
       // Partner auto-seat: accepted ne tient pas de chaise (prise à la confirm).
       const heldSeat = requestHoldsSeat(req);
@@ -1140,16 +1143,14 @@ function reducer(state: AppState, action: AppAction): AppState {
         reason,
         discomfortAllowed,
       });
-      const early = isLeaveBeforeH30(outing.startsAt, leftAtMs);
-      // Côté demande (visible hôte) : même statut avec ou sans malaise.
-      // Malaise avant H+30 → 'forfeited' affiché comme un départ sans motif ;
-      // le remboursement réel de l’invité est porté par le signalement
-      // confidentiel (guestDepositRefundedEuros), la part hôte par Moment.
-      // Caution déjà rendue (joker…) : jamais re-perdue.
+      // Malaise (caution bloquée) → statut interne 'returned_discomfort_leave'
+      // (caution rendue). L’hôte ne le voit jamais tel quel : projection
+      // hostDepositStatus() = même rendu qu’un départ sans motif.
+      // Caution déjà rendue (joker…) : jamais re-perdue, jamais re-remboursée.
       const deposit =
         req.depositStatus === 'held'
-          ? outcome.confidentialReport && early
-            ? ('forfeited' as const)
+          ? outcome.confidentialReport
+            ? ('returned_discomfort_leave' as const)
             : outcome.deposit
           : req.depositStatus;
       const guestRefunded =
@@ -2535,7 +2536,7 @@ interface ChanceContextValue {
     requestId: string,
     reason?: 'discomfort',
   ) =>
-    | { ok: true; deposit: 'returned' | 'forfeited' | 'none' | undefined; discomfort: boolean }
+    | { ok: true; deposit: RequestDepositStatus | undefined; discomfort: boolean }
     | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' };
   useJokerOnImprevu: (
     imprevuId: string,
@@ -5682,7 +5683,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     ):
       | {
           ok: true;
-          deposit: 'returned' | 'forfeited' | 'none' | undefined;
+          deposit: RequestDepositStatus | undefined;
           discomfort: boolean;
         }
       | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' } => {
@@ -5732,7 +5733,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       return {
         ok: true,
         deposit:
-          req.depositStatus === 'held' ? outcome.deposit : req.depositStatus,
+          req.depositStatus === 'held'
+            ? outcome.confidentialReport
+              ? 'returned_discomfort_leave'
+              : outcome.deposit
+            : req.depositStatus,
         discomfort: outcome.confidentialReport,
       };
     },

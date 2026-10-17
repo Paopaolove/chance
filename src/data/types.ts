@@ -361,7 +361,7 @@ export interface Request {
    * - forfeited: perdue (annulation trop tard, absence, auto_refuse imprévu invité à startsAt) — split 6,90/13,10
    * Voir docs/deposit-imprevu.md. Pas d’amendes inventées.
    */
-  depositStatus?: 'none' | 'held' | 'returned' | 'forfeited';
+  depositStatus?: RequestDepositStatus;
   /**
    * Presence at the outing — **Confirmé ≠ présent**.
    * - unset while only confirmed (seat + deposit held; no show-up yet)
@@ -462,6 +462,20 @@ export type ImprevuStatus =
  * Signal imprévu — une fois par personne et par sortie (pas de fil libre).
  * Accepté ≠ no-show. Refus ≠ forfeit immédiat (règle 3 h). Voir docs/deposit-imprevu.md.
  */
+/**
+ * Statut caution d’une demande.
+ * - returned_discomfort_leave : interne — départ « Je ne me sens pas à
+ *   l’aise », caution rendue intégralement (Moment paie 13,10 € à l’hôte).
+ *   Jamais montré tel quel à l’hôte : projeté par hostDepositStatus()
+ *   (même rendu qu’un départ sans motif).
+ */
+export type RequestDepositStatus =
+  | 'none'
+  | 'held'
+  | 'returned'
+  | 'forfeited'
+  | 'returned_discomfort_leave';
+
 export interface ImprevuReport {
   id: string;
   outingId: string;

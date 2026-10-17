@@ -47,7 +47,9 @@ import { makeVenueKey } from '../utils/venue';
 import {
   canGuestLeaveTable,
   DISCOMFORT_REASON_LABEL,
+  hostDepositStatus,
   hostLeaveView,
+  isDepositReturnedForGuest,
   isJokerAllowedNow,
 } from '../utils/leaveTable';
 import { useOpenUserProfile } from '../utils/openUserProfile';
@@ -768,7 +770,7 @@ export function OutingDetailScreen() {
                           ? `${r.userName} · arrivé · caution rendue après 30 min`
                           : r.attendance === 'absent'
                             ? `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
-                            : r.depositStatus === 'returned'
+                            : hostDepositStatus(r) === 'returned'
                               ? `${r.userName} · caution rendue (silence le lendemain)`
                               : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, le soir même.'}
                     </Text>
@@ -1087,7 +1089,9 @@ export function OutingDetailScreen() {
                 />
               )}
               {'id' in myRequest &&
-              (getRequestById(myRequest.id)?.depositStatus === 'returned' ||
+              (isDepositReturnedForGuest(
+                getRequestById(myRequest.id)?.depositStatus,
+              ) ||
                 isMyLeaveDepositRefunded(myRequest.id)) ? (
                 <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
                   Caution remboursée (mock).

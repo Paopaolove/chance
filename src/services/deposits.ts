@@ -12,7 +12,13 @@
  * Ne pas inventer amendes hors 20 € — voir « non tranché » dans deposit-imprevu.md.
  */
 
-export type DepositStatus = 'none' | 'held' | 'returned' | 'forfeited';
+/** Aligné sur RequestDepositStatus (returned_discomfort_leave = interne, rendue). */
+export type DepositStatus =
+  | 'none'
+  | 'held'
+  | 'returned'
+  | 'forfeited'
+  | 'returned_discomfort_leave';
 
 export type DepositMutationResult =
   | { ok: true; status: DepositStatus }
