@@ -5104,6 +5104,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       reviewId: string,
     ): { ok: true; hidden: boolean } | { ok: false; reason: string } => {
+      // Démo seulement (__DEV__) : inerte en production.
+      if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       const review = state.reviews.find((r) => r.id === reviewId);

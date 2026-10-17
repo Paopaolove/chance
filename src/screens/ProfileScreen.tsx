@@ -43,6 +43,7 @@ import {
   PARTNER_KIND_LABELS,
   PARTNER_WARNINGS_BEFORE_CLOSE,
 } from '../utils/partners';
+import { isDemoEnabled } from '../utils/devMode';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Profile'>,
@@ -735,7 +736,11 @@ function ProfileScreenInner() {
           {(() => {
             const toRate = getOutingsToRate();
             const rated = getMyRatedOutingPairs();
-            const missingPresent = getCompletedOutingsMissingPresent();
+            // Provisoire : « Marquer présent et noter » (outil démo) seulement
+            // en développement (__DEV__) — décision Paolo en attente.
+            const missingPresent = isDemoEnabled()
+              ? getCompletedOutingsMissingPresent()
+              : [];
             if (!toRate.length && !rated.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
@@ -888,8 +893,8 @@ function ProfileScreenInner() {
         </View>
 
         <Text style={styles.demoNote}>
-          Mode démo local — pas de Stripe ni Supabase pour l’instant. Outils QA :
-          5 taps sur le logo Moment.
+          Mode démo local — pas de Stripe ni Supabase pour l’instant.
+          {isDemoEnabled() ? ' Outils QA : 5 taps sur le logo Moment.' : ''}
         </Text>
       </ScrollView>
     </SafeAreaView>

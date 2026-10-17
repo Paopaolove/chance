@@ -18,6 +18,7 @@ import { colors, fonts, radius, spacing, typography } from '../theme';
 import { formatRatingAverage } from '../utils/format';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { Avatar } from '../components/Avatar';
+import { isDemoEnabled } from '../utils/devMode';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'Reviews'>;
@@ -249,6 +250,8 @@ export function ReviewsScreen() {
                     En attente de l’accord de l’autre personne. La note et le
                     compteur de moments restent.
                   </Text>
+                  {/* Outil démo : développement seulement (__DEV__). */}
+                  {isDemoEnabled() ? (
                   <Pressable
                     onPress={() => {
                       const result = simulateOtherHideConsent(review.id);
@@ -269,6 +272,7 @@ export function ReviewsScreen() {
                       Démo · simuler accord de l’autre
                     </Text>
                   </Pressable>
+                  ) : null}
                 </View>
               ) : null}
             </View>

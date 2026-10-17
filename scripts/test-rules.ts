@@ -417,5 +417,31 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(DM.isDemoEnabled()===false,'__DEV__ undefined → disabled');
   (globalThis as any).__DEV__=true;
 }
+
+// garde démo (QA v2) : contrôle statique — chaque fonction démo du contexte est gardée,
+// et tout appel hors du menu démo est derrière isDemoEnabled()
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const src=(f:string)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8');
+  const ctx=src('data/ChanceContext.tsx');
+  const re=/const (simulate\w+|demo\w+|seed\w+|resetDemo) = useCallback\(/g; let m:any; const names:string[]=[]; const unguarded:string[]=[];
+  while((m=re.exec(ctx))){ names.push(m[1]); const body=ctx.slice(m.index,m.index+400); if(!body.includes('if (!isDemoEnabled())')) unguarded.push(m[1]); }
+  ok(names.length===19&&names.includes('simulateOtherHideConsent'),'static: demo callbacks found ('+names.length+')');
+  for(const n of ['reviewPartnerApplication','setPartnerPinned']){ const i=ctx.indexOf('const '+n+' = useCallback('); ok(i>0&&ctx.slice(i,i+400).includes('if (!isDemoEnabled())'),'static: menu-only '+n+' guarded'); }
+  ok(unguarded.length===0,'static: every demo callback guarded'+(unguarded.length?' — missing: '+unguarded.join(','):''));
+  // appels hors menu démo
+  const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
+  const outside:string[]=[];
+  for(const f of walk(path.join(__dirname,'..','src'))){
+    if(!/\.tsx?$/.test(f)||/ChanceContext\.tsx$|DemoMenuModal\.tsx$|demoTools\.ts$/.test(f)) continue;
+    const t=fs.readFileSync(f,'utf8');
+    for(const n of names){ if(new RegExp('\\b'+n+'\\b').test(t)) outside.push(path.basename(f)+':'+n); }
+  }
+  ok(JSON.stringify(outside.sort())===JSON.stringify(['ProfileScreen.tsx:demoMarkConfirmedPresent','ReviewsScreen.tsx:simulateOtherHideConsent']),'static: demo calls outside menu = '+outside.join(','));
+  const rv=src('screens/ReviewsScreen.tsx'), pf=src('screens/ProfileScreen.tsx');
+  ok(/isDemoEnabled\(\) \? \(\s*<Pressable[\s\S]{0,200}simulateOtherHideConsent/.test(rv),'static: ReviewsScreen demo entry behind isDemoEnabled()');
+  ok(/missingPresent = isDemoEnabled\(\)\s*\?\s*getCompletedOutingsMissingPresent\(\)\s*:\s*\[\]/.test(pf),'static: ProfileScreen missingPresent hidden outside dev');
+  ok(/isDemoEnabled\(\) \? ' Outils QA : 5 taps sur le logo Moment\.' : ''/.test(pf)&&!/Outils QA :\s*\n\s*5 taps/.test(pf),'static: QA note hidden outside dev');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
