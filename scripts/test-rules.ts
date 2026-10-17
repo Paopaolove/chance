@@ -1015,5 +1015,25 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(raw(od,'reportGuestNoShow(').length===0&&raw(od,'partnerMarkNoShow(').length===0&&raw(dm,'reportGuestNoShow(').length===0&&raw(dm,'demoSimulateDepositH6(').length===0,'static: no raw code in « Pas venu » / H+6 alerts');
   ok(!od.includes('isAtOrAfterH6(outing)')&&od.includes('hostReturnedDepositLine(r)'),'static: host line driven by recorded cause, not by the clock');
 }
+
+// libellés d’alerte par parcours (remarques Testeur 1, 2, 3, 5)
+{
+  const RL=require('../src/utils/refusalLabels');
+  const snake=/[a-z]+_[a-z]+/;
+  ok(RL.refusalLabel('too_late').endsWith('Elle est rendue d’office.')&&!RL.refusalLabel('too_late').includes('a été rendue'),'too_late: « Elle est rendue d’office. »');
+  const nn=RL.refusalLabel('not_allowed_now'), np=RL.refusalLabel('not_allowed_now','partner_noshow');
+  ok(!/soir même/.test(nn)&&nn.includes('6 h'),'not_allowed_now (table normale): avant H+6, plus « le soir même »');
+  ok(!/soir même/.test(np)&&np.includes('jour du moment')&&!np.includes('6 h'),'not_allowed_now (partenaire): règle du jour du moment');
+  const hp=RL.refusalLabel('not_participant'), pp=RL.refusalLabel('not_participant','partner_noshow');
+  ok(hp!==pp&&pp.includes('lieu')&&!pp.includes('hôte')&&hp!=='Seul l’hôte de la table peut le faire.','not_participant: libellé propre au parcours partenaire');
+  ok(RL.refusalLabel('too_early','presence').includes('15 min')&&RL.refusalLabel('not_host','presence').includes('présence')&&RL.refusalLabel('already_absent','presence').includes('« Pas venu »'),'presence: too_early / not_host / already_absent labels');
+  const all=[...RL.REFUSAL_CODES,'zzz_unknown'];
+  ok(['noshow','partner_noshow','presence'].every((f)=>all.every((c)=>!snake.test(RL.refusalLabel(c,f))&&RL.refusalLabel(c,f).length>5)),'every code × every flow: clear French, no raw code');
+  const fs=require('node:fs'), path=require('node:path');
+  const od=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
+  const after=(call:string)=>{const i=od.indexOf(call);const nx=od.indexOf('onPress',i+1);return od.slice(i,nx>0?nx:i+1500);};
+  ok(/refusalLabel\(res\.reason, 'presence'\)/.test(after('markGuestPresent(r.id)'))&&!/Alert\.alert\('Impossible', res\.reason\)/.test(after('markGuestPresent(r.id)')),'« Marquer présent »: refusal through refusalLabels');
+  ok((od.match(/partnerMarkNoShow\(r\.id\);\s*if \(!res\.ok\) Alert\.alert\('Impossible', refusalLabel\(res\.reason, 'partner_noshow'\)\)/g)||[]).length===2,'partnerMarkNoShow alerts: partner flow labels');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

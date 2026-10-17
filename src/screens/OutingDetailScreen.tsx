@@ -801,7 +801,7 @@ export function OutingDetailScreen() {
                                 style: 'destructive',
                                 onPress: () => {
                                   const res = partnerMarkNoShow(r.id);
-                                  if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason));
+                                  if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason, 'partner_noshow'));
                                 },
                               },
                             ],
@@ -816,7 +816,7 @@ export function OutingDetailScreen() {
                         variant="ghost"
                         onPress={() => {
                           const res = partnerMarkNoShow(r.id);
-                          if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason));
+                          if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason, 'partner_noshow'));
                           else
                             Alert.alert(
                               'Litige ouvert',
@@ -844,7 +844,7 @@ export function OutingDetailScreen() {
                           `Caution de ${r.userName} rendue après 30 min (mock). Confirmé ≠ présent.`,
                         );
                       } else {
-                        Alert.alert('Impossible', res.reason);
+                        Alert.alert('Impossible', refusalLabel(res.reason, 'presence'));
                       }
                     }}
                     style={{ marginTop: spacing.sm }}
