@@ -49,3 +49,7 @@ expo-qr.png
 
 # npm run verify (export, captures, log)
 .verify/
+
+# Local, jamais commités
+start-tunnel.sh
+*.log

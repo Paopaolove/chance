@@ -1,0 +1,14 @@
+#!/bin/sh
+# Hook pre-push versionné : lance `npm run verify` et bloque le push en cas d'échec.
+# Activation (une fois par clone) : git config core.hooksPath .githooks
+# Contournement exceptionnel : seulement sur décision explicite (git push --no-verify).
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+[ -d "$HOME/.local/node22/bin" ] && PATH="$HOME/.local/node22/bin:$PATH" && export PATH
+# stdin (refs poussées) non utilisé : la vérification porte sur l'arbre de travail.
+cat > /dev/null
+if npm run --silent verify; then
+  exit 0
+fi
+echo "pre-push : verify KO, push bloqué. Détails : .verify/verify.log" >&2
+exit 1
