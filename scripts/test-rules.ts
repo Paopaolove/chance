@@ -1533,7 +1533,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const e24=EXP(hp,NSAT+D1), e48=EXP(hp,NSAT+2*D1);
   ok(e24.requests[0].depositStatus==='noshow_pending'&&e48.requests[0].depositStatus==='noshow_pending'&&!e48.toast&&!e48.requests[0].noShowFinalNotice&&!e48.guestNoShowStrikes.u1,'decision 3: no expiry and no « absence retenue » message while host absence pending');
   ok(NC.requestsDueForContestExpiry(hp.requests,NSAT+2*D1).length===0&&NC.contestTimeLeftLabel(hp.requests[0],NSAT+3*H)===NC.contestTimeLeftLabel(hp.requests[0],NSAT+40*H),'decision 3: timer idle, time left frozen');
-  ok(D(hp,{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'x',at:iso(NSAT+30*H)}}).requests[0].depositStatus==='contested','decision 3: guest can still contest during the pause');
+  ok(D(hp,{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'x',at:iso(NSAT+30*H)}}).requests[0].depositStatus==='noshow_pending','B6: guest cannot contest during the pause');
   // contestation de l’hôte acceptée : les 24 h reprennent (22 h restantes)
   const ACC_AT=NSAT+30*H;
   const resumed=ACCH(back(CH(hp,NSAT+3*H)),ACC_AT);
@@ -1557,7 +1557,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const rv=REVH(back(CH(hp,NSAT+3*H)),NSAT+3*H+D7);
   ok(rv.requests[0].depositStatus==='returned'&&rv.requests[0].attendance===undefined&&!rv.guestNoShowStrikes.u1&&!rv.hostNoShowStrikes.h1&&rv.outings[0].hostNoShowReported===false,'decision 2: undecided at 7 d → nothing retained, guests returned and erased, host unblocked');
   ok(REVH(back(CH(hp,NSAT+3*H)),NSAT+3*H+D7-MIN).requests[0].depositStatus==='noshow_pending','decision 2: 7 d − 1 min: still pending');
-  ok(HN(rv,NSAT+4*H).outings[0].hostNoShowCase.status==='review_expired'&&HN(ACCH(back(CH(HN(mk(),T+2*H),T+2*H+MIN)),T+3*H),T+4*H).outings[0].hostNoShowCase.status==='not_retained','no second declaration of host absence after expiry or acceptance');
+  ok(HN(rv,NSAT+4*H).outings[0].hostNoShowCase.status==='pending'&&HN(ACCH(back(CH(HN(mk(),T+2*H),T+2*H+MIN)),T+3*H),T+4*H).outings[0].hostNoShowCase.status==='pending','B5: host absence can be declared again after expiry or acceptance (as before 4ee894f)');
   // 5) contestation de l’hôte acceptée : « Pas venu » encore possible jusqu’à H+6 (figé)
   const okH=ACCH(back(CH(HN(mk(),T+2*H),T+2*H+MIN)),T+3*H);
   ok(NS(okH,T+6*H-MIN,'r2','u2').requests[1].depositStatus==='noshow_pending','decision 5: host present again → « Pas venu » accepted at H+6 − 1 min');
@@ -1638,6 +1638,37 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const fs=require('node:fs'), path=require('node:path');
   const ctx=fs.readFileSync(path.join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
   ok(/const getOutingsToRate = useCallback\(\s*\(\) =>[\s\S]{0,120}listOutingsToRate\(/.test(ctx),'static: getOutingsToRate delegates to listOutingsToRate');
+}
+
+// QA 4ee894f : B5 et B6 (retrait de deux ajouts de 4ee894f)
+{
+  const NC=require('../src/utils/noShowContest');
+  const MIN=60e3, D1=24*H, T=now-2*H, NSAT=T+H;
+  const guest:any={...me};
+  const mk=(ox:any={})=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed',...ox})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const NS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const HN=(s0:any,at:number)=>D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedAt:iso(at),reportedByUserId:'u2'}});
+  const CH=(s0:any,at:number)=>D({...s0,currentUser:{...host}},{type:'CONTEST_HOST_NO_SHOW',payload:{outingId:'o1',note:'J’étais là',at:iso(at)}});
+  const ACCH=(s0:any,at:number)=>({...D(s0,{type:'ACCEPT_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(at)}}),currentUser:guest});
+  const C=(s0:any,at:number)=>D(s0,{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'J’y étais',at:iso(at)}});
+  // B5 : redéclaration de l’hôte absent sur le même moment, comme avant 4ee894f
+  const acq=ACCH(CH(HN(mk(),T+2*H),T+2*H+MIN),T+3*H);
+  const again=HN(acq,T+4*H);
+  ok(acq.outings[0].hostNoShowReported===false&&again.outings[0].hostNoShowReported===true&&again.outings[0].hostNoShowCase.status==='pending'&&again.outings[0].hostNoShowCase.reportedAt===iso(T+4*H),'B5: after acquittal, host absence declarable again (new 24 h window)');
+  ok(HN(acq,T+6*H).outings[0].hostNoShowReported===false,'B5: re-declaration still bounded by H+6');
+  ok(HN(HN(mk(),T+2*H),T+3*H).outings[0].hostNoShowCase.reportedAt===iso(T+2*H),'B5: while declared, no double declaration (unchanged)');
+  // B6 : pas de contestation pendant la pause ; à la reprise, le temps restant
+  const hp=HN(NS(mk()),NSAT+2*H);
+  ok(NC.contestRefusal(hp.requests[0],'u1','x',NSAT+3*H)==='paused'&&NC.contestRefusalLabel('paused')==='Contestation impossible pour le moment.'&&C(hp,NSAT+3*H).requests[0].depositStatus==='noshow_pending','B6: contest refused during the pause, neutral existing text');
+  ok(C(hp,NSAT+2*H).requests[0].depositStatus==='noshow_pending'&&C(NS(mk()),NSAT+2*H-MIN).requests[0].depositStatus==='contested','B6: allowed just before the pause, refused from its start');
+  const res=ACCH(CH(hp,NSAT+3*H),NSAT+10*H);
+  const left=22*H; // 2 h écoulées avant la pause
+  ok(NC.contestDeadlineMs(res.requests[0],NSAT+10*H)===NSAT+10*H+left,'B6: on resume, 22 h left (time remaining before the pause)');
+  ok(C(res,NSAT+10*H+left-MIN).requests[0].depositStatus==='contested'&&C(res,NSAT+10*H+left).requests[0].depositStatus==='noshow_pending','B6: after resume, contest ok at remaining − 1 min, refused at the deadline');
+  // partenaire : « Je suis arrivé » pendant la pause ne vaut pas contestation (litige seul)
+  const pp=HN(NS(mk({isPartnerListing:true})),NSAT+2*H);
+  const arr=D(pp,{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(NSAT+3*H)}});
+  ok(arr.requests[0].depositStatus==='noshow_pending'&&arr.requests[0].partnerDispute?.trigger==='arrival_after_absent','B6: partner arrival during the pause → dispute only, no contest');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

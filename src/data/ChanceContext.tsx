@@ -1849,9 +1849,8 @@ function reducer(state: AppState, action: AppAction): AppState {
     case 'REPORT_HOST_NO_SHOW': {
       const { outingId, reportedAt, reportedByUserId } = action.payload;
       const outing = state.outings.find((o) => o.id === outingId);
-      // Lot 6: same outing / event → no double strike. Une absence déjà
-      // déclarée (même effacée ou non tranchée) ne se redéclare pas.
-      if (!outing || outing.hostNoShowReported || outing.hostNoShowCase) return state;
+      // Lot 6: same outing / event → no double strike.
+      if (!outing || outing.hostNoShowReported) return state;
       const reportedAtMs = reportedAt ? new Date(reportedAt).getTime() : Date.now();
       // Table normale : strictement avant H+6 (partenaires non concernés).
       if (!isNoShowWindowOpen(outing, reportedAtMs)) return state;
@@ -2537,7 +2536,7 @@ function reducer(state: AppState, action: AppAction): AppState {
             // « Pas venu » déjà tapé puis « Je suis arrivé » → litige, pas de sanction auto,
             // et contestation (17/10) tant que la caution est en attente.
             const contest =
-              r.depositStatus === 'noshow_pending' && !r.noShowContest
+              r.depositStatus === 'noshow_pending' && !r.noShowContest && !r.noShowContestPausedAt
                 ? {
                     depositStatus: 'contested' as const,
                     noShowContest: {
@@ -6205,10 +6204,6 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!outing) return { ok: false, reason: 'not_found' };
       if (outing.status === 'cancelled') {
         return { ok: false, reason: 'outing_cancelled' };
-      }
-      // Absence déjà déclarée puis effacée ou non tranchée : pas de nouvelle déclaration.
-      if (outing.hostNoShowCase && !outing.hostNoShowReported) {
-        return { ok: false, reason: 'not_declarable' };
       }
       // Lot 6: same event idempotent.
       if (outing.hostNoShowReported) {

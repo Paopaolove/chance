@@ -65,7 +65,7 @@ export function normalizeContestNote(note: string | undefined): string {
   return (note ?? '').trim().slice(0, NOSHOW_CONTEST_NOTE_MAX_CHARS);
 }
 
-export type ContestRefusal = 'not_guest' | 'not_pending' | 'too_late' | 'note_required';
+export type ContestRefusal = 'not_guest' | 'not_pending' | 'paused' | 'too_late' | 'note_required';
 
 export function contestRefusal(
   r: ContestRequest,
@@ -75,6 +75,8 @@ export function contestRefusal(
 ): ContestRefusal | null {
   if (r.userId !== userId) return 'not_guest';
   if (r.depositStatus !== 'noshow_pending') return 'not_pending';
+  // Absence de l’hôte en attente : pas de contestation pendant la suspension.
+  if (isContestPaused(r)) return 'paused';
   if (!isContestWindowOpen(r, nowMs)) return 'too_late';
   if (!normalizeContestNote(note)) return 'note_required';
   return null;
@@ -84,6 +86,7 @@ export function contestRefusal(
 const CONTEST_REFUSAL_LABELS: Record<ContestRefusal | 'not_found' | 'no_user', string> = {
   not_guest: 'Seule la personne signalée « Pas venu » peut contester.',
   not_pending: 'Cette caution n’est plus en attente : rien à contester.',
+  paused: 'Contestation impossible pour le moment.',
   too_late: 'Le délai de 24 h pour contester est écoulé.',
   note_required: 'Écris une phrase pour contester.',
   not_found: 'Cette participation n’existe plus.',
