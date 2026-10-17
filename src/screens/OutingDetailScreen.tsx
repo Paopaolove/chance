@@ -88,6 +88,7 @@ export function OutingDetailScreen() {
     hasJokerAvailable,
     useJokerOnImprevu,
     isDiscomfortReasonOfferedForMe,
+    canReportOnOuting,
     isMyLeaveDepositRefunded,
     leaveTable,
     guestArrivedPartner,
@@ -1362,6 +1363,21 @@ export function OutingDetailScreen() {
           <Button title="Demander à rejoindre" onPress={onJoin} />
         </View>
       )}
+      {/* Point d’entrée discret : membres de la table, à partir de H. */}
+      {canReportOnOuting(outing.id) ? (
+        <Pressable
+          onPress={() =>
+            navigation.navigate('ReportTable', { outingId: outing.id })
+          }
+          hitSlop={8}
+          accessibilityRole="link"
+          style={{ marginTop: spacing.xl, alignSelf: 'center' }}
+        >
+          <Text style={[styles.hint, { textDecorationLine: 'underline' }]}>
+            Signaler un souci
+          </Text>
+        </Pressable>
+      ) : null}
     </ScrollView>
   );
 }

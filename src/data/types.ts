@@ -578,6 +578,39 @@ export interface MomentPaidHostLine {
   momentKeepsEuros: 0;
 }
 
+/** Signalement d’un membre de la table (démo, côté Moment — jamais montré à l’hôte ni au concerné). */
+export interface TableReport {
+  id: string;
+  outingId: string;
+  reporterId: string;
+  targetUserId: string;
+  /** Mot facultatif du signaleur. */
+  note?: string;
+  createdAt: string;
+  status: 'open' | 'contact_reporter' | 'contact_target' | 'closed';
+  /** Messages simulés (aucun envoi réel). */
+  messages: {
+    to: 'reporter' | 'target';
+    userId: string;
+    body: string;
+    at: string;
+  }[];
+  outcome?: 'nothing' | 'warning' | 'suspension' | 'abusive';
+  closedAt?: string;
+}
+
+/** Suivi confidentiel Moment par membre (démo) — jamais visible par l’intéressé ni par l’hôte. */
+export interface MemberModeration {
+  /** Avertissements (issue « avertissement »). */
+  warnings?: number;
+  /** Suspendu (issue « suspension »). */
+  suspended?: boolean;
+  /** Accès au motif malaise retiré (issue « signalement abusif »). */
+  discomfortAccessRevoked?: boolean;
+  /** Revue de l’hôte : 2 départs malaise à ses tables en 3 mois. */
+  hostReview?: boolean;
+}
+
 export interface AppState {
   /** Compte créé (tunnel terminé). */
   onboardingDone: boolean;
@@ -614,6 +647,10 @@ export interface AppState {
   confidentialLeaveReports: ConfidentialLeaveReport[];
   /** Lignes internes payées par Moment (Moment seulement, jamais l’hôte). */
   momentPaidHostLines: MomentPaidHostLine[];
+  /** File de signalements (côté Moment, démo). */
+  tableReports: TableReport[];
+  /** Suivi confidentiel par membre (côté Moment, démo). */
+  memberModeration: Record<string, MemberModeration>;
 }
 
 export type DispoProfileUpdate = {
@@ -760,6 +797,25 @@ export type AppAction =
         leftAt: string;
         reason?: 'discomfort';
         reportId: string;
+      };
+    }
+  | {
+      type: 'SUBMIT_TABLE_REPORT';
+      payload: {
+        id: string;
+        outingId: string;
+        targetUserId: string;
+        note?: string;
+        createdAt: string;
+      };
+    }
+  | {
+      type: 'ADVANCE_TABLE_REPORT';
+      payload: {
+        reportId: string;
+        to: TableReport['status'];
+        at: string;
+        outcome?: TableReport['outcome'];
       };
     }
   | { type: 'SET_TOAST'; payload: AppToast | null }

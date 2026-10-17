@@ -506,5 +506,76 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(D(S({currentUser:me,outings:[out()],requests:[g({attendance:'present'})]}),{type:'ADD_REVIEW',payload:review('u1','h1')}).reviews.some((x:any)=>x.id==='rvx'),'reducer ADD_REVIEW: guest present ok');
   (globalThis as any).__DEV__=true;
 }
+
+// Signalement et revue + compteur hôte (17/10)
+{
+  const TR=require('../src/utils/tableReports');
+  const LT=require('../src/utils/leaveTable');
+  const start=now-10*60e3;
+  const g2:any={id:'u2',firstName:'Bea'};
+  const base=(user:any,x:any={})=>S({currentUser:user,outings:[o({startsAt:iso(start),status:'closed',...x})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'}),rq({id:'r3',userId:'u3',userName:'Cle',status:'pending'})]});
+  const SUB=(s0:any,target:string,at=now,id='t1',note?:string)=>D(s0,{type:'SUBMIT_TABLE_REPORT',payload:{id,outingId:'o1',targetUserId:target,note,createdAt:iso(at)}});
+  // droit de signaler
+  ok(SUB(base(me),'h1').tableReports.length===1,'guest member can report host');
+  ok(SUB(base(host),'u1').tableReports.length===1,'host can report guest');
+  ok(SUB(base(me),'u2').tableReports.length===1,'guest can report other guest');
+  ok(SUB(base({...me,id:'u3'}),'h1').tableReports.length===0,'pending (non-member) cannot report');
+  ok(SUB(base({...me,id:'zz'}),'h1').tableReports.length===0,'outsider cannot report');
+  ok(SUB(base(me),'u3').tableReports.length===0&&SUB(base(me),'zz').tableReports.length===0,'target must be a table member');
+  ok(SUB(base(me),'u1').tableReports.length===0,'cannot report oneself');
+  ok(SUB(base(me),'h1',start-1).tableReports.length===0&&SUB(base(me),'h1',start).tableReports.length===1,'before H refused, from H ok (minimal choice)');
+  ok(SUB(base(me,{status:'completed'}),'h1',now+5*H).tableReports.length===1,'after the moment ok');
+  ok(SUB(base(me,{status:'cancelled'}),'h1').tableReports.length===0,'cancelled moment refused');
+  ok(SUB(base(null),'h1').tableReports.length===0,'no user refused');
+  const left=D(base(me),{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reportId:'lv'}});
+  ok(SUB(left,'h1').tableReports.length===1,'guest who left can still report');
+  let r=SUB(base(me),'h1',now,'t1','  il a été lourd  ');
+  ok(r.tableReports[0].status==='open'&&r.tableReports[0].note==='il a été lourd'&&r.tableReports[0].reporterId==='u1'&&r.tableReports[0].messages.length===0,'report open, note trimmed');
+  ok(SUB(base(me),'h1',now,'t1','   ').tableReports[0].note===undefined,'empty note → undefined');
+  ok(SUB(r,'h1',now,'t1').tableReports.length===1,'same id idempotent');
+  // transitions
+  const A=(s0:any,to:string,outcome?:string,at=now)=>D(s0,{type:'ADVANCE_TABLE_REPORT',payload:{reportId:'t1',to,at:iso(at),outcome}});
+  ok(A(r,'contact_target').tableReports[0].status==='open'&&A(r,'closed','nothing').tableReports[0].status==='open','no skip from open');
+  ok(A(r,'contact_reporter','warning').tableReports[0].status==='open','outcome only at closure');
+  let r1=A(r,'contact_reporter'); ok(r1.tableReports[0].status==='contact_reporter'&&r1.tableReports[0].messages[0].to==='reporter'&&r1.tableReports[0].messages[0].userId==='u1','open → contact reporter');
+  ok(A(r1,'open').tableReports[0].status==='contact_reporter'&&A(r1,'closed','nothing').tableReports[0].status==='contact_reporter','no back / no skip');
+  let r2=A(r1,'contact_target'); const tm=r2.tableReports[0].messages[1];
+  ok(r2.tableReports[0].status==='contact_target'&&tm.to==='target'&&tm.userId==='h1','contact reporter → contact target');
+  // message neutre
+  ok(tm.body==='Est-ce que tout s’est bien passé ?'&&tm.body===TR.REPORT_TARGET_MESSAGE,'target message fixed & neutral');
+  ok(!/Moi|u1|r1|lourd/.test(JSON.stringify(TR.tableReportMessagesFor(r2.tableReports,'h1'))),'target messages never reveal reporter / note');
+  ok(A(r2,'closed').tableReports[0].status==='contact_target','closure needs an outcome');
+  // issues
+  const nothing=A(r2,'closed','nothing'); ok(nothing.tableReports[0].status==='closed'&&nothing.tableReports[0].outcome==='nothing'&&JSON.stringify(nothing.memberModeration)==='{}','nothing: closed, no trace');
+  const warn=A(r2,'closed','warning'); ok(warn.memberModeration.h1.warnings===1&&!warn.memberModeration.u1,'warning: target counter +1');
+  ok(A({...warn,tableReports:[{...r2.tableReports[0]}]},'closed','warning').memberModeration.h1.warnings===2,'warnings accumulate');
+  const susp=A(r2,'closed','suspension'); ok(susp.memberModeration.h1.suspended===true&&!susp.memberModeration.h1.warnings,'suspension: target flagged');
+  const abus=A(r2,'closed','abusive'); ok(abus.memberModeration.u1.discomfortAccessRevoked===true&&!abus.memberModeration.h1,'abusive: reporter loses discomfort access, target untouched');
+  // clos figé
+  ok(A(nothing,'closed','warning').tableReports[0].outcome==='nothing'&&A(nothing,'open').tableReports[0].status==='closed'&&JSON.stringify(A(nothing,'closed','suspension').memberModeration)==='{}','closed report frozen');
+  // abusif → motif malaise plus proposé (mécanisme existant) ; départ = règle normale
+  ok(LT.isDiscomfortReasonOffered([], 'u1', abus.memberModeration.u1.discomfortAccessRevoked, now)===false,'abusive: existing access check returns false');
+  const ab2={...abus,outings:[{...abus.outings[0],startsAt:iso(now-5*60e3)}]};
+  const lv=D(ab2,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason:'discomfort',reportId:'lvx'}});
+  ok(lv.requests[0].depositStatus==='forfeited'&&lv.confidentialLeaveReports.length===0,'abusive reporter: discomfort no longer accepted on leave');
+  // compteur hôte : 1 malaise non, 2 en 3 mois oui, 2 hors fenêtre non
+  const hs=(prior:any[])=>D(S({currentUser:me,outings:[o({startsAt:iso(now-5*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],confidentialLeaveReports:prior}),{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason:'discomfort',reportId:'lvh'}});
+  const oth=(d:number,guest='u9')=>({id:'p'+d+guest,outingId:'o0',requestId:'r0',guestId:guest,hostId:'h1',reason:'discomfort',createdAt:iso(now-d*24*H)});
+  ok(!hs([]).memberModeration.h1?.hostReview,'host: 1 discomfort leave → no review');
+  ok(hs([oth(40)]).memberModeration.h1.hostReview===true,'host: 2 in 3 months (other guest) → review');
+  ok(!hs([oth(100)]).memberModeration.h1?.hostReview,'host: 2nd outside window → no review');
+  ok(!hs([{...oth(10),hostId:'h2'}]).memberModeration.h1?.hostReview,'host: other host leaves not counted');
+  {
+    const M=Date.parse('2026-05-31T10:00:00Z'), rp=(d:string)=>({hostId:'h1',createdAt:d});
+    ok(TR.countRecentHostDiscomfort([rp('2026-03-03T12:00:00Z'),rp('2026-05-30T12:00:00Z')],'h1',M)===2&&TR.countRecentHostDiscomfort([rp('2026-03-02T12:00:00Z'),rp('2026-05-30T12:00:00Z')],'h1',M)===1,'host window: same Paris calendar as guest (31/05 → 03/03)');
+  }
+  const hr=hs([oth(40)]);
+  ok(hr.currentUser.manualReviewRequired!==true,'host review does not touch guest (1st discomfort for u1)');
+  // confidentialité : rien côté hôte
+  const hostSees=(st:any)=>JSON.stringify({reqs:st.requests.map(LT.projectRequestForHost),views:st.requests.map(LT.hostLeaveView),outings:st.outings});
+  ok(hostSees(hr)===hostSees(hs([])),'host review flag invisible in host view');
+  ok(hostSees(r2)===hostSees(base(me))&&!/report|signal/i.test(hostSees(r2)),'reports invisible in host view');
+  ok(TR.tableReportMessagesFor(r2.tableReports,'h1').length===1&&TR.tableReportMessagesFor(r.tableReports,'h1').length===0,'host gets only the neutral message, after contact step');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

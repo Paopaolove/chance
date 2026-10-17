@@ -45,6 +45,7 @@ export type RootStackParamList = {
   ConfirmSlot: { requestId: string };
   ChatPlaceholder: { outingId: string; requestId?: string };
   Imprevu: { outingId: string; requestId?: string };
+  ReportTable: { outingId: string };
   Paywall: { returnToConfirmRequestId?: string } | undefined;
   DispoSoir: undefined;
   EditProfile: undefined;

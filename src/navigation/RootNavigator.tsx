@@ -9,6 +9,7 @@ import React from 'react';
 import { useChance } from '../data/ChanceContext';
 import { ChatPlaceholderScreen } from '../screens/ChatPlaceholderScreen';
 import { ImprevuScreen } from '../screens/ImprevuScreen';
+import { ReportTableScreen } from '../screens/ReportTableScreen';
 import { ConfirmSlotScreen } from '../screens/ConfirmSlotScreen';
 import { DispoSoirScreen } from '../screens/DispoSoirScreen';
 import { EditProfileScreen } from '../screens/EditProfileScreen';
@@ -106,6 +107,11 @@ export function RootNavigator() {
               name="Imprevu"
               component={ImprevuScreen}
               options={{ title: 'Imprévu' }}
+            />
+            <Stack.Screen
+              name="ReportTable"
+              component={ReportTableScreen}
+              options={{ title: 'Signaler' }}
             />
             <Stack.Screen
               name="Paywall"

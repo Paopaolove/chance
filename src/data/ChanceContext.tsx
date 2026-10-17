@@ -26,6 +26,7 @@ import {
   LateReport,
   ImprevuMotive,
   MomentPhoto,
+  MemberModeration,
   ImprevuReport,
   OnboardingInput,
   VenueAlternate,
@@ -123,6 +124,13 @@ import { presenceChecklist, validatePresenceSelection } from '../utils/markPrese
 import { reviewEligibility } from '../utils/reviewEligibility';
 import { isDemoEnabled } from '../utils/devMode';
 import {
+  advanceTableReport,
+  canSubmitTableReport,
+  canOpenTableReport,
+  hostNeedsReview,
+  normalizeTableReportNote,
+} from '../utils/tableReports';
+import {
   canActorBlockUser,
   canActorConfirmSlot,
   canActorMarkGuestPresent,
@@ -205,6 +213,8 @@ const initialState: AppState = {
   momentPhotos: [],
   confidentialLeaveReports: [],
   momentPaidHostLines: [],
+  tableReports: [],
+  memberModeration: {},
 };
 
 /** Paris neighborhoods default for a demo venue. */
@@ -932,6 +942,8 @@ function reducer(state: AppState, action: AppAction): AppState {
         momentPhotos: [],
         confidentialLeaveReports: [],
         momentPaidHostLines: [],
+        tableReports: [],
+        memberModeration: {},
       };
     }
 
@@ -1164,7 +1176,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       const discomfortAllowed = isDiscomfortReasonOffered(
         state.confidentialLeaveReports,
         me.id,
-        me.manualReviewRequired,
+        me.manualReviewRequired ||
+          state.memberModeration[me.id]?.discomfortAccessRevoked,
         leftAtMs,
       );
       const outcome = resolveLeaveTable({
@@ -1227,6 +1240,19 @@ function reducer(state: AppState, action: AppAction): AppState {
               ...state.momentPaidHostLines,
             ]
           : state.momentPaidHostLines;
+      // Compteur hôte (confidentiel) : 2 départs malaise à ses tables en 3 mois.
+      const hostReview =
+        outcome.confidentialReport &&
+        hostNeedsReview(reports, outing.hostId, leftAtMs);
+      const memberModeration = hostReview
+        ? {
+            ...state.memberModeration,
+            [outing.hostId]: {
+              ...state.memberModeration[outing.hostId],
+              hostReview: true,
+            },
+          }
+        : state.memberModeration;
       return {
         ...state,
         currentUser: needsReview
@@ -1234,6 +1260,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           : me,
         confidentialLeaveReports: reports,
         momentPaidHostLines: paidLines,
+        memberModeration,
         requests: state.requests.map((r) =>
           r.id === requestId
             ? {
@@ -1247,6 +1274,69 @@ function reducer(state: AppState, action: AppAction): AppState {
               }
             : r,
         ),
+      };
+    }
+
+    case 'SUBMIT_TABLE_REPORT': {
+      const { id, outingId, targetUserId, note, createdAt } = action.payload;
+      const me = state.currentUser;
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!me || !outing) return state;
+      if (state.tableReports.some((r) => r.id === id)) return state;
+      const atMs = new Date(createdAt).getTime();
+      if (!Number.isFinite(atMs)) return state;
+      if (
+        !canSubmitTableReport(outing, state.requests, me.id, targetUserId, atMs)
+      ) {
+        return state;
+      }
+      return {
+        ...state,
+        tableReports: [
+          {
+            id,
+            outingId,
+            reporterId: me.id,
+            targetUserId,
+            note: normalizeTableReportNote(note),
+            createdAt,
+            status: 'open',
+            messages: [],
+          },
+          ...state.tableReports,
+        ],
+      };
+    }
+
+    case 'ADVANCE_TABLE_REPORT': {
+      // Côté Moment (démo) : une étape à la fois, clos = figé.
+      const { reportId, to, at, outcome } = action.payload;
+      const report = state.tableReports.find((r) => r.id === reportId);
+      if (!report) return state;
+      const next = advanceTableReport(report, to, at, outcome);
+      if (!next) return state;
+      let memberModeration = state.memberModeration;
+      if (next.status === 'closed') {
+        const bump = (userId: string, patch: (m: MemberModeration) => MemberModeration) => {
+          memberModeration = {
+            ...memberModeration,
+            [userId]: patch(memberModeration[userId] ?? {}),
+          };
+        };
+        if (next.outcome === 'warning') {
+          bump(next.targetUserId, (m) => ({ ...m, warnings: (m.warnings ?? 0) + 1 }));
+        } else if (next.outcome === 'suspension') {
+          bump(next.targetUserId, (m) => ({ ...m, suspended: true }));
+        } else if (next.outcome === 'abusive') {
+          // Mécanisme existant : accès au motif malaise retiré au signaleur.
+          bump(next.reporterId, (m) => ({ ...m, discomfortAccessRevoked: true }));
+        }
+        // 'nothing' : clos sans trace sur le concerné.
+      }
+      return {
+        ...state,
+        memberModeration,
+        tableReports: state.tableReports.map((r) => (r.id === reportId ? next : r)),
       };
     }
 
@@ -2604,6 +2694,14 @@ interface ChanceContextValue {
    */
   /** Motif « Je ne me sens pas à l’aise » encore proposé à l’utilisateur courant. */
   isDiscomfortReasonOfferedForMe: () => boolean;
+  /** Écran « Signaler » accessible (membre de la table, à partir de H). */
+  canReportOnOuting: (outingId: string) => boolean;
+  /** Signalement d’un membre de la table (démo, confidentiel côté Moment). */
+  submitTableReport: (
+    outingId: string,
+    targetUserId: string,
+    note?: string,
+  ) => { ok: true } | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' };
   /** Invité seulement : caution rendue par Moment après un départ malaise (confidentiel). */
   isMyLeaveDepositRefunded: (requestId: string) => boolean;
   /**
@@ -5758,15 +5856,59 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.confidentialLeaveReports],
   );
 
+  const canReportOnOuting = useCallback(
+    (outingId: string): boolean => {
+      const user = state.currentUser;
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!user || !outing) return false;
+      return canOpenTableReport(outing, state.requests, user.id);
+    },
+    [state.currentUser, state.outings, state.requests],
+  );
+
+  const submitTableReport = useCallback(
+    (
+      outingId: string,
+      targetUserId: string,
+      note?: string,
+    ):
+      | { ok: true }
+      | { ok: false; reason: 'no_user' | 'not_found' | 'not_allowed' } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      const nowMs = Date.now();
+      if (
+        !canSubmitTableReport(outing, state.requests, user.id, targetUserId, nowMs)
+      ) {
+        return { ok: false, reason: 'not_allowed' };
+      }
+      dispatch({
+        type: 'SUBMIT_TABLE_REPORT',
+        payload: {
+          id: uid('report'),
+          outingId,
+          targetUserId,
+          note,
+          createdAt: new Date(nowMs).toISOString(),
+        },
+      });
+      return { ok: true };
+    },
+    [state.currentUser, state.outings, state.requests],
+  );
+
   const isDiscomfortReasonOfferedForMe = useCallback((): boolean => {
     const user = state.currentUser;
     if (!user) return false;
     return isDiscomfortReasonOffered(
       state.confidentialLeaveReports,
       user.id,
-      user.manualReviewRequired,
+      user.manualReviewRequired ||
+        state.memberModeration[user.id]?.discomfortAccessRevoked,
     );
-  }, [state.currentUser, state.confidentialLeaveReports]);
+  }, [state.currentUser, state.confidentialLeaveReports, state.memberModeration]);
 
   const leaveTable = useCallback(
     (
@@ -5804,7 +5946,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const discomfortAllowed = isDiscomfortReasonOffered(
         state.confidentialLeaveReports,
         user.id,
-        user.manualReviewRequired,
+        user.manualReviewRequired ||
+          state.memberModeration[user.id]?.discomfortAccessRevoked,
         nowMs,
       );
       const outcome = resolveLeaveTable({
@@ -5833,7 +5976,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         discomfort: outcome.confidentialReport,
       };
     },
-    [state.currentUser, state.requests, state.outings, state.confidentialLeaveReports],
+    [
+      state.currentUser,
+      state.requests,
+      state.outings,
+      state.confidentialLeaveReports,
+      state.memberModeration,
+    ],
   );
 
   const reportGuestNoShow = useCallback(
@@ -6942,6 +7091,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       hasJokerAvailable,
       useJokerOnImprevu,
       isDiscomfortReasonOfferedForMe,
+      canReportOnOuting,
+      submitTableReport,
       isMyLeaveDepositRefunded,
       leaveTable,
       reportGuestNoShow,
@@ -7050,6 +7201,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       hasJokerAvailable,
       useJokerOnImprevu,
       isDiscomfortReasonOfferedForMe,
+      canReportOnOuting,
+      submitTableReport,
       isMyLeaveDepositRefunded,
       leaveTable,
       reportGuestNoShow,
