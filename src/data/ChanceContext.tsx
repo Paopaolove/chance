@@ -119,6 +119,7 @@ import {
   presenceReturnsDepositNow,
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
+import { isDemoEnabled } from '../utils/devMode';
 import {
   canActorBlockUser,
   canActorConfirmSlot,
@@ -885,7 +886,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
-    case 'RESET_DEMO':
+    case 'RESET_DEMO': {
+      if (!isDemoEnabled()) return state; // démo seulement (__DEV__)
       return {
         ...initialState,
         outings: mockOutings,
@@ -905,6 +907,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         confidentialLeaveReports: [],
         momentPaidHostLines: [],
       };
+    }
 
     case 'ADD_CHAT_MESSAGE':
       return {
@@ -1275,6 +1278,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'SIMULATE_TRIAL_END': {
+      if (!isDemoEnabled()) return state; // démo seulement (__DEV__)
       if (!state.currentUser) return state;
       const past = new Date();
       past.setDate(past.getDate() - 1);
@@ -1867,6 +1871,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'DEMO_BECOME_PARTNER': {
+      if (!isDemoEnabled()) return state; // démo seulement (__DEV__)
       const u = state.currentUser;
       if (!u) return state;
       const kind = action.payload.kind;
@@ -1889,6 +1894,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'DEMO_LEAVE_PARTNER': {
+      if (!isDemoEnabled()) return state; // démo seulement (__DEV__)
       const u = state.currentUser;
       if (!u) return state;
       return {
@@ -1904,6 +1910,7 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'SET_PARTNER_PINNED': {
+      if (!isDemoEnabled()) return state; // démo seulement (__DEV__)
       const u = state.currentUser;
       if (!u) return state;
       const pinned = action.payload.pinned;
@@ -2814,6 +2821,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const resetDemo = useCallback(() => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
     dispatch({ type: 'RESET_DEMO' });
   }, []);
 
@@ -3646,6 +3655,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const simulateTrialEnd = useCallback(() => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
     dispatch({ type: 'SIMULATE_TRIAL_END' });
   }, []);
 
@@ -3655,6 +3666,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const seedIncomingRequest = useCallback(
     (outingId: string) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
       const outing = state.outings.find((o) => o.id === outingId);
       const user = state.currentUser;
       if (!outing || !user || outing.hostId !== user.id) return;
@@ -3705,6 +3718,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const simulateHostAccept = useCallback(
     (requestId: string) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
       acceptRequest(requestId);
     },
     [acceptRequest],
@@ -3848,6 +3863,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       minutes: number = 10,
       requestId?: string,
     ) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return;
       const me = state.currentUser;
@@ -4113,6 +4130,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       reason: string = 'RER bloqué à Gare du Nord (démo).',
       requestId?: string,
     ) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false as const, reason: 'missing_outing' };
       const me = state.currentUser;
@@ -4511,6 +4530,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const simulateOutingInMinutes = useCallback(
     (outingId: string, minutesAhead = 50) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
       const startsAt = new Date(
         Date.now() + minutesAhead * 60 * 1000,
       ).toISOString();
@@ -4810,6 +4831,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
    */
   const demoSimulateAutoComplete = useCallback(
     (outingId: string): boolean => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return false;
       const action = buildDemoAutoCompleteAction(
         state.outings.find((o) => o.id === outingId),
       );
@@ -4822,6 +4845,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const demoMarkConfirmedPresent = useCallback(
     (outingId: string) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const user = state.currentUser;
       if (!user) return { ok: false as const, reason: 'no_user' };
       const outing = state.outings.find((o) => o.id === outingId);
@@ -5966,6 +5991,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           loserRequestId: string;
         }
       | { ok: false; reason: string } => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       const now = Date.now();
@@ -6055,6 +6082,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       decision: 'active' | 'refused',
     ): { ok: true } | { ok: false; reason: string } => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       if (user.partnerStatus !== 'pending') {
@@ -6077,14 +6106,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const demoBecomePartner = useCallback((kind: PartnerKind) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
     dispatch({ type: 'DEMO_BECOME_PARTNER', payload: { kind } });
   }, []);
 
   const demoLeavePartner = useCallback(() => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
     dispatch({ type: 'DEMO_LEAVE_PARTNER' });
   }, []);
 
   const setPartnerPinned = useCallback((pinned: boolean) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return;
     dispatch({ type: 'SET_PARTNER_PINNED', payload: { pinned } });
   }, []);
 
@@ -6180,6 +6215,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     ):
       | { ok: true; confirmed: number; noSpot: number }
       | { ok: false; reason: string } => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing || !isPartnerListing(outing)) {
         return { ok: false, reason: 'not_partner_listing' };
@@ -6251,6 +6288,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       outingId: string,
     ): { ok: true; refunded: number } | { ok: false; reason: string } => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing || !isPartnerListing(outing)) {
         return { ok: false, reason: 'not_partner_listing' };
@@ -6491,6 +6530,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const simulateOtherMomentPhotoResponse = useCallback(
     (decision: 'accepted' | 'declined') => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       const user = state.currentUser;
       if (!user) return { ok: false as const, reason: 'no_user' };
       const mine = state.momentPhotos
@@ -6599,6 +6640,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   );
 
   const simulateOtherAddsMomentPhoto = useCallback(() => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
     const user = state.currentUser;
     if (!user) return { ok: false as const, reason: 'no_user' };
     // Mon moment passé le plus récent (où j’étais vraiment à table).
@@ -6702,6 +6745,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   ]);
 
   const seedDemoPastMoments = useCallback(() => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
     const user = state.currentUser;
     // 1) Profil mock : Nina (hôte) + Camille, une photo de la table acceptée.
     const mock = buildDemoPastMoment({
@@ -6759,6 +6804,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
 
   const simulateLocalNotifications = useCallback(
     async (outingTitle?: string) => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
       void ensureAndroidChannel();
       return simulateDemoNotifications(
         outingTitle ? { outingTitle } : undefined,

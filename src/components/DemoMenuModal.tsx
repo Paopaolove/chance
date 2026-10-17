@@ -15,6 +15,7 @@ import { colors, fonts, radius, spacing, typography } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { Button } from './Button';
 import { isPartnerListing } from '../utils/partners';
+import { isDemoEnabled } from '../utils/devMode';
 
 type Props = {
   visible: boolean;
@@ -121,6 +122,8 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     [],
   );
 
+  // Menu démo : développement seulement (__DEV__), après les hooks.
+  if (!isDemoEnabled()) return null;
   return (
     <Modal
       visible={visible}

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DemoMenuModal } from '../components/DemoMenuModal';
+import { isDemoEnabled } from '../utils/devMode';
 import { OutingCard } from '../components/OutingCard';
 import { MomentsMap } from '../components/MomentsMap';
 import { pinPartnerOutingsNearSoon } from '../utils/partners';
@@ -202,6 +203,8 @@ export function FeedScreen() {
   const logoTaps = useRef(0);
   const logoTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onLogoTap = () => {
+    // Menu démo : développement seulement (__DEV__), absent en production.
+    if (!isDemoEnabled()) return;
     logoTaps.current += 1;
     if (logoTapTimer.current) clearTimeout(logoTapTimer.current);
     if (logoTaps.current >= 5) {
@@ -1129,10 +1132,12 @@ export function FeedScreen() {
           )}
         />
       )}
-      <DemoMenuModal
-        visible={demoMenuOpen}
-        onClose={() => setDemoMenuOpen(false)}
-      />
+      {isDemoEnabled() ? (
+        <DemoMenuModal
+          visible={demoMenuOpen}
+          onClose={() => setDemoMenuOpen(false)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

@@ -1,5 +1,7 @@
 // Harnais règles Moment — lancer : npm run test:rules (Node 22). Voir scripts/run-test-rules.cjs.
 // @ts-nocheck
+// Harnais = environnement de développement (Expo Go / Metro) : __DEV__ vrai. Le garde démo est testé plus bas avec __DEV__ = false.
+(globalThis as any).__DEV__ = true;
 import * as G from '../src/utils/parisGeo';
 import { __reducer as R, __initial as I } from '../src/data/ChanceContext';
 import * as OA from '../src/utils/outingActive';
@@ -388,6 +390,32 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const ut=D(u1,{type:'EXPIRE_REQUEST',payload:{requestId:'r1'}});
   ok(ut.requests[0].status==='expired'&&ut.outings[0].spotsLeft===1&&OA.isVisibleOnAnnoncesFeed(ut.outings[0],now+10*60e3+1),'urgent 1 seat: timer expiry (EXPIRE_REQUEST) → back in feed');
   ok(!OA.isVisibleOnAnnoncesFeed(ue.outings[0],now+31*60e3),'urgent: still leaves feed after H+30');
+}
+// garde démo (__DEV__) — menu et fonctions démo inertes en production
+{
+  const DC=require('../src/utils/demoComplete');
+  const DM=require('../src/utils/devMode');
+  const outing=o({startsAt:iso(now+H),status:'closed'});
+  const st=S({currentUser:me,outings:[outing],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  ok(DM.isDemoEnabled()===true&&DC.buildDemoAutoCompleteAction(outing)!==null,'dev: demo enabled, demo closure built');
+  ok(D(S({currentUser:{...me}}),{type:'DEMO_BECOME_PARTNER',payload:{kind:'bar'}}).currentUser.partnerStatus!==undefined,'dev: DEMO_BECOME_PARTNER applies');
+  (globalThis as any).__DEV__=false;
+  try {
+    ok(DM.isDemoEnabled()===false,'prod: demo disabled');
+    ok(DC.buildDemoAutoCompleteAction(outing)===null,'prod: no forced demo closure');
+    const before=JSON.stringify(st);
+    for (const a of [{type:'RESET_DEMO'},{type:'SIMULATE_TRIAL_END'},{type:'DEMO_BECOME_PARTNER',payload:{kind:'bar'}},{type:'DEMO_LEAVE_PARTNER'},{type:'SET_PARTNER_PINNED',payload:{pinned:true}}] as any[]) {
+      ok(JSON.stringify(D(st,a))===before,'prod: '+a.type+' is a no-op');
+    }
+    // règles réelles intactes en production : clôture hôte à H, auto H+30
+    ok(D({...st,currentUser:host},{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'host',at:iso(now+H)}}).outings[0].status==='completed','prod: real host closure unchanged');
+    ok(D(st,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(now+H+30*60e3)}}).outings[0].status==='completed','prod: real auto H+30 unchanged');
+  } finally {
+    (globalThis as any).__DEV__=true;
+  }
+  (globalThis as any).__DEV__=undefined;
+  ok(DM.isDemoEnabled()===false,'__DEV__ undefined → disabled');
+  (globalThis as any).__DEV__=true;
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;
