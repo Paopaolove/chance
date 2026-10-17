@@ -87,10 +87,20 @@ export function hostReturnedDepositLine(
   outing: H6Outing,
   nowMs = Date.now(),
 ): string | null {
+  // Absence de l’hôte en attente (délai ou revue) : aucune ligne pour personne,
+  // avant comme après H+6 (le joker reste invisible).
+  const hs = outing.hostNoShowCase?.status;
+  if (hs === 'pending' || hs === 'contested') return null;
   if (r.attendance || r.leftTableAt || r.depositStatus !== 'returned') return null;
   // Contestation acceptée : mention seule, sans phrase ni détail.
   if (r.noShowNotRetained) return `${r.userName} · absence non retenue`;
-  if (outing.hostNoShowReported || outing.hostNoShowCase?.status === 'review_expired') {
+  // Absence de l’hôte retenue (ou revue expirée à 7 jours) : même ligne pour tous.
+  // Sans dossier (ancien état) : hostNoShowReported suffit, comme avant.
+  if (
+    hs === 'retained' ||
+    hs === 'review_expired' ||
+    (!outing.hostNoShowCase && outing.hostNoShowReported)
+  ) {
     return `${r.userName} · caution rendue`;
   }
   if (isAtOrAfterH6(outing, nowMs)) return `${r.userName} · caution rendue 6 h après le début`;

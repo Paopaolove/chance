@@ -19,7 +19,20 @@ export function reviewEligibility(input: {
   if (!fromUserId) return { ok: false, reason: 'no_user' };
   if (toUserId === fromUserId) return { ok: false, reason: 'self' };
   if (!outing) return { ok: false, reason: 'outing_not_found' };
-  if (outing.status !== 'completed') return { ok: false, reason: 'not_completed' };
+  // Contestation acceptée (L62, L79) : l’invité peut noter même si la table est
+  // restée « closed » après le « Pas venu ». Autres cas inchangés.
+  const acceptedContestGuest =
+    outing.status === 'closed' &&
+    requests.some(
+      (r) =>
+        r.outingId === outing.id &&
+        r.userId === fromUserId &&
+        r.status === 'confirmed' &&
+        r.noShowNotRetained === true,
+    );
+  if (outing.status !== 'completed' && !acceptedContestGuest) {
+    return { ok: false, reason: 'not_completed' };
+  }
   // Contestation acceptée (absence non retenue) : vaut présence pour la note,
   // sans modifier l’attendance réelle.
   const present = (uid: string) =>

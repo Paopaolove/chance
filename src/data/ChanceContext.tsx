@@ -380,20 +380,14 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
     const next = Math.max(0, (guestNoShowStrikes[req.userId] ?? 0) - 1);
     guestNoShowStrikes = { ...guestNoShowStrikes, [req.userId]: next };
     if (currentUser && currentUser.id === req.userId) {
-      // Priorité baissée et mention profil recalculées sur le compteur restant
-      // (elles ne viennent que des absences).
-      const left = guestSanctionFromStrike(next);
-      const stillBanned = req.noShowCausedBan ? false : !!currentUser.banned;
+      // L70 : priorité baissée et mention profil liées à cette absence annulées,
+      // quel que soit le nombre d’absences restantes.
       currentUser = {
         ...currentUser,
         guestNoShowCount: Math.max(0, (currentUser.guestNoShowCount ?? 1) - 1),
         ...(req.noShowCausedBan ? { banned: false, bannedReason: undefined } : {}),
-        lowerPriority: left.lowerPriority,
-        profileMention: left.lowerPriority
-          ? stillBanned && left.banned
-            ? currentUser.profileMention
-            : 'Absence après confirmation (démo)'
-          : undefined,
+        lowerPriority: false,
+        profileMention: undefined,
       };
     }
   }
@@ -1993,18 +1987,10 @@ function reducer(state: AppState, action: AppAction): AppState {
           };
         }),
       };
-      // Invité « Pas venu » qui avait déclaré l’hôte absent : l’hôte était là.
+      // Invité « Pas venu » qui avait déclaré l’hôte absent : l’hôte était là,
+      // caution perdue (L73), même s’il avait aussi contesté avec une phrase.
       for (const r of next.requests) {
         if (r.outingId !== outingId || r.depositStatus !== 'contested' || !r.noShowContest?.viaHostNoShow) continue;
-        if (normalizeContestNote(r.noShowContest.note)) {
-          // Il avait aussi contesté avec une phrase : sa contestation reste en revue.
-          const { viaHostNoShow: _v, ...contest } = r.noShowContest;
-          next = {
-            ...next,
-            requests: next.requests.map((x) => (x.id === r.id ? { ...x, noShowContest: contest } : x)),
-          };
-          continue;
-        }
         next = withGuestNoShowStrike(
           {
             ...next,
