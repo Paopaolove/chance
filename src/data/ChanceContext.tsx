@@ -119,7 +119,8 @@ import {
   presenceReturnsDepositNow,
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
-import { planMarkPresentAndRate } from '../utils/markPresent';
+import { presenceChecklist, validatePresenceSelection } from '../utils/markPresent';
+import { reviewEligibility } from '../utils/reviewEligibility';
 import { isDemoEnabled } from '../utils/devMode';
 import {
   canActorBlockUser,
@@ -241,6 +242,30 @@ export type ProfileUpdate = {
   womenOnlyPreference?: boolean;
   momentPromptSeen?: boolean;
 };
+
+/**
+ * Présence enregistrée (MARK_GUEST_PRESENT / MARK_GUESTS_PRESENT).
+ * Présent ≠ rendu tout de suite : caution retenue jusqu’à H+30 (ou départ /
+ * fin du moment), pour que « Je quitte la table » avant H+30 sans motif
+ * puisse encore la faire perdre.
+ */
+function applyPresence(r: Request, outing: Outing, markedAt: string): Request {
+  const returnNow = presenceReturnsDepositNow({
+    startsAt: outing.startsAt,
+    outingStatus: outing.status,
+    atMs: new Date(markedAt).getTime(),
+  });
+  return {
+    ...r,
+    attendance: 'present' as const,
+    depositStatus:
+      r.depositStatus === 'held' || !r.depositStatus
+        ? returnNow
+          ? ('returned' as const)
+          : ('held' as const)
+        : r.depositStatus,
+  };
+}
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -1395,29 +1420,45 @@ function reducer(state: AppState, action: AppAction): AppState {
           if (r.attendance === 'absent' || r.attendance === 'present') {
             return r;
           }
-          // Présent ≠ rendu tout de suite : caution retenue jusqu’à H+30
-          // (ou départ / fin du moment), pour que « Je quitte la table » avant
-          // H+30 sans motif puisse encore la faire perdre.
-          const returnNow = presenceReturnsDepositNow({
-            startsAt: outingMark.startsAt,
-            outingStatus: outingMark.status,
-            atMs: new Date(markedAt).getTime(),
-          });
-          return {
-            ...r,
-            attendance: 'present' as const,
-            depositStatus:
-              r.depositStatus === 'held' || !r.depositStatus
-                ? returnNow
-                  ? ('returned' as const)
-                  : ('held' as const)
-                : r.depositStatus,
-          };
+          return applyPresence(r, outingMark, markedAt);
         }),
       };
     }
 
+    case 'MARK_GUESTS_PRESENT': {
+      // Profil : invité par invité, seuls les cochés — tout ou rien (atomique).
+      const { outingId, requestIds, markedAt } = action.payload;
+      const outingSel = state.outings.find((o) => o.id === outingId);
+      const markedMs = new Date(markedAt).getTime();
+      if (!Number.isFinite(markedMs)) return state;
+      const sel = validatePresenceSelection({
+        userId: state.currentUser?.id,
+        outing: outingSel,
+        requests: state.requests,
+        requestIds,
+        nowMs: markedMs,
+      });
+      if (!sel.ok || !sel.requestIds.length || !outingSel) return state;
+      const ids = new Set(sel.requestIds);
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          ids.has(r.id) ? applyPresence(r, outingSel, markedAt) : r,
+        ),
+      };
+    }
+
     case 'ADD_REVIEW': {
+      // Même droit que canLeaveReview : un invité ne note que si sa présence
+      // est établie (attendance 'present'), moment terminé.
+      const elig = reviewEligibility({
+        fromUserId: action.payload.fromUserId,
+        toUserId: action.payload.toUserId,
+        outing: state.outings.find((o) => o.id === action.payload.outingId),
+        requests: state.requests,
+        reviews: state.reviews,
+      });
+      if (!elig.ok) return state;
       const exists = state.reviews.some(
         (r) =>
           r.outingId === action.payload.outingId &&
@@ -2386,12 +2427,24 @@ interface ChanceContextValue {
         } | null;
       }
     | { ok: false; reason: string };
+  /** Profil (hôte) : confirmés non partis à cocher, rien de pré-coché. */
+  getPresenceChecklist: (outingId: string) =>
+    | {
+        ok: true;
+        candidates: { requestId: string; userId: string; userName: string }[];
+        alreadyPresent: { requestId: string; userId: string; userName: string }[];
+        windowOpen: boolean;
+      }
+    | { ok: false; reason: string };
   /**
-   * Profil « Marquer présent et noter » : vraie action de présence (hôte, H−15,
-   * pas après « Pas venu »). ok seulement si la présence est enregistrée ou
-   * déjà marquée ; sinon motif (cf. markPresentReasonLabel).
+   * Profil « Marquer présent et noter » : seuls les invités cochés sont
+   * marqués présents, en une seule action (tout ou rien). ok seulement si une
+   * présence est enregistrée ou déjà marquée ; sinon motif.
    */
-  markPresentAndRate: (outingId: string) =>
+  markGuestsPresentAndRate: (
+    outingId: string,
+    requestIds: string[],
+  ) =>
     | {
         ok: true;
         rateTarget: { outingId: string; toUserId: string; toUserName: string };
@@ -4682,45 +4735,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       outingId: string,
       toUserId: string,
-    ): { ok: true } | { ok: false; reason: string } => {
-      const user = state.currentUser;
-      if (!user) return { ok: false, reason: 'no_user' };
-      if (toUserId === user.id) return { ok: false, reason: 'self' };
-      const outing = state.outings.find((o) => o.id === outingId);
-      if (!outing) return { ok: false, reason: 'outing_not_found' };
-      if (outing.status !== 'completed') {
-        return { ok: false, reason: 'not_completed' };
-      }
-      const isHost = outing.hostId === user.id;
+    ): { ok: true } | { ok: false; reason: string } =>
       // Confirmé ≠ présent : avis only when attendance is present.
-      const myPresent = state.requests.some(
-        (r) =>
-          r.outingId === outing.id &&
-          r.userId === user.id &&
-          wasPresent(r),
-      );
-      if (!isHost && !myPresent) {
-        return { ok: false, reason: 'not_participant' };
-      }
-      const targetIsHost = outing.hostId === toUserId;
-      const targetPresent = state.requests.some(
-        (r) =>
-          r.outingId === outing.id &&
-          r.userId === toUserId &&
-          wasPresent(r),
-      );
-      if (!targetIsHost && !targetPresent) {
-        return { ok: false, reason: 'target_not_participant' };
-      }
-      const dup = state.reviews.some(
-        (r) =>
-          r.outingId === outingId &&
-          r.fromUserId === user.id &&
-          r.toUserId === toUserId,
-      );
-      if (dup) return { ok: false, reason: 'already_reviewed' };
-      return { ok: true };
-    },
+      reviewEligibility({
+        fromUserId: state.currentUser?.id,
+        toUserId,
+        outing: state.outings.find((o) => o.id === outingId),
+        requests: state.requests,
+        reviews: state.reviews,
+      }),
     [state.currentUser, state.outings, state.requests, state.reviews],
   );
 
@@ -4837,26 +4860,37 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.requests, state.outings],
   );
 
-  const markPresentAndRate = useCallback(
-    (outingId: string) => {
-      const outing = state.outings.find((o) => o.id === outingId);
-      const plan = planMarkPresentAndRate({
+  const getPresenceChecklist = useCallback(
+    (outingId: string) =>
+      presenceChecklist({
         userId: state.currentUser?.id,
-        outing,
+        outing: state.outings.find((o) => o.id === outingId),
         requests: state.requests,
+      }),
+    [state.currentUser, state.outings, state.requests],
+  );
+
+  const markGuestsPresentAndRate = useCallback(
+    (outingId: string, requestIds: string[]) => {
+      const markedAt = new Date().toISOString();
+      const sel = validatePresenceSelection({
+        userId: state.currentUser?.id,
+        outing: state.outings.find((o) => o.id === outingId),
+        requests: state.requests,
+        requestIds,
+        nowMs: new Date(markedAt).getTime(),
       });
-      if (!plan.ok) return { ok: false as const, reason: plan.reason };
-      // Vraie action, demande par demande (mêmes contrôles + MARK_GUEST_PRESENT).
-      for (const requestId of plan.requestIds) {
-        const res = markGuestPresent(requestId);
-        if (!res.ok) return { ok: false as const, reason: res.reason };
+      if (!sel.ok) return { ok: false as const, reason: sel.reason };
+      if (sel.requestIds.length) {
+        // Une seule action atomique (pas de boucle → pas de résultat partiel).
+        dispatch({
+          type: 'MARK_GUESTS_PRESENT',
+          payload: { outingId, requestIds: sel.requestIds, markedAt },
+        });
       }
-      return {
-        ok: true as const,
-        rateTarget: { outingId, ...plan.rateTarget },
-      };
+      return { ok: true as const, rateTarget: { outingId, ...sel.rateTarget } };
     },
-    [state.currentUser, state.outings, state.requests, markGuestPresent],
+    [state.currentUser, state.outings, state.requests],
   );
 
   /**
@@ -5004,40 +5038,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       if (input.toUserId === user.id) return { ok: false, reason: 'self' };
       const outing = state.outings.find((o) => o.id === input.outingId);
+      // Lot 6 : avis seulement si présent (Confirmé ≠ présent) — même règle
+      // que canLeaveReview et le reducer ADD_REVIEW.
+      const elig = reviewEligibility({
+        fromUserId: user.id,
+        toUserId: input.toUserId,
+        outing,
+        requests: state.requests,
+        reviews: state.reviews,
+      });
+      if (!elig.ok) return elig;
       if (!outing) return { ok: false, reason: 'outing_not_found' };
-      if (outing.status !== 'completed') {
-        return { ok: false, reason: 'not_completed' };
-      }
-      // Lot 6: align with canLeaveReview — avis seulement si présent
-      // (Confirmé ≠ présent). Hôte note les invités présents ; invité présent
-      // note l’hôte.
-      const isHost = outing.hostId === user.id;
-      const myPresent = state.requests.some(
-        (r) =>
-          r.outingId === outing.id &&
-          r.userId === user.id &&
-          wasPresent(r),
-      );
-      if (!isHost && !myPresent) {
-        return { ok: false, reason: 'not_participant' };
-      }
-      const targetIsHost = outing.hostId === input.toUserId;
-      const targetPresent = state.requests.some(
-        (r) =>
-          r.outingId === outing.id &&
-          r.userId === input.toUserId &&
-          wasPresent(r),
-      );
-      if (!targetIsHost && !targetPresent) {
-        return { ok: false, reason: 'target_not_participant' };
-      }
-      const dup = state.reviews.some(
-        (r) =>
-          r.outingId === input.outingId &&
-          r.fromUserId === user.id &&
-          r.toUserId === input.toUserId,
-      );
-      if (dup) return { ok: false, reason: 'already_reviewed' };
       if (
         (input.rating === 1 || input.rating === 2) &&
         !input.lowStarReason
@@ -6903,7 +6914,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       markGuestPresent,
       demoSimulateAutoComplete,
       demoMarkConfirmedPresent,
-      markPresentAndRate,
+      getPresenceChecklist,
+      markGuestsPresentAndRate,
       getCompletedOutingsMissingPresent,
       addReview,
       replyToReview,
@@ -7010,7 +7022,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       markGuestPresent,
       demoSimulateAutoComplete,
       demoMarkConfirmedPresent,
-      markPresentAndRate,
+      getPresenceChecklist,
+      markGuestsPresentAndRate,
       getCompletedOutingsMissingPresent,
       addReview,
       replyToReview,

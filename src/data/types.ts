@@ -792,6 +792,11 @@ export type AppAction =
    * returned. Idempotent. Cannot override absent. ≠ COMPLETE_OUTING / CLOSE.
    */
   | { type: 'MARK_GUEST_PRESENT'; payload: { requestId: string; markedAt: string } }
+  /** Profil : invités cochés par l’hôte, marqués présents en une fois (tout ou rien). */
+  | {
+      type: 'MARK_GUESTS_PRESENT';
+      payload: { outingId: string; requestIds: string[]; markedAt: string };
+    }
   | { type: 'ADD_REVIEW'; payload: Review }
   | { type: 'REPLY_TO_REVIEW'; payload: { reviewId: string; reply: string } }
   | {

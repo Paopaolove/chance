@@ -69,7 +69,8 @@ function ProfileScreenInner() {
     getOutingsToRate,
     getMyRatedOutingPairs,
     getCompletedOutingsMissingPresent,
-    markPresentAndRate,
+    getPresenceChecklist,
+    markGuestsPresentAndRate,
     hasJokerAvailable,
     getMyPastMoments,
     getPendingMomentPhotoConsentsForMe,
@@ -81,6 +82,9 @@ function ProfileScreenInner() {
   const user = state.currentUser;
   const active = getActiveOutingForUser();
   const [busy, setBusy] = useState(false);
+  // « Marquer présent et noter » : liste à cocher (hôte), rien de pré-coché.
+  const [presenceOutingId, setPresenceOutingId] = useState<string | null>(null);
+  const [presenceChecked, setPresenceChecked] = useState<string[]>([]);
 
   useEffect(() => {
     const focus = route.params?.focusSection;
@@ -737,8 +741,11 @@ function ProfileScreenInner() {
           {(() => {
             const toRate = getOutingsToRate();
             const rated = getMyRatedOutingPairs();
-            // « Marquer présent et noter » : vraie action de présence (17/10).
-            const missingPresent = getCompletedOutingsMissingPresent();
+            // « Marquer présent et noter » : hôte seulement (décision Paolo
+            // 17/10) — l’invité ne note qu’après coup, si sa présence est établie.
+            const missingPresent = getCompletedOutingsMissingPresent().filter(
+              (item) => item.outing.hostId === state.currentUser?.id,
+            );
             if (!toRate.length && !rated.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
@@ -799,30 +806,95 @@ function ProfileScreenInner() {
                         <Text style={styles.cardHint}>
                           Moment terminé — personne n’est marquée présente.
                         </Text>
-                        <Button
-                          title="Marquer présent et noter"
-                          variant="secondary"
-                          onPress={() => {
-                            const marked = markPresentAndRate(item.outing.id);
-                            if (!marked.ok) {
-                              Alert.alert(
-                                'Présence non enregistrée',
-                                markPresentReasonLabel(marked.reason),
-                              );
-                              return;
-                            }
-                            const { toUserId, toUserName } = marked.rateTarget;
-                            // Defer so MARK_GUEST_PRESENT is committed before LeaveReview gates.
-                            setTimeout(() => {
-                              navigation.navigate('LeaveReview', {
-                                outingId: item.outing.id,
-                                toUserId,
-                                toUserName,
-                              });
-                            }, 0);
-                          }}
-                          style={{ marginTop: spacing.sm }}
-                        />
+                        {presenceOutingId !== item.outing.id ? (
+                          <Button
+                            title="Marquer présent et noter"
+                            variant="secondary"
+                            onPress={() => {
+                              const list = getPresenceChecklist(item.outing.id);
+                              if (!list.ok) {
+                                Alert.alert(
+                                  'Présence non enregistrée',
+                                  markPresentReasonLabel(list.reason),
+                                );
+                                return;
+                              }
+                              setPresenceChecked([]); // rien de pré-coché
+                              setPresenceOutingId(item.outing.id);
+                            }}
+                            style={{ marginTop: spacing.sm }}
+                          />
+                        ) : (
+                          (() => {
+                            const list = getPresenceChecklist(item.outing.id);
+                            const candidates = list.ok ? list.candidates : [];
+                            return (
+                              <View style={{ marginTop: spacing.sm }}>
+                                <Text style={styles.cardHint}>
+                                  Coche les invités qui étaient là. Les autres
+                                  restent sans présence (« Pas venu » toujours
+                                  possible).
+                                </Text>
+                                {candidates.map((c) => {
+                                  const on = presenceChecked.includes(c.requestId);
+                                  return (
+                                    <Pressable
+                                      key={c.requestId}
+                                      onPress={() =>
+                                        setPresenceChecked((prev) =>
+                                          on
+                                            ? prev.filter((x) => x !== c.requestId)
+                                            : [...prev, c.requestId],
+                                        )
+                                      }
+                                      accessibilityRole="checkbox"
+                                      accessibilityState={{ checked: on }}
+                                      style={[
+                                        styles.presenceRow,
+                                        on && styles.presenceRowOn,
+                                      ]}
+                                    >
+                                      <Text style={styles.cardValue}>{c.userName}</Text>
+                                      <Text style={styles.cardHint}>
+                                        {on ? 'Était là' : 'Non coché'}
+                                      </Text>
+                                    </Pressable>
+                                  );
+                                })}
+                                <Button
+                                  title="Valider la présence et noter"
+                                  variant="secondary"
+                                  disabled={!presenceChecked.length}
+                                  onPress={() => {
+                                    const marked = markGuestsPresentAndRate(
+                                      item.outing.id,
+                                      presenceChecked,
+                                    );
+                                    if (!marked.ok) {
+                                      Alert.alert(
+                                        'Présence non enregistrée',
+                                        markPresentReasonLabel(marked.reason),
+                                      );
+                                      return;
+                                    }
+                                    setPresenceOutingId(null);
+                                    setPresenceChecked([]);
+                                    const { toUserId, toUserName } = marked.rateTarget;
+                                    // Defer so MARK_GUESTS_PRESENT is committed before LeaveReview gates.
+                                    setTimeout(() => {
+                                      navigation.navigate('LeaveReview', {
+                                        outingId: item.outing.id,
+                                        toUserId,
+                                        toUserName,
+                                      });
+                                    }, 0);
+                                  }}
+                                  style={{ marginTop: spacing.sm }}
+                                />
+                              </View>
+                            );
+                          })()
+                        )}
                       </View>
                     ))}
                   </>
@@ -1013,6 +1085,18 @@ const styles = StyleSheet.create({
   },
   missingRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   missingText: { flex: 1 },
+  /** Ligne à cocher : carte blanche, filet #E7DFD6, rayon 16, sans ombre. */
+  presenceRow: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  /** Coché : filet encre (l’abricot reste au bouton principal). */
+  presenceRowOn: { borderColor: colors.text },
   missingLabel: { ...typography.bodyStrong, color: colors.text },
   missingHint: { ...typography.caption, color: colors.textSecondary },
   card: {
