@@ -47,8 +47,8 @@ import { makeVenueKey } from '../utils/venue';
 import {
   canGuestLeaveTable,
   DISCOMFORT_REASON_LABEL,
-  hostDepositStatus,
   hostLeaveView,
+  projectRequestForHost,
   isDepositReturnedForGuest,
   isJokerAllowedNow,
 } from '../utils/leaveTable';
@@ -736,6 +736,8 @@ export function OutingDetailScreen() {
           ) : null}
           {incomingRequests
             .filter((r) => r.outingId === outing.id && r.status === 'confirmed')
+            // Vue hôte : statut caution projeté (départ malaise = sans motif).
+            .map(projectRequestForHost)
             .map((r) => (
               <View key={r.id} style={{ marginTop: spacing.md }}>
                 {/* Prénom / photo → profil (présence, chat) */}
@@ -770,7 +772,7 @@ export function OutingDetailScreen() {
                           ? `${r.userName} · arrivé · caution rendue après 30 min`
                           : r.attendance === 'absent'
                             ? `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
-                            : hostDepositStatus(r) === 'returned'
+                            : r.depositStatus === 'returned'
                               ? `${r.userName} · caution rendue (silence le lendemain)`
                               : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, le soir même.'}
                     </Text>

@@ -118,6 +118,7 @@ import {
   DEPOSIT_EUROS_LEAVE,
   presenceReturnsDepositNow,
 } from '../utils/leaveTable';
+import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
 import {
   canActorBlockUser,
   canActorConfirmSlot,
@@ -2361,6 +2362,11 @@ interface ChanceContextValue {
    * Host: all confirmed on outing. Guest: own confirmed request only.
    * Returns a LeaveReview target when someone was (or already is) present.
    */
+  /**
+   * Démo QA (option A) : clôture automatique H+30 forcée (by 'auto',
+   * at = startsAt + H+30), hôte ou invité. true si la clôture est envoyée.
+   */
+  demoSimulateAutoComplete: (outingId: string) => boolean;
   demoMarkConfirmedPresent: (outingId: string) =>
     | {
         ok: true;
@@ -4802,6 +4808,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
    * Demo QA: force presence so getOutingsToRate / LeaveReview unlock.
    * Does not weaken prod markGuestPresent (host-only).
    */
+  const demoSimulateAutoComplete = useCallback(
+    (outingId: string): boolean => {
+      const action = buildDemoAutoCompleteAction(
+        state.outings.find((o) => o.id === outingId),
+      );
+      if (!action) return false;
+      dispatch(action);
+      return true;
+    },
+    [state.outings],
+  );
+
   const demoMarkConfirmedPresent = useCallback(
     (outingId: string) => {
       const user = state.currentUser;
@@ -6800,6 +6818,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOutingInMinutes,
       completeOuting,
       markGuestPresent,
+      demoSimulateAutoComplete,
       demoMarkConfirmedPresent,
       getCompletedOutingsMissingPresent,
       addReview,
@@ -6905,6 +6924,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOutingInMinutes,
       completeOuting,
       markGuestPresent,
+      demoSimulateAutoComplete,
       demoMarkConfirmedPresent,
       getCompletedOutingsMissingPresent,
       addReview,

@@ -41,7 +41,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     simulateOtherLate,
     simulateOtherImprevu,
     reportVenueClosed,
-    completeOuting,
+    demoSimulateAutoComplete,
     demoMarkConfirmedPresent,
     setDispoProfile,
     simulateLocalNotifications,
@@ -224,10 +224,11 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 }
                 const outingId = firstConfirmedOuting.id;
                 // terminée ≠ présent (lot 6) — la simu marque present explicitement.
-                if (!completeOuting(outingId)) {
+                // Option A : clôture automatique H+30 simulée (hôte ou invité).
+                if (!demoSimulateAutoComplete(outingId)) {
                   Alert.alert(
                     'Clôture refusée',
-                    'Seul l’hôte peut clôturer le moment, à partir de l’heure prévue. Présences et avis non simulés.',
+                    'Moment déjà terminé ou annulé. Présences et avis non simulés.',
                   );
                   return;
                 }

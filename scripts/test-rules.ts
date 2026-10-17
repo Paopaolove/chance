@@ -327,5 +327,28 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const r0=L(st(-5*60e3,{depositStatus:'returned'}),now,'discomfort');
   ok(r0.requests[0].depositStatus==='returned'&&!r0.confidentialLeaveReports[0].guestDepositRefundedEuros&&r0.momentPaidHostLines.length===0,'already returned: stays returned, no refund, no line');
 }
+
+// démo « Simuler sortie terminée » (option A) : clôture auto H+30 forcée
+{
+  const DC=require('../src/utils/demoComplete');
+  const start=now+2*H; // moment futur : la démo doit marcher quand même
+  const base=(user:any,rx:any={})=>S({currentUser:user,outings:[o({startsAt:iso(start),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held',...rx})]});
+  const act=DC.buildDemoAutoCompleteAction(base(me).outings[0]);
+  ok(act&&act.payload.by==='auto'&&act.payload.at===iso(start+30*60e3)&&act.payload.outingId==='o1','demo action: auto, at = startsAt + H+30');
+  ok(DC.buildDemoAutoCompleteAction(o({status:'completed'}))===null&&DC.buildDemoAutoCompleteAction(o({status:'cancelled'}))===null&&DC.buildDemoAutoCompleteAction(undefined)===null&&DC.buildDemoAutoCompleteAction(o({startsAt:'x'}))===null,'demo action: null when completed/cancelled/missing/invalid');
+  for (const [who,user] of [['guest',me],['host',host],['no user',null]] as any) {
+    const c1=D(base(user),act);
+    ok(c1.outings[0].status==='completed','demo closure works for '+who);
+    // présences démo marquées après la clôture (markedAt = startsAt) → caution rendue, état cohérent
+    const p1=D(c1,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(start)}});
+    ok(p1.requests[0].attendance==='present'&&p1.requests[0].depositStatus==='returned','demo presence after closure: returned ('+who+')');
+  }
+  // présent avant la clôture démo → rendu par la clôture
+  const pre=D(base(me),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(start)}});
+  ok(pre.requests[0].depositStatus==='held'&&D(pre,act).requests[0].depositStatus==='returned','demo closure returns deposit of present guest');
+  // règle réelle inchangée : sans by auto, l’invité ne peut pas clôturer
+  ok(D(base(me),{type:'COMPLETE_OUTING',payload:{outingId:'o1',at:iso(start+30*60e3)}}).outings[0].status==='closed','real rule unchanged: guest by host refused');
+  ok(D(D(base(me),act),act).outings[0].status==='completed','demo closure idempotent');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
