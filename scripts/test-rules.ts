@@ -777,5 +777,49 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(/shouldOfferReportAfterLeave\(res, canReportOnOuting\(outing\.id\)\)/.test(od)&&/navigation\.navigate\(act\.screen, act\.params\)/.test(od),'static: OutingDetail uses the helper');
   ok(/title="Oui"\s*variant="secondary"/.test(od)&&/title="Non"\s*variant="secondary"/.test(od),'static: Oui / Non secondary');
 }
+
+// Confidentialité côté hôte (rétabli à la demande du Testeur) : aucune trace de signalement dans la vue hôte
+{
+  const TR=require('../src/utils/tableReports');
+  const LT=require('../src/utils/leaveTable');
+  const NOTE='il a été très lourd zq9x';
+  const mk=()=>S({currentUser:me,outings:[o({startsAt:iso(now-5*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  // vue hôte = demandes projetées + mention de départ + annonces + messages reçus par l’hôte
+  const hostView=(st:any)=>({reqs:st.requests.filter((r:any)=>r.outingId==='o1').map(LT.projectRequestForHost),views:st.requests.map(LT.hostLeaveView),outings:st.outings,msgs:TR.tableReportMessagesFor(st.tableReports,'h1')});
+  const SUB=(st:any,id:string,target='h1',category='sexism',note=NOTE,user=me)=>D({...st,currentUser:user},{type:'SUBMIT_TABLE_REPORT',payload:{id,outingId:'o1',targetUserId:target,category,note,createdAt:iso(now)}});
+  const ADV=(st:any,id:string,to:string,outcome?:string,abusiveReason?:string)=>D(st,{type:'ADVANCE_TABLE_REPORT',payload:{reportId:id,to,at:iso(now),outcome,abusiveReason}});
+  // « category » seule = catégorie du moment (resto…), pas celle du signalement → on cherche les valeurs de catégorie de signalement
+  const FORBID=/tableReport|report|signal|sexism|racism|insults|threats|solicitation|not_the_person|inappropriate|zq9x|lourd|reporterId|targetUserId|requiresManualReview|manualReview|abusive|abusiveReason|warnings|suspended|memberModeration|hostReview|discomfort|malaise|confidential/i;
+  // 1) départ malaise puis signalement contre l’hôte (avec phrase)
+  const base0=mk();
+  const left=D(base0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason:'discomfort',reportId:'lvc'}});
+  const leftPlain=D(base0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reportId:'lvc'}});
+  const rep=SUB(left,'c1');
+  ok(rep.tableReports.length===1&&rep.tableReports[0].note===NOTE&&rep.tableReports[0].category==='sexism','privacy setup: discomfort leave then report recorded');
+  ok(JSON.stringify(hostView(rep))===JSON.stringify(hostView(left)),'host view identical with / without report (after discomfort leave)');
+  ok(JSON.stringify(hostView(left).reqs)===JSON.stringify(hostView(leftPlain).reqs)&&JSON.stringify(hostView(left).views)===JSON.stringify(hostView(leftPlain).views),'host view: discomfort leave identical to plain leave');
+  ok(!FORBID.test(JSON.stringify(hostView(rep))),'host view after discomfort leave + report: no report / category / phrase / author / review / abuse trace');
+  ok(rep.requests.filter((r:any)=>r.outingId==='o1').map(LT.projectRequestForHost).every((r:any)=>!FORBID.test(JSON.stringify(r))&&r.depositStatus!=='returned_discomfort_leave'),'projectRequestForHost: no trace, no internal discomfort status');
+  // 2) cheminement complet : contact signaleur → contact concerné → issue ; l’hôte ne reçoit que le message neutre
+  let full=ADV(ADV(rep,'c1','contact_reporter'),'c1','contact_target');
+  ok(JSON.stringify(hostView(full).msgs.map((m:any)=>m.body))===JSON.stringify([TR.REPORT_TARGET_MESSAGE])&&!FORBID.test(JSON.stringify(hostView(full).msgs)),'host (target) receives only the neutral message, no author / category / phrase');
+  ok(JSON.stringify({...hostView(full),msgs:[]})===JSON.stringify({...hostView(left),msgs:[]}),'host view otherwise unchanged during review');
+  for(const out of [['sans_suite'],['warning'],['suspension'],['abusive','reporter_admitted_false']]){
+    const cl=ADV(full,'c1','closed',out[0],out[1]);
+    ok(cl.tableReports[0].status==='closed'&&JSON.stringify({...hostView(cl),msgs:[]})===JSON.stringify({...hostView(left),msgs:[]})&&!FORBID.test(JSON.stringify({...hostView(cl),msgs:[]})),'host view unchanged after outcome '+out[0]);
+  }
+  // 3) abus ×2 contre le signaleur → revue manuelle préalable sur le suivant : rien côté hôte
+  let ab=ADV(full,'c1','closed','abusive','reporter_admitted_false');
+  ab=SUB(ab,'c2','u2','threats');
+  ab=ADV(ADV(ADV(ab,'c2','contact_reporter'),'c2','contact_target'),'c2','closed','abusive','reporter_admitted_false');
+  const flagged=SUB(ab,'c3','h1','other');
+  ok(flagged.tableReports.find((r:any)=>r.id==='c3').requiresManualReviewFirst===true&&flagged.memberModeration.u1.warnings===1,'privacy setup: 2 abuses → next report needs manual review');
+  ok(JSON.stringify({...hostView(flagged),msgs:[]})===JSON.stringify({...hostView(left),msgs:[]})&&!FORBID.test(JSON.stringify({...hostView(flagged),msgs:[]})),'host view: no manual-review / abuse / warning trace');
+  ok(hostView(flagged).msgs.every((m:any)=>m.body===TR.REPORT_TARGET_MESSAGE),'host messages: neutral only, even with manual review / abuse');
+  // 4) l’hôte comme signaleur ne voit pas les signalements des autres ; projection de chaque demande sans champ de signalement
+  const hostRep=SUB(left,'c4','u2','racism','x',host);
+  ok(JSON.stringify(hostView(hostRep))===JSON.stringify(hostView(left)),'host view unchanged by a report the host makes / other reports');
+  ok(hostRep.requests.map(LT.projectRequestForHost).every((r:any)=>Object.keys(r).every((k)=>!/report|category|note|abus|review|moderation/i.test(k))),'projectRequestForHost: no report-related keys');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
