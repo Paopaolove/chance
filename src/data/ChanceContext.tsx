@@ -121,6 +121,14 @@ import {
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
 import {
+  contestRefusal,
+  normalizeContestNote,
+  noShowOpensContest,
+  requestsDueForContestExpiry,
+  shouldForfeitUncontested,
+  type ContestRefusal,
+} from '../utils/noShowContest';
+import {
   h6AtIso,
   isNoShowWindowOpen,
   outingsDueForH6,
@@ -1831,6 +1839,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         lowerPriority,
         banned,
         reportedAt,
+        reportedByUserId,
       } = action.payload;
       const existing = state.requests.find((r) => r.id === requestId);
       // Must be confirmed and not already present.
@@ -1911,7 +1920,13 @@ function reducer(state: AppState, action: AppAction): AppState {
             ? {
                 ...r,
                 attendance: 'absent' as const,
-                depositStatus: 'forfeited' as const,
+                // Hôte d’une table normale : 24 h pour contester (ni perdue ni rendue).
+                ...(noShowOpensContest(outingNoShow, reportedByUserId)
+                  ? {
+                      depositStatus: 'noshow_pending' as const,
+                      noShowReportedAt: reportedAt,
+                    }
+                  : { depositStatus: 'forfeited' as const }),
               }
             : r,
         ),
@@ -2225,6 +2240,68 @@ function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         requests: state.requests.map((r) =>
           r.id === requestId ? { ...r, partnerMarkedAbsentAt: at } : r,
+        ),
+      };
+    }
+
+    case 'CONTEST_NO_SHOW': {
+      const { requestId, note, at } = action.payload;
+      const me = state.currentUser;
+      const req = state.requests.find((r) => r.id === requestId);
+      const atMs = new Date(at).getTime();
+      if (!me || !req || !Number.isFinite(atMs)) return state;
+      if (contestRefusal(req, me.id, note, atMs)) return state;
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          r.id === requestId
+            ? {
+                ...r,
+                depositStatus: 'contested' as const,
+                noShowContest: { note: normalizeContestNote(note), contestedAt: at },
+              }
+            : r,
+        ),
+      };
+    }
+
+    case 'EXPIRE_NO_SHOW_CONTEST': {
+      // Sans contestation à 24 h : perdue. Refusée avant l’échéance ; idempotente.
+      const { requestId, at } = action.payload;
+      const req = state.requests.find((r) => r.id === requestId);
+      const atMs = new Date(at).getTime();
+      if (!req || !Number.isFinite(atMs) || !shouldForfeitUncontested(req, atMs)) {
+        return state;
+      }
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          r.id === requestId ? { ...r, depositStatus: 'forfeited' as const } : r,
+        ),
+      };
+    }
+
+    case 'CONFIRM_NO_SHOW_AFTER_REVIEW':
+    case 'ACCEPT_NO_SHOW_CONTEST': {
+      // Revue Moment d’une contestation : seulement sur une caution contestée.
+      const { requestId, at } = action.payload;
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req || req.depositStatus !== 'contested' || !req.noShowContest) return state;
+      const accepted = action.type === 'ACCEPT_NO_SHOW_CONTEST';
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          r.id === requestId
+            ? {
+                ...r,
+                depositStatus: accepted ? ('returned' as const) : ('forfeited' as const),
+                noShowContest: {
+                  ...r.noShowContest!,
+                  outcome: accepted ? ('contest_accepted' as const) : ('noshow_confirmed' as const),
+                  resolvedAt: at,
+                },
+              }
+            : r,
         ),
       };
     }
@@ -2589,6 +2666,11 @@ interface ChanceContextValue {
    * at = startsAt + H+30), hôte ou invité. true si la clôture est envoyée.
    */
   demoSimulateAutoComplete: (outingId: string) => boolean;
+  /** Invité : contester le « Pas venu » de l’hôte (phrase obligatoire, avant 24 h). */
+  contestNoShow: (
+    requestId: string,
+    note: string,
+  ) => { ok: true } | { ok: false; reason: ContestRefusal | 'not_found' | 'no_user' };
   /** Démo QA (__DEV__) : envoie RETURN_DEPOSITS_H6 daté de H+6. Nombre de cautions rendues. */
   demoSimulateDepositH6: (
     outingId: string,
@@ -2836,6 +2918,7 @@ interface ChanceContextValue {
         lowerPriority: boolean;
         banned?: boolean;
         jokerExempted?: boolean;
+        pending?: boolean;
       }
     | { ok: false; reason: string };
   /** Host publishes often and never honors: 1 warning, 2nd ban. */
@@ -4706,6 +4789,28 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.outings]);
 
+  /** « Pas venu » de l’hôte non contesté à 24 h → caution perdue (minuterie locale). */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const requestId of requestsDueForContestExpiry(state.requests, now)) {
+        dispatch({
+          type: 'EXPIRE_NO_SHOW_CONTEST',
+          payload: { requestId, at: new Date(now).toISOString() },
+        });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.requests]);
+
   /**
    * Table normale — H+6 : caution encore bloquée d’un confirmé non « Pas venu »
    * rendue d’office (minuterie locale, même modèle que le partenaire).
@@ -5122,6 +5227,21 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       return true;
     },
     [state.outings],
+  );
+
+  const contestNoShow = useCallback(
+    (requestId: string, note: string) => {
+      const user = state.currentUser;
+      if (!user) return { ok: false as const, reason: 'no_user' as const };
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req) return { ok: false as const, reason: 'not_found' as const };
+      const at = new Date().toISOString();
+      const refusal = contestRefusal(req, user.id, note, new Date(at).getTime());
+      if (refusal) return { ok: false as const, reason: refusal };
+      dispatch({ type: 'CONTEST_NO_SHOW', payload: { requestId, note, at } });
+      return { ok: true as const };
+    },
+    [state.currentUser, state.requests],
   );
 
   const demoSimulateDepositH6 = useCallback(
@@ -6128,6 +6248,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           lowerPriority: boolean;
           banned?: boolean;
           jokerExempted?: boolean;
+          /** Caution en attente 24 h (contestation possible). */
+          pending?: boolean;
         }
       | { ok: false; reason: string } => {
       const user = state.currentUser;
@@ -6221,8 +6343,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           lowerPriority,
           banned,
           reportedAt,
+          reportedByUserId: user.id,
         },
       });
+      // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité).
+      const pending = noShowOpensContest(outing, user.id);
+      const lossText = pending
+        ? 'caution en attente 24 h, puis perdue sans suite (6,90 € Moment / 13,10 € hôte).'
+        : 'caution perdue (6,90 € Moment / 13,10 € hôte).';
       const note: ChatMessage = {
         id: uid('msg'),
         threadKey: chatThreadKey(outingId, requestId),
@@ -6230,10 +6358,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         requestId,
         kind: 'system',
         text: banned
-          ? 'Note auto · 3e absence invité — compte fermé. Caution perdue (6,90 € Moment / 13,10 € hôte).'
+          ? `Note auto · 3e absence invité — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
           : lowerPriority
-            ? 'Note auto · 2e absence invité — priorité baissée + mention profil. Caution perdue (6,90 € Moment / 13,10 € hôte).'
-            : 'Note auto · absence après confirmation — caution perdue (6,90 € Moment / 13,10 € hôte).',
+            ? `Note auto · 2e absence invité — priorité baissée + mention profil. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
+            : `Note auto · absence après confirmation — ${lossText}`,
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
@@ -6243,16 +6371,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           ? 'Compte fermé'
           : lowerPriority
             ? 'Priorité baissée'
-            : 'Caution perdue',
+            : pending
+              ? 'Absence signalée'
+              : 'Caution perdue',
         body: banned
-          ? '3e absence — compte fermé. Caution perdue : 6,90 € Moment / 13,10 € hôte.'
+          ? `3e absence — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
           : lowerPriority
             ? '2e no-show invité — priorité baissée + mention sur le profil.'
-            : 'Absence après confirmation — caution perdue : 6,90 € pour Moment, 13,10 € pour l’hôte.',
+            : pending
+              ? `Absence après confirmation — ${lossText}`
+              : 'Absence après confirmation — caution perdue : 6,90 € pour Moment, 13,10 € pour l’hôte.',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
-      return { ok: true, strike, lowerPriority, banned };
+      return { ok: true, strike, lowerPriority, banned, pending };
     },
     [
       state.currentUser,
@@ -7203,6 +7335,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       markGuestPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
+      contestNoShow,
       demoMarkConfirmedPresent,
       getPresenceChecklist,
       markGuestsPresentAndRate,
@@ -7314,6 +7447,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       markGuestPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
+      contestNoShow,
       demoMarkConfirmedPresent,
       getPresenceChecklist,
       markGuestsPresentAndRate,

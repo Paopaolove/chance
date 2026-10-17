@@ -44,7 +44,9 @@ export type DepositStatusLite =
   | 'held'
   | 'returned'
   | 'forfeited'
-  | 'returned_discomfort_leave';
+  | 'returned_discomfort_leave'
+  | 'noshow_pending'
+  | 'contested';
 
 /**
  * Guest cancel on a confirmed seat — deposit outcome.
@@ -58,7 +60,12 @@ export function resolveGuestCancelDeposit(opts: {
   currentDeposit?: DepositStatusLite;
 }): DepositStatusLite {
   // Départ malaise : caution déjà rendue, jamais de nouvelle perte.
-  if (opts.currentDeposit === 'returned_discomfort_leave') {
+  // « Pas venu » en délai de 24 h ou contesté : réglé par la contestation seulement.
+  if (
+    opts.currentDeposit === 'returned_discomfort_leave' ||
+    opts.currentDeposit === 'noshow_pending' ||
+    opts.currentDeposit === 'contested'
+  ) {
     return opts.currentDeposit;
   }
   if (opts.by === 'host') {

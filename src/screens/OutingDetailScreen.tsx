@@ -54,6 +54,7 @@ import { makeVenueKey } from '../utils/venue';
 import {
   canGuestLeaveTable,
   DISCOMFORT_REASON_LABEL,
+  hostDepositStatus,
   hostLeaveView,
   projectRequestForHost,
   isDepositReturnedForGuest,
@@ -62,6 +63,7 @@ import {
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 import { CheckNote } from '../components/CheckNote';
+import { NoShowContestCard } from '../components/NoShowContestCard';
 import { useFirstMomentGate } from '../components/FirstMomentSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -864,7 +866,12 @@ export function OutingDetailScreen() {
                 ) : null}
                 {!partner && r.attendance === 'absent' ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                    {r.userName} · absence · caution perdue
+                    {/* Délai de 24 h ou contestation : même mention (projection hôte). */}
+                    {hostDepositStatus(r) === 'noshow_pending'
+                      ? `${r.userName} · absence signalée · caution en attente`
+                      : hostDepositStatus(r) === 'returned'
+                        ? `${r.userName} · absence signalée · caution rendue`
+                        : `${r.userName} · absence · caution perdue`}
                   </Text>
                 ) : null}
                 {!partner && hostReturnedDepositLine(r, outing) ? (
@@ -893,11 +900,14 @@ export function OutingDetailScreen() {
                             : res.lowerPriority
                               ? 'Priorité baissée'
                               : 'Absence signalée',
-                          res.banned
-                            ? '3e absence — compte fermé. Caution perdue : 6,90 € Moment / 13,10 € hôte.'
+                          (res.banned
+                            ? '3e absence — compte fermé. '
                             : res.lowerPriority
-                              ? '2e absence — priorité baissée + mention profil.'
-                              : 'Caution perdue : 6,90 € Moment / 13,10 € hôte.',
+                              ? '2e absence — priorité baissée + mention profil. '
+                              : '') +
+                            (res.pending
+                              ? 'Caution en attente 24 h, puis perdue sans suite : 6,90 € Moment / 13,10 € hôte.'
+                              : 'Caution perdue : 6,90 € Moment / 13,10 € hôte.'),
                         );
                       } else {
                         Alert.alert('Impossible', refusalLabel(res.reason));
@@ -1117,6 +1127,10 @@ export function OutingDetailScreen() {
                 <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
                   Caution remboursée (mock).
                 </CheckNote>
+              ) : 'id' in myRequest &&
+                (getRequestById(myRequest.id)?.depositStatus === 'noshow_pending' ||
+                  getRequestById(myRequest.id)?.depositStatus === 'contested') ? (
+                <NoShowContestCard request={getRequestById(myRequest.id)!} />
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'forfeited' ? (
                 <Text style={styles.hint}>

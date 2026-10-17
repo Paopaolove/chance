@@ -18,7 +18,9 @@ export type DepositStatus =
   | 'held'
   | 'returned'
   | 'forfeited'
-  | 'returned_discomfort_leave';
+  | 'returned_discomfort_leave'
+  | 'noshow_pending'
+  | 'contested';
 
 export type DepositMutationResult =
   | { ok: true; status: DepositStatus }

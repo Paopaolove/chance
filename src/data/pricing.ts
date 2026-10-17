@@ -137,6 +137,10 @@ export const DEPOSIT_STATUS_LABELS = {
   forfeited: 'Caution perdue',
   /** Vue invité seulement (l’hôte voit la projection hostDepositStatus). */
   returned_discomfort_leave: 'Caution remboursée',
+  /** « Pas venu » de l’hôte : 24 h pour contester (vue hôte : en attente). */
+  noshow_pending: 'Caution en attente',
+  /** Vue invité seulement : contestation en revue. */
+  contested: 'Caution en attente de revue',
 } as const;
 
 export type DepositStatusKey = keyof typeof DEPOSIT_STATUS_LABELS;
@@ -158,6 +162,10 @@ export function describeDepositOutcome(
       return `Caution ${DEPOSIT_EUROS} € remboursée.`;
     case 'forfeited':
       return describeDepositForfeitMoment();
+    case 'noshow_pending':
+      return `« Pas venu » signalé par l’hôte. Caution ${DEPOSIT_EUROS} € en attente 24 h : tu peux contester avec une phrase ; sans contestation, elle est perdue (${describeDepositForfeitSplit()}).`;
+    case 'contested':
+      return `Contestation envoyée. Caution ${DEPOSIT_EUROS} € en attente de revue.`;
     case 'none':
     case undefined:
       return 'Aucune caution bloquée.';

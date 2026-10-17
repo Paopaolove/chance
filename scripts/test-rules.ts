@@ -1067,5 +1067,87 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const od=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
   ok((od.match(/hostReturnedDepositLine\(r, outing\)/g)||[]).length===2,'static: screen passes the outing (H+6 / host no-show gate)');
 }
+
+// contestation d’un « Pas venu » de l’hôte : 24 h, phrase obligatoire, revue (Paolo 17/10, 15 h 44 — délai 24 h)
+{
+  const NC=require('../src/utils/noShowContest');
+  const DH=require('../src/utils/depositH6');
+  const LT=require('../src/utils/leaveTable');
+  const MIN=60e3, T=now-2*H; // début ; « Pas venu » déclaré à T+1 h
+  const NSAT=T+H, DL=NSAT+24*H;
+  ok(NC.NOSHOW_CONTEST_WINDOW_MS===24*H,'contest: named constant = 24 h');
+  const g2=rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'});
+  const st=(ox:any={},rx:any={})=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed',...ox})],requests:[rq({status:'confirmed',depositStatus:'held',...rx}),g2]});
+  const NS=(s0:any,by:any='h1',at=NSAT)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(at),reportedByUserId:by}});
+  const CT=(s0:any,at:number,note='J’étais à la table, l’hôte est parti tôt.',user=me)=>D({...s0,currentUser:user},{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note,at:iso(at)}});
+  const EXP=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(at)}});
+  const CONF=(s0:any)=>D(s0,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(DL+H)}});
+  const ACC=(s0:any)=>D(s0,{type:'ACCEPT_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(DL+H)}});
+  const R6=(s0:any,at:number)=>D(s0,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(at)}});
+  const p0=NS(st());
+  const r0=p0.requests[0];
+  ok(r0.attendance==='absent'&&r0.depositStatus==='noshow_pending'&&r0.noShowReportedAt===iso(NSAT),'host « Pas venu »: deposit pending 24 h (neither lost nor returned)');
+  ok(NS(st(),'u1').requests[0].depositStatus==='forfeited','self-declared absence: no contest, lost (unchanged)');
+  ok(NS(st()).guestNoShowStrikes.u1===1,'host « Pas venu »: strike recorded as today');
+  // H+6 : jamais pendant les 24 h ni pendant la revue (même si les 24 h dépassent H+6)
+  ok(DL>T+6*H,'setup: 24 h window extends past H+6');
+  const r6=R6(p0,T+6*H+MIN);
+  ok(r6.requests[0].depositStatus==='noshow_pending'&&r6.requests[1].depositStatus==='returned','H+6: no effect during the 24 h (other silent guest returned)');
+  ok(!DH.shouldReturnDepositH6(p0.outings[0],p0.requests[0],T+6*H+MIN),'H+6 helper: excludes « Pas venu » guest');
+  const c0=CT(p0,DL-MIN);
+  ok(R6(c0,T+20*H).requests[0].depositStatus==='contested','H+6: no effect during review');
+  ok(D(c0,{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}}).requests[0].depositStatus==='contested'&&D(p0,{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}}).requests[0].depositStatus==='noshow_pending','bulk return does not settle pending / contested');
+  // perte à 24 h, pas à 24 h − 1 min
+  ok(EXP(p0,DL-MIN).requests[0].depositStatus==='noshow_pending','no loss at 24 h − 1 min (expiry refused before time)');
+  const e24=EXP(p0,DL);
+  ok(e24.requests[0].depositStatus==='forfeited','uncontested at 24 h: lost');
+  ok(PR.DEPOSIT_FORFEIT_CHANCE_EUROS===6.9&&PR.DEPOSIT_FORFEIT_HOST_EUROS===13.1,'loss split unchanged 6,90 / 13,10');
+  ok(JSON.stringify(EXP(e24,DL+H))===JSON.stringify(e24),'expiry idempotent');
+  ok(JSON.stringify(NC.requestsDueForContestExpiry(p0.requests,DL))==='["r1"]'&&NC.requestsDueForContestExpiry(p0.requests,DL-MIN).length===0,'timer helper: due at 24 h only');
+  // contestation acceptée à 24 h − 1 min, refusée à 24 h
+  ok(c0.requests[0].depositStatus==='contested'&&c0.requests[0].noShowContest.note.length>0,'contest accepted at 24 h − 1 min → under review');
+  ok(CT(p0,DL).requests[0].depositStatus==='noshow_pending','contest refused at 24 h');
+  ok(EXP(c0,DL).requests[0].depositStatus==='contested','contested: no loss at 24 h');
+  // phrase obligatoire, invité concerné seulement
+  ok(CT(p0,NSAT+H,'   ').requests[0].depositStatus==='noshow_pending'&&CT(p0,NSAT+H,'').requests[0].depositStatus==='noshow_pending','contest: sentence required');
+  ok(CT(p0,NSAT+H,'x',host).requests[0].depositStatus==='noshow_pending'&&CT(p0,NSAT+H,'x',{id:'u2',firstName:'Bea'}).requests[0].depositStatus==='noshow_pending','contest: only the guest concerned');
+  ok(NC.contestRefusal(p0.requests[0],'u1','',NSAT)==='note_required'&&NC.contestRefusal(p0.requests[0],'u1','ok',DL)==='too_late'&&NC.contestRefusal(p0.requests[0],'u2','ok',NSAT)==='not_guest','contest refusal reasons');
+  ok(JSON.stringify(CT(c0,DL-MIN,'encore'))===JSON.stringify(c0),'contest only once');
+  // revue
+  const conf=CONF(c0), acc=ACC(c0);
+  ok(conf.requests[0].depositStatus==='forfeited'&&conf.requests[0].noShowContest.outcome==='noshow_confirmed','review « Pas venu confirmé » → lost (usual split)');
+  ok(acc.requests[0].depositStatus==='returned'&&acc.requests[0].noShowContest.outcome==='contest_accepted','review « contestation acceptée » → returned');
+  ok(CONF(p0).requests[0].depositStatus==='noshow_pending'&&ACC(p0).requests[0].depositStatus==='noshow_pending'&&ACC(e24).requests[0].depositStatus==='forfeited','review actions only on a contested deposit');
+  ok(JSON.stringify(ACC(acc))===JSON.stringify(acc)&&JSON.stringify(CONF(acc))===JSON.stringify(acc),'review: decided once');
+  // invisible pour l’hôte : même projection pendant le délai et la revue, aucune trace de la contestation
+  const hv=(x:any)=>JSON.stringify(LT.projectRequestForHost(x.requests[0]));
+  ok(LT.hostDepositStatus(p0.requests[0])==='noshow_pending'&&LT.hostDepositStatus(c0.requests[0])==='noshow_pending','host: same view during 24 h and review');
+  ok(!/contest|J’étais|noShowContest/.test(hv(c0)),'host projection: no contest field / sentence');
+  ok(hv(p0)===hv(c0),'host view identical contested / not contested');
+  // hors périmètre : départ sans motif, malaise, partenaire
+  const pst=NS(st({isPartnerListing:true}));
+  ok(pst.requests[0].depositStatus==='forfeited'&&CT(pst,NSAT+MIN).requests[0].depositStatus==='forfeited','partner « Pas venu »: unchanged (no contest)');
+  {
+    const sl=S({currentUser:me,outings:[o({startsAt:iso(now-10*MIN),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+    const L=(s0:any,reason?:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lvc'}});
+    const a=L(sl), b=L(sl,'discomfort');
+    ok(CT(a,now+MIN).requests[0].depositStatus==='forfeited'&&!CT(a,now+MIN).requests[0].noShowContest,'leave without reason: no contest');
+    ok(CT(b,now+MIN).requests[0].depositStatus==='returned_discomfort_leave','malaise: no contest');
+  }
+  // pendant le délai : pas de départ, d’annulation, de présence ni d’imprévu qui règle la caution
+  ok(D({...p0,currentUser:me},{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(NSAT+MIN),reportId:'z'}}).requests[0].depositStatus==='noshow_pending','pending: leave table does not settle');
+  ok(D(p0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(NSAT+MIN)}}).requests[0].depositStatus==='noshow_pending','pending: presence does not settle');
+  const JE=require('../src/utils/jokerExemption');
+  ok(JE.resolveGuestCancelDeposit({by:'guest',freeWindow:false,jokerExempted:false,currentDeposit:'noshow_pending'})==='noshow_pending'&&JE.resolveGuestCancelDeposit({by:'host',freeWindow:true,jokerExempted:false,currentDeposit:'contested'})==='contested','pending / contested: cancellation does not settle');
+  // statique : minuterie locale, encart invité, mention hôte
+  const fs=require('node:fs'), path=require('node:path');
+  const rd=(f:string)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8');
+  const ctx=rd('data/ChanceContext.tsx'), od=rd('screens/OutingDetailScreen.tsx'), card=rd('components/NoShowContestCard.tsx');
+  ok(/requestsDueForContestExpiry\(state\.requests, now\)[\s\S]{0,300}EXPIRE_NO_SHOW_CONTEST[\s\S]{0,300}setInterval\(tick, 60_000\)[\s\S]{0,200}'active'/.test(ctx),'static: local 24 h timer (interval + foreground)');
+  ok(/reportedByUserId: user\.id/.test(ctx),'static: reportGuestNoShow passes the author');
+  ok(od.includes('<NoShowContestCard')&&card.includes('title="Contester"')&&card.includes('variant="secondary"')&&card.includes('contestTimeLeftLabel')&&!/shadow|elevation/i.test(card),'static: guest « Contester » card, time left, secondary button, no shadow');
+  ok(od.includes('absence signalée · caution en attente'),'static: host sees « caution en attente »');
+  ok(NC.contestTimeLeftLabel(p0.requests[0],NSAT+60*MIN+30e3)==='23 h 00'&&NC.contestTimeLeftLabel(p0.requests[0],DL-12*MIN)==='12 min','time-left label');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

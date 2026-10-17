@@ -179,7 +179,13 @@ export function hostLeaveView(r: {
 }
 
 /** Statut caution tel que l’hôte le voit (avant projection). */
-export type HostVisibleDepositStatus = 'none' | 'held' | 'returned' | 'forfeited';
+export type HostVisibleDepositStatus =
+  | 'none'
+  | 'held'
+  | 'returned'
+  | 'forfeited'
+  /** « Pas venu » en attente (délai de 24 h ou revue) : l’hôte ne voit pas la contestation. */
+  | 'noshow_pending';
 
 /**
  * Projection hôte du statut caution : le départ malaise (interne
@@ -193,6 +199,10 @@ export function hostDepositStatus(r: {
   switch (r.depositStatus) {
     case 'returned_discomfort_leave':
       return r.leftTableEarly ? 'forfeited' : 'returned';
+    // Délai de 24 h et contestation : même rendu pour l’hôte.
+    case 'noshow_pending':
+    case 'contested':
+      return 'noshow_pending';
     case 'none':
     case 'held':
     case 'returned':
@@ -209,9 +219,16 @@ export function hostDepositStatus(r: {
  * qui distingue un départ malaise d’un départ sans motif.
  */
 export function projectRequestForHost<
-  T extends { depositStatus?: string; leftTableEarly?: boolean },
->(r: T): Omit<T, 'depositStatus'> & { depositStatus?: HostVisibleDepositStatus } {
-  return { ...r, depositStatus: hostDepositStatus(r) };
+  T extends { depositStatus?: string; leftTableEarly?: boolean; noShowContest?: unknown },
+>(
+  r: T,
+): Omit<T, 'depositStatus' | 'noShowContest'> & { depositStatus?: HostVisibleDepositStatus } {
+  // La contestation (phrase, date, issue) n’est jamais transmise à l’hôte.
+  const { noShowContest: _contest, ...rest } = r;
+  return { ...rest, depositStatus: hostDepositStatus(r) } as Omit<
+    T,
+    'depositStatus' | 'noShowContest'
+  > & { depositStatus?: HostVisibleDepositStatus };
 }
 
 /** Caution rendue (y compris départ malaise) — vue invité. */

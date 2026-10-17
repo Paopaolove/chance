@@ -373,6 +373,15 @@ export interface Request {
   attendance?: 'present' | 'absent';
   /** Cause d’un rendu de caution quand elle a un libellé propre (« h6 » : rendue d’office à H+6). */
   depositReturnCause?: 'h6';
+  /** ISO UTC — « Pas venu » déclaré par l’hôte (départ du délai de contestation de 24 h). */
+  noShowReportedAt?: string;
+  /** Contestation de l’invité (interne, jamais projetée vers l’hôte). */
+  noShowContest?: {
+    note: string;
+    contestedAt: string;
+    outcome?: 'noshow_confirmed' | 'contest_accepted';
+    resolvedAt?: string;
+  };
   /** ISO UTC — « Je quitte la table » (invité, pendant le moment). */
   leftTableAt?: string;
   /** Départ avant H+30, avec ou sans motif (même indicateur côté hôte). Le motif n’est jamais stocké ici. */
@@ -476,7 +485,11 @@ export type RequestDepositStatus =
   | 'held'
   | 'returned'
   | 'forfeited'
-  | 'returned_discomfort_leave';
+  | 'returned_discomfort_leave'
+  /** « Pas venu » déclaré par l’hôte : délai de 24 h pour contester (ni perdue ni rendue). Interne. */
+  | 'noshow_pending'
+  /** Contestation envoyée : en attente de revue Moment. Interne (l’hôte voit noshow_pending). */
+  | 'contested';
 
 export interface ImprevuReport {
   id: string;
@@ -878,6 +891,14 @@ export type AppAction =
    * returned. Idempotent. Cannot override absent. ≠ COMPLETE_OUTING / CLOSE.
    */
   | { type: 'MARK_GUEST_PRESENT'; payload: { requestId: string; markedAt: string } }
+  /** Invité : contester un « Pas venu » de l’hôte (phrase obligatoire, avant 24 h). */
+  | { type: 'CONTEST_NO_SHOW'; payload: { requestId: string; note: string; at: string } }
+  /** Sans contestation à 24 h : caution perdue. Refusée avant l’échéance. */
+  | { type: 'EXPIRE_NO_SHOW_CONTEST'; payload: { requestId: string; at: string } }
+  /** Revue : « Pas venu confirmé » → caution perdue (6,90 / 13,10). */
+  | { type: 'CONFIRM_NO_SHOW_AFTER_REVIEW'; payload: { requestId: string; at: string } }
+  /** Revue : « contestation acceptée » → caution rendue. */
+  | { type: 'ACCEPT_NO_SHOW_CONTEST'; payload: { requestId: string; at: string } }
   /** Table normale : à partir de H+6, cautions encore bloquées (non « Pas venu ») rendues. */
   | { type: 'RETURN_DEPOSITS_H6'; payload: { outingId: string; at: string } }
   /** Profil : invités cochés par l’hôte, marqués présents en une fois (tout ou rien). */
@@ -937,6 +958,8 @@ export type AppAction =
         banned?: boolean;
         /** Instant of the report — must be ≥ H. */
         reportedAt: string;
+        /** Auteur : l’hôte d’une table normale ouvre la contestation de 24 h. */
+        reportedByUserId?: string;
       };
     }
   | {
