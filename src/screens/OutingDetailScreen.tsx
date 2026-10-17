@@ -37,7 +37,7 @@ import {
 } from '../utils/partners';
 import { imprevuMotiveLabel } from '../utils/imprevu';
 import { formatOutingWhen } from '../utils/format';
-import { isStartsAtPast } from '../utils/parisTime';
+import { isStartsAtPast, isStartsAtReached } from '../utils/parisTime';
 import {
   isOutingAcceptingRequests,
   isPresenceWindowOpen,
@@ -715,9 +715,10 @@ export function OutingDetailScreen() {
                     : null}
             </Text>
           )}
-          {outing.status !== 'completed' &&
+          {isHost &&
+          outing.status !== 'completed' &&
           outing.status !== 'cancelled' &&
-          isStartsAtPast(outing.startsAt) ? (
+          isStartsAtReached(outing.startsAt) ? (
             <Button
               title="Marquer comme terminée"
               variant="secondary"

@@ -36,7 +36,7 @@ ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+3*H),b
 ok(D(s,{type:'CANCEL_OUTING',payload:{outingId:'o1'}}).requests[0].depositStatus==='returned','host cancel returns');
 ok(PR.DEPOSIT_FORFEIT_CHANCE_EUROS+PR.DEPOSIT_FORFEIT_HOST_EUROS===20,'split 6.90+13.10');
 // complete + present + photos
-let c=D(s,{type:'COMPLETE_OUTING',payload:{outingId:'o1'}}); ok(c.requests[0].attendance===undefined,'complete ≠ present');
+let c=D(s,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(now+5*H+30*60e3)}}); ok(c.requests[0].attendance===undefined,'complete ≠ present');
 ok(MP.momentParticipants(c.outings[0],c.requests).length===0,'no participants without presence');
 ok(D(c,{type:'ADD_MOMENT_PHOTO',payload:{id:'p0',outingId:'o1',uploaderId:'zz',uri:'x',createdAt:iso(now),consents:{}}}).momentPhotos.length===0,'non-participant photo (reducer)');
 c=D(c,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now+5*H)}}); ok(c.requests[0].depositStatus==='returned','present returns');
@@ -105,7 +105,7 @@ const feb=parseFreeDate('29/02',Date.parse('2028-03-01T10:00:00Z')); ok(!feb.ok&
   ok(s1.requests[0].attendance!=='present'&&s1.requests[0].depositStatus==='held','presence before H−15 refused');
   const s2=D(s0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now+50*60e3)}});
   ok(s2.requests[0].attendance==='present'&&s2.requests[0].depositStatus==='held','presence from H−15 ok (caution retenue jusqu’à H+30)');
-  ok(D(s2,{type:'COMPLETE_OUTING',payload:{outingId:'o1'}}).requests[0].depositStatus==='returned','present: returned at end (H+30)');
+  ok(D(s2,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(now+90*60e3)}}).requests[0].depositStatus==='returned','present: returned at end (H+30)');
   ok(D(s0,{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now+90*60e3)}}).requests[0].depositStatus==='returned','presence marked at H+30 returns now');
 }
 {
@@ -227,7 +227,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const p=D(base(10*60e3),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
   ok(p.requests[0].attendance==='present'&&p.requests[0].depositStatus==='held','imprévu guest marked present H−10: held');
   const pa=auto(p); ok(pa.requests[0].depositStatus==='held'&&pa.imprevuReports[0].status==='auto_refused','auto-refuse at H does not forfeit a present guest');
-  ok(D(pa,{type:'COMPLETE_OUTING',payload:{outingId:'o1'}}).requests[0].depositStatus==='returned','present imprévu guest: returned at H+30/clôture');
+  ok(D(pa,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(now+40*60e3)}}).requests[0].depositStatus==='returned','present imprévu guest: returned at H+30/clôture');
   const pr=D(p,{type:'RESPOND_IMPREVU',payload:{imprevuId:'i1',decision:'refused',respondedAt:iso(now),respondedByUserId:'h1',forfeitReporterDeposit:true}});
   ok(pr.requests[0].depositStatus==='held','manual refuse does not forfeit a present guest');
   ok(auto(base(10*60e3)).requests[0].depositStatus==='forfeited','auto-refuse still forfeits a non-present guest');
@@ -241,7 +241,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const left=D(S({outings:[o({startsAt:iso(now-40*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reportId:'z'}});
   const nl=ns(left); ok(nl.requests[0].attendance===undefined&&nl.requests[0].depositStatus==='returned'&&!(nl.guestNoShowStrikes.u1),'no-show refused (reducer) for guest who left');
   // clôture (COMPLETE_OUTING) avant H+30 : présent → rendue, départ ensuite refusé
-  const early=D(D(S({outings:[o({startsAt:iso(now-10*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}}),{type:'COMPLETE_OUTING',payload:{outingId:'o1'}});
+  const early={...D({...D(S({outings:[o({startsAt:iso(now-10*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}}),currentUser:host},{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'host',at:iso(now)}}),currentUser:me};
   ok(early.requests[0].depositStatus==='returned'&&D(early,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reportId:'z'}}).requests[0].leftTableAt===undefined,'clôture before H+30: present returned, leave refused');
 }
 
@@ -257,6 +257,34 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(a.momentPaidHostLines.length===0&&b.momentPaidHostLines.length===0,'returned deposit: no Moment-paid line (both)');
   ok(hostSees(a)===hostSees(b)&&a.requests[0].depositStatus==='returned','returned deposit: host view identical, stays returned');
   ok(!b.confidentialLeaveReports[0].guestDepositRefundedEuros,'returned deposit: no double refund');
+}
+
+// clôture (17/10) : seul l’hôte, à partir de H ; auto à H+30 intacte
+{
+  const start=now+60*60e3;
+  const base=(user:any)=>S({currentUser:user,outings:[o({startsAt:iso(start),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  const C=(s0:any,at:number,by?:any)=>D(s0,{type:'COMPLETE_OUTING',payload:{outingId:'o1',at:iso(at),by}});
+  ok(C(base(me),start+60*60e3).outings[0].status==='closed','non-host cannot complete (even after H)');
+  ok(C(base(me),start,'host').outings[0].status==='closed','non-host by:host refused');
+  ok(C(base(host),start-1).outings[0].status==='closed','host refused at H−1 ms');
+  ok(C(base(host),start).outings[0].status==='completed','host accepted exactly at H');
+  ok(D(base(host),{type:'COMPLETE_OUTING',payload:{outingId:'o1'}}).outings[0].status==='closed','host refused before H (default now)');
+  // auto H+30 : marche pour tout utilisateur courant, refusée avant
+  ok(C(base(me),start+30*60e3,'auto').outings[0].status==='completed','auto completion at H+30 (guest device)');
+  ok(C(base(null),start+31*60e3,'auto').outings[0].status==='completed','auto completion after H+30 (no user)');
+  ok(C(base(me),start+30*60e3-1,'auto').outings[0].status==='closed','auto refused before H+30');
+  const auto=C(base(me),start+30*60e3,'auto');
+  ok(auto.requests[0].depositStatus==='held','auto: unmarked confirmed keeps held (silence rule unchanged)');
+  {
+    const p=D(base(me),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(start)}});
+    ok(C(p,start+30*60e3,'auto').requests[0].depositStatus==='returned','auto H+30: present guest returned');
+  }
+  // invité : peut encore partir entre H et la clôture, plus après
+  const L=(s0:any,at:number,reason?:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(at),reason,reportId:'c'}});
+  ok(!!L(base(me),start+10*60e3).requests[0].leftTableAt&&L(base(me),start+10*60e3).requests[0].depositStatus==='forfeited','guest can leave between H and closure');
+  ok(L(base(me),start+10*60e3,'discomfort').confidentialLeaveReports.length===1,'guest can leave with discomfort between H and closure');
+  const closed={...C(base(host),start+10*60e3),currentUser:me};
+  ok(closed.outings[0].status==='completed'&&L(closed,start+15*60e3).requests[0].leftTableAt===undefined,'no leave after host closure');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

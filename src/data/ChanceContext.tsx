@@ -55,6 +55,7 @@ import {
 import {
   isParisSameDay,
   isStartsAtPast,
+  isStartsAtReached,
   parisMonthKey,
   parisYmd,
 } from '../utils/parisTime';
@@ -1301,6 +1302,27 @@ function reducer(state: AppState, action: AppAction): AppState {
         target.status === 'cancelled'
       ) {
         return state;
+      }
+      // Clôture : seul l’hôte, à partir de H ; ou auto à partir de H+30.
+      {
+        const atMs = action.payload.at
+          ? new Date(action.payload.at).getTime()
+          : Date.now();
+        if (!Number.isFinite(atMs)) return state;
+        if (action.payload.by === 'auto') {
+          const startMs = new Date(target.startsAt).getTime();
+          if (
+            !Number.isFinite(startMs) ||
+            atMs < startMs + OUTING_AUTO_COMPLETE_AFTER_MS
+          ) {
+            return state;
+          }
+        } else {
+          if (!state.currentUser || state.currentUser.id !== target.hostId) {
+            return state;
+          }
+          if (!isStartsAtReached(target.startsAt, atMs)) return state;
+        }
       }
       const acceptedCount = state.requests.filter(
         (r) =>
@@ -4454,7 +4476,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         ) {
           continue;
         }
-        dispatch({ type: 'COMPLETE_OUTING', payload: { outingId: outing.id } });
+        dispatch({
+          type: 'COMPLETE_OUTING',
+          payload: {
+            outingId: outing.id,
+            by: 'auto',
+            at: new Date(now).toISOString(),
+          },
+        });
       }
     };
     tick();
@@ -4504,8 +4533,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     ) {
       return;
     }
+    // Seul l’hôte, à partir de H (même garde que le reducer).
+    const nowMs = Date.now();
+    if (
+      !state.currentUser ||
+      state.currentUser.id !== outing.hostId ||
+      !isStartsAtReached(outing.startsAt, nowMs)
+    ) {
+      return;
+    }
     // terminée only — does not mark confirmés present (use markGuestPresent).
-    dispatch({ type: 'COMPLETE_OUTING', payload: { outingId } });
+    dispatch({
+      type: 'COMPLETE_OUTING',
+      payload: { outingId, by: 'host', at: new Date(nowMs).toISOString() },
+    });
     const title = outing.title;
     const toast: AppToast = {
       id: uid('toast'),
@@ -4526,7 +4567,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       });
       if (!push.pushOk) Alert.alert(toast.title, toast.body);
     })();
-  }, [state.outings]);
+  }, [state.outings, state.currentUser]);
 
   const getDisplayName = useCallback(
     (userId: string) => {

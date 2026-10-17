@@ -760,7 +760,19 @@ export type AppAction =
    * already marked present. Does NOT set attendance (Confirmé ≠ présent).
    * Deposit return for present guests happens in MARK_GUEST_PRESENT.
    */
-  | { type: 'COMPLETE_OUTING'; payload: { outingId: string } }
+  | {
+      type: 'COMPLETE_OUTING';
+      payload: {
+        outingId: string;
+        /**
+         * host (défaut) : seul l’hôte (currentUser), à partir de H.
+         * auto : clôture automatique, seulement à partir de H+30.
+         */
+        by?: 'host' | 'auto';
+        /** ISO UTC de la clôture (défaut : maintenant). */
+        at?: string;
+      };
+    }
   /**
    * Explicit presence (host / check-in). Confirmé → present + held deposit
    * returned. Idempotent. Cannot override absent. ≠ COMPLETE_OUTING / CLOSE.
