@@ -1,3 +1,4 @@
+import { isAtOrAfterH6, isNoShowWindowOpen } from '../utils/depositH6';
 import {
   DISCOMFORT_REPORT_PROMPT_TEXT,
   discomfortReportPromptAction,
@@ -866,10 +867,21 @@ export function OutingDetailScreen() {
                   </Text>
                 ) : null}
                 {!partner &&
+                !r.attendance &&
+                !r.leftTableAt &&
+                r.depositStatus === 'returned' &&
+                isAtOrAfterH6(outing) ? (
+                  <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                    {r.userName} · caution rendue 6 h après le début
+                  </Text>
+                ) : null}
+                {!partner &&
                 outing.status !== 'cancelled' &&
                 !r.attendance &&
                 !r.leftTableAt &&
-                isStartsAtPast(outing.startsAt) ? (
+                isStartsAtPast(outing.startsAt) &&
+                // Plus de « Pas venu » à partir de H+6 (caution rendue d’office).
+                isNoShowWindowOpen(outing) ? (
                   <Button
                     title={`Signaler absence de ${r.userName}`}
                     variant="ghost"

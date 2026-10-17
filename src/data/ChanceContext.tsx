@@ -120,6 +120,12 @@ import {
   presenceReturnsDepositNow,
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
+import {
+  h6AtIso,
+  isNoShowWindowOpen,
+  outingsDueForH6,
+  shouldReturnDepositH6,
+} from '../utils/depositH6';
 import { presenceChecklist, validatePresenceSelection } from '../utils/markPresent';
 import { reviewEligibility } from '../utils/reviewEligibility';
 import { isDemoEnabled } from '../utils/devMode';
@@ -1068,10 +1074,17 @@ function reducer(state: AppState, action: AppAction): AppState {
         }
         // Host reporter: acceptation ≠ annuler le groupe — hôte utilise cancelOuting.
       } else {
+        // Table normale : imprévu traité à partir de H+6 → pas de perte
+        // (caution rendue d’office à H+6).
+        const imprevuOuting = state.outings.find((o) => o.id === report.outingId);
+        const forfeitAllowed =
+          forfeitReporterDeposit &&
+          (!imprevuOuting ||
+            isNoShowWindowOpen(imprevuOuting, new Date(respondedAt).getTime()));
         requests = state.requests.map((r) => {
           if (r.outingId !== report.outingId) return r;
           if (
-            forfeitReporterDeposit &&
+            forfeitAllowed &&
             r.userId === report.reporterId &&
             r.status === 'confirmed' &&
             // Présent (H−15 → H) : pas de perte à H ; règle de présence / départ.
@@ -1838,6 +1851,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
+      // Table normale : plus de « Pas venu » à partir de H+6 (caution rendue d’office).
+      if (!isNoShowWindowOpen(outingNoShow, new Date(reportedAt).getTime())) {
+        return state;
+      }
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -2210,6 +2227,26 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'RETURN_DEPOSITS_H6': {
+      // Table normale : rien de renseigné et pas de « Pas venu » avant H+6 →
+      // caution rendue d’office. Refusé avant H+6 ; idempotent.
+      const { outingId, at } = action.payload;
+      const outingH6 = state.outings.find((o) => o.id === outingId);
+      const atMs = new Date(at).getTime();
+      if (!outingH6 || !Number.isFinite(atMs)) return state;
+      const due = state.requests.filter(
+        (r) => r.outingId === outingId && shouldReturnDepositH6(outingH6, r, atMs),
+      );
+      if (!due.length) return state;
+      const ids = new Set(due.map((r) => r.id));
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          ids.has(r.id) ? { ...r, depositStatus: 'returned' as const } : r,
+        ),
+      };
+    }
+
     case 'RETURN_DEPOSIT_SILENCE': {
       const { requestId } = action.payload;
       return {
@@ -2548,6 +2585,10 @@ interface ChanceContextValue {
    * at = startsAt + H+30), hôte ou invité. true si la clôture est envoyée.
    */
   demoSimulateAutoComplete: (outingId: string) => boolean;
+  /** Démo QA (__DEV__) : envoie RETURN_DEPOSITS_H6 daté de H+6. Nombre de cautions rendues. */
+  demoSimulateDepositH6: (
+    outingId: string,
+  ) => { ok: true; returned: number } | { ok: false; reason: string };
   demoMarkConfirmedPresent: (outingId: string) =>
     | {
         ok: true;
@@ -4662,6 +4703,31 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   }, [state.outings]);
 
   /**
+   * Table normale — H+6 : caution encore bloquée d’un confirmé non « Pas venu »
+   * rendue d’office (minuterie locale, même modèle que le partenaire).
+   */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      for (const outingId of outingsDueForH6(state.outings, state.requests, now)) {
+        dispatch({
+          type: 'RETURN_DEPOSITS_H6',
+          payload: { outingId, at: new Date(now).toISOString() },
+        });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.outings, state.requests]);
+
+  /**
    * Partenaire — lendemain (Paris) : silence des deux → caution rendue.
    * On ne pénalise pas le silence du lieu ; pas de présence auto non plus.
    */
@@ -5052,6 +5118,24 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       return true;
     },
     [state.outings],
+  );
+
+  const demoSimulateDepositH6 = useCallback(
+    (outingId: string) => {
+      // Démo seulement (__DEV__) : inerte en production.
+      if (!isDemoEnabled()) return { ok: false as const, reason: 'demo_disabled' };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false as const, reason: 'outing_not_found' };
+      const at = h6AtIso(outing);
+      if (!at) return { ok: false as const, reason: 'invalid_start' };
+      const atMs = new Date(at).getTime();
+      const returned = state.requests.filter(
+        (r) => r.outingId === outingId && shouldReturnDepositH6(outing, r, atMs),
+      ).length;
+      dispatch({ type: 'RETURN_DEPOSITS_H6', payload: { outingId, at } });
+      return { ok: true as const, returned };
+    },
+    [state.outings, state.requests],
   );
 
   const demoMarkConfirmedPresent = useCallback(
@@ -6077,6 +6161,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // Not before H — UI hides the button, but the action must enforce it.
       if (!isStartsAtPast(outing.startsAt, new Date(reportedAt).getTime())) {
         return { ok: false, reason: 'too_early' };
+      }
+      // Table normale : à partir de H+6, plus de « Pas venu ».
+      if (!isNoShowWindowOpen(outing, new Date(reportedAt).getTime())) {
+        return { ok: false, reason: 'too_late' };
       }
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -7107,6 +7195,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       completeOuting,
       markGuestPresent,
       demoSimulateAutoComplete,
+      demoSimulateDepositH6,
       demoMarkConfirmedPresent,
       getPresenceChecklist,
       markGuestsPresentAndRate,
@@ -7217,6 +7306,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       completeOuting,
       markGuestPresent,
       demoSimulateAutoComplete,
+      demoSimulateDepositH6,
       demoMarkConfirmedPresent,
       getPresenceChecklist,
       markGuestsPresentAndRate,

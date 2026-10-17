@@ -426,7 +426,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const ctx=src('data/ChanceContext.tsx');
   const re=/const (simulate\w+|demo\w+|seed\w+|resetDemo) = useCallback\(/g; let m:any; const names:string[]=[]; const unguarded:string[]=[];
   while((m=re.exec(ctx))){ names.push(m[1]); const body=ctx.slice(m.index,m.index+400); if(!body.includes('if (!isDemoEnabled())')) unguarded.push(m[1]); }
-  ok(names.length===19&&names.includes('simulateOtherHideConsent'),'static: demo callbacks found ('+names.length+')');
+  ok(names.length===20&&names.includes('simulateOtherHideConsent')&&names.includes('demoSimulateDepositH6'),'static: demo callbacks found ('+names.length+')');
   for(const n of ['reviewPartnerApplication','setPartnerPinned']){ const i=ctx.indexOf('const '+n+' = useCallback('); ok(i>0&&ctx.slice(i,i+400).includes('if (!isDemoEnabled())'),'static: menu-only '+n+' guarded'); }
   ok(unguarded.length===0,'static: every demo callback guarded'+(unguarded.length?' — missing: '+unguarded.join(','):''));
   // appels hors menu démo
@@ -820,6 +820,106 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const hostRep=SUB(left,'c4','u2','racism','x',host);
   ok(JSON.stringify(hostView(hostRep))===JSON.stringify(hostView(left)),'host view unchanged by a report the host makes / other reports');
   ok(hostRep.requests.map(LT.projectRequestForHost).every((r:any)=>Object.keys(r).every((k)=>!/report|category|note|abus|review|moderation/i.test(k))),'projectRequestForHost: no report-related keys');
+}
+
+// caution H+6 (décision Paolo 17/10) : la caution évite le no-show, la note n’a aucun effet sur l’argent
+{
+  const DH=require('../src/utils/depositH6');
+  const MIN=60e3, T=now-10*H, H6=T+6*H; // début du moment, H+6
+  ok(DH.DEPOSIT_SILENCE_RETURN_AFTER_MS===6*H,'H+6: named constant = 6 h');
+  const st=(x:any={},ox:any={},more:any={})=>S({outings:[o({startsAt:iso(T),status:'closed',...ox})],requests:[rq({status:'confirmed',depositStatus:'held',...x})],...more});
+  const R6=(s0:any,at:number)=>D(s0,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(at)}});
+  const NS=(s0:any,at:number)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(at)}});
+  // invité silencieux : rendue à H+6, pas à H+6 − 1 min
+  ok(R6(st(),H6).requests[0].depositStatus==='returned','silent guest: returned at H+6');
+  ok(R6(st(),H6-MIN).requests[0].depositStatus==='held','H+6 action refused before time (H+6 − 1 min)');
+  ok(R6(st(),T+30*MIN).requests[0].depositStatus==='held','H+6 action refused at H+30');
+  ok(DH.shouldReturnDepositH6(o({startsAt:iso(T)}),rq({status:'confirmed',depositStatus:'held'}),H6)&&!DH.shouldReturnDepositH6(o({startsAt:iso(T)}),rq({status:'confirmed',depositStatus:'held'}),H6-MIN),'helper: due at H+6, not at H+6 − 1 min');
+  ok(JSON.stringify(DH.outingsDueForH6([o({startsAt:iso(T)})],[rq({status:'confirmed',depositStatus:'held'})],H6))==='["o1"]'&&DH.outingsDueForH6([o({startsAt:iso(T)})],[rq({status:'confirmed',depositStatus:'held'})],H6-MIN).length===0,'timer helper: outings due at H+6 only');
+  // idempotent
+  const once=R6(st(),H6), twice=R6(once,H6+H);
+  ok(twice===once||JSON.stringify(twice)===JSON.stringify(once),'H+6 action idempotent');
+  // non-confirmé / annulé : intact
+  ok(R6(st({status:'accepted'}),H6).requests[0].depositStatus==='held'&&R6(st({},{status:'cancelled'}),H6).requests[0].depositStatus==='held','H+6: only confirmed, not cancelled outings');
+  // « Pas venu » : accepté à H+6 − 1 min, refusé à H+6
+  const nsOk=NS(st(),H6-MIN);
+  ok(nsOk.requests[0].attendance==='absent'&&nsOk.requests[0].depositStatus==='forfeited','« Pas venu » accepted at H+6 − 1 min');
+  const nsKo=NS(st(),H6);
+  ok(nsKo.requests[0].attendance===undefined&&nsKo.requests[0].depositStatus==='held'&&!(nsKo.guestNoShowStrikes?.u1),'« Pas venu » refused at H+6 (reducer)');
+  ok(DH.isNoShowWindowOpen(o({startsAt:iso(T)}),H6-MIN)&&!DH.isNoShowWindowOpen(o({startsAt:iso(T)}),H6),'model: no-show window closes at H+6 (button hidden)');
+  // « Pas venu » avant H+6 → 6,90 / 13,10, pas défait à H+6
+  ok(PR.DEPOSIT_FORFEIT_CHANCE_EUROS===6.9&&PR.DEPOSIT_FORFEIT_HOST_EUROS===13.1,'« Pas venu » split 6,90 / 13,10');
+  const ns6=R6(nsOk,H6+MIN);
+  ok(ns6.requests[0].depositStatus==='forfeited'&&ns6.requests[0].attendance==='absent','« Pas venu » before H+6 not undone at H+6');
+  ok(NS(R6(st(),H6),H6+MIN).requests[0].depositStatus==='returned','returned at H+6 then « Pas venu » refused');
+  // présent : H+30 et clôture inchangés ; présence marquée après H+6 = sans effet sur la caution rendue
+  const pres=D(st({},{startsAt:iso(now+10*MIN)}),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
+  ok(pres.requests[0].attendance==='present'&&pres.requests[0].depositStatus==='held','present before H+30: held (unchanged)');
+  ok(D(pres,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(now+40*MIN)}}).requests[0].depositStatus==='returned','present: returned at closure / H+30 (unchanged)');
+  ok(D(st(),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}}).requests[0].depositStatus==='returned','present marked ≥ H+30: returned now (unchanged)');
+  const late=D(R6(st(),H6),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(H6+H)}});
+  ok(late.requests[0].attendance==='present'&&late.requests[0].depositStatus==='returned','presence marked after H+6 still possible, deposit stays returned');
+  // notes 1 à 5 : aucun effet sur la caution (invité et hôte)
+  {
+    const g2=rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'});
+    const c0=D(st({attendance:'present'},{},{requests:[rq({status:'confirmed',depositStatus:'held',attendance:'present'}),g2]}),{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(T+40*MIN)}});
+    const dep=(x:any)=>JSON.stringify(x.requests.map((r:any)=>[r.id,r.depositStatus,r.attendance]));
+    let same=true;
+    for(const rating of [1,2,3,4,5]){
+      const rv=(id:string,from:string,to:string)=>({id,outingId:'o1',fromUserId:from,toUserId:to,rating,venueRating:rating,venueKey:'k',createdAt:iso(T+2*H)});
+      const a=D({...c0,currentUser:me},{type:'ADD_REVIEW',payload:rv('rg'+rating,'u1','h1')});
+      const b=D({...a,currentUser:host},{type:'ADD_REVIEW',payload:rv('rh'+rating,'h1','u1')});
+      if(!(a.reviews.some((x:any)=>x.id==='rg'+rating)&&b.reviews.some((x:any)=>x.id==='rh'+rating))) same=false;
+      if(dep(a)!==dep(c0)||dep(b)!==dep(c0)) same=false;
+      if(dep(R6(b,H6))!==dep(R6(c0,H6))) same=false;
+    }
+    ok(same,'ratings 1–5 (guest and host): no effect on deposits, before or after H+6');
+    ok(R6(c0,H6).requests.find((r:any)=>r.id==='r2').depositStatus==='returned','silent guest beside present one: returned at H+6');
+  }
+  // partenaire : inchangé
+  {
+    const pst=st({},{isPartnerListing:true});
+    ok(P.isPartnerListing(pst.outings[0]),'partner fixture');
+    ok(R6(pst,H6+H).requests[0].depositStatus==='held','partner: H+6 action has no effect');
+    ok(DH.outingsDueForH6(pst.outings,pst.requests,H6+H).length===0&&DH.isNoShowWindowOpen(pst.outings[0],H6+H),'partner: no H+6 timer, no H+6 no-show bound');
+    ok(NS(pst,H6+MIN).requests[0].depositStatus==='forfeited','partner: « Pas venu » not bounded by H+6 (same-evening rule unchanged)');
+    ok(D(pst,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='returned','partner: next-day silence return unchanged');
+  }
+  // imprévu refusé après H+6 : pas de perte ; avant H+6 : inchangé
+  {
+    const imp={id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'pending',createdAt:iso(T-H)};
+    const b0=st({},{},{imprevuReports:[imp]});
+    const RI=(s0:any,decision:string,at:number)=>D(s0,{type:'RESPOND_IMPREVU',payload:{imprevuId:'i1',decision,respondedAt:iso(at),respondedByUserId:decision==='refused'?'h1':undefined,forfeitReporterDeposit:true}});
+    const r1=RI(b0,'refused',H6), r2=RI(b0,'auto_refused',H6+MIN);
+    ok(r1.imprevuReports[0].status==='refused'&&r1.requests[0].depositStatus==='held'&&R6(r1,H6).requests[0].depositStatus==='returned','imprévu refused at H+6: no loss, returned');
+    ok(r2.imprevuReports[0].status==='auto_refused'&&r2.requests[0].depositStatus!=='forfeited','imprévu auto-refused after H+6: no loss');
+    ok(RI(R6(b0,H6),'refused',H6+MIN).requests[0].depositStatus==='returned','imprévu refused after H+6 return: stays returned');
+    ok(RI(b0,'auto_refused',T).requests[0].depositStatus==='forfeited','imprévu auto-refused at H: forfeits (unchanged)');
+  }
+  // départ sans motif / malaise : inchangés, intacts à H+6
+  {
+    const sl=st({},{startsAt:iso(now-10*MIN)});
+    const L=(s0:any,reason?:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lvh6'}});
+    const a=L(sl), b=L(sl,'discomfort');
+    const at6=now-10*MIN+6*H;
+    ok(a.requests[0].depositStatus==='forfeited'&&R6(a,at6).requests[0].depositStatus==='forfeited','leave without reason < H+30: forfeited, untouched at H+6');
+    ok(b.requests[0].depositStatus==='returned_discomfort_leave'&&R6(b,at6).requests[0].depositStatus==='returned_discomfort_leave'&&b.momentPaidHostLines[0].amountEuros===13.1,'malaise: refunded, host 13,10 € by Moment, untouched at H+6');
+  }
+  // statique : bouton « Signaler absence » masqué à H+6 ; minuterie locale ; démo gardée et absente du menu prod
+  {
+    const fs=require('node:fs'), path=require('node:path');
+    const rd=(f:string)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8');
+    const od=rd('screens/OutingDetailScreen.tsx'), ctx=rd('data/ChanceContext.tsx'), dm=rd('components/DemoMenuModal.tsx');
+    const bi=od.indexOf('title={`Signaler absence de ${r.userName}`}');
+    ok(bi>0&&od.slice(bi-500,bi).includes('isNoShowWindowOpen(outing)'),'static: « Signaler absence » hidden from H+6');
+    ok(/type: 'RETURN_DEPOSITS_H6'[\s\S]{0,200}at: new Date\(now\)/.test(ctx)&&/outingsDueForH6\(state\.outings, state\.requests, now\)[\s\S]{0,600}setInterval\(tick, 60_000\)[\s\S]{0,200}'active'/.test(ctx),'static: local H+6 timer (interval + foreground)');
+    ok(/reason: 'too_late'/.test(ctx),'static: reportGuestNoShow returns too_late from H+6');
+    ok(dm.includes('title="Simuler H+6"')&&dm.includes('title="Simuler sortie terminée"'),'demo: « Simuler H+6 » added, « Simuler sortie terminée » kept');
+    (globalThis as any).__DEV__=false;
+    const DM2=require('../src/utils/devMode');
+    ok(DM2.isDemoEnabled()===false,'H+6 demo inert when __DEV__ false');
+    (globalThis as any).__DEV__=true;
+  }
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

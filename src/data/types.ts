@@ -876,6 +876,8 @@ export type AppAction =
    * returned. Idempotent. Cannot override absent. ≠ COMPLETE_OUTING / CLOSE.
    */
   | { type: 'MARK_GUEST_PRESENT'; payload: { requestId: string; markedAt: string } }
+  /** Table normale : à partir de H+6, cautions encore bloquées (non « Pas venu ») rendues. */
+  | { type: 'RETURN_DEPOSITS_H6'; payload: { outingId: string; at: string } }
   /** Profil : invités cochés par l’hôte, marqués présents en une fois (tout ou rien). */
   | {
       type: 'MARK_GUESTS_PRESENT';

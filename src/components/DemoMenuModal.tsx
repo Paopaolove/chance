@@ -43,6 +43,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     simulateOtherImprevu,
     reportVenueClosed,
     demoSimulateAutoComplete,
+    demoSimulateDepositH6,
     demoMarkConfirmedPresent,
     setDispoProfile,
     simulateLocalNotifications,
@@ -210,6 +211,30 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 Alert.alert(
                   'Tu es accepté !',
                   'Confirme ta place dans 10 min (voir Demandes).',
+                );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Simuler H+6"
+            variant="secondary"
+            disabled={busy || !firstConfirmedOuting}
+            onPress={() =>
+              run('H+6 simulé', () => {
+                if (!firstConfirmedOuting) {
+                  Alert.alert('Démo', 'Aucune sortie confirmée.');
+                  return;
+                }
+                // Caution des confirmés non « Pas venu » rendue d’office (table normale).
+                const res = demoSimulateDepositH6(firstConfirmedOuting.id);
+                Alert.alert(
+                  'H+6',
+                  !res.ok
+                    ? `Refusé (${res.reason}).`
+                    : res.returned > 0
+                      ? `${res.returned} caution${res.returned > 1 ? 's' : ''} rendue${res.returned > 1 ? 's' : ''}. « Pas venu » n’est plus possible.`
+                      : 'Aucune caution à rendre (présents, « Pas venu », partenaire ou déjà rendue).',
                 );
               })
             }
