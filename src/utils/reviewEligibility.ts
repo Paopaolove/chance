@@ -57,3 +57,43 @@ export function reviewEligibility(input: {
   }
   return { ok: true };
 }
+
+/**
+ * Liste « À noter » (getOutingsToRate, rappels, notification « Noter le moment ») :
+ * mêmes droits que reviewEligibility. Hôte : invités présents d’un moment terminé
+ * (inchangé). Invité : l’hôte, si reviewEligibility l’autorise — y compris
+ * contestation acceptée sur une table restée « closed » (L79).
+ */
+export function listOutingsToRate<O extends Outing>(input: {
+  userId: string | null | undefined;
+  outings: O[];
+  requests: Request[];
+  reviews: Pick<Review, 'outingId' | 'fromUserId' | 'toUserId'>[];
+}): { outing: O; toUserId: string; toUserName: string; requestId?: string }[] {
+  const { userId, outings, requests, reviews } = input;
+  if (!userId) return [];
+  const items: { outing: O; toUserId: string; toUserName: string; requestId?: string }[] = [];
+  const eligible = (outing: O, toUserId: string) =>
+    reviewEligibility({ fromUserId: userId, toUserId, outing, requests, reviews }).ok;
+  for (const outing of outings) {
+    if (outing.hostId === userId) {
+      if (outing.status !== 'completed') continue;
+      for (const g of requests.filter((r) => r.outingId === outing.id && wasPresent(r))) {
+        if (eligible(outing, g.userId)) {
+          items.push({ outing, toUserId: g.userId, toUserName: g.userName, requestId: g.id });
+        }
+      }
+      continue;
+    }
+    if (outing.status !== 'completed' && outing.status !== 'closed') continue;
+    const mine = requests.find(
+      (r) =>
+        r.outingId === outing.id &&
+        r.userId === userId &&
+        (wasPresent(r) || (r.status === 'confirmed' && r.noShowNotRetained === true)),
+    );
+    if (!mine || !eligible(outing, outing.hostId)) continue;
+    items.push({ outing, toUserId: outing.hostId, toUserName: outing.hostName, requestId: mine.id });
+  }
+  return items;
+}

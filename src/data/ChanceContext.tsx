@@ -149,7 +149,7 @@ import {
   shouldReturnDepositH6,
 } from '../utils/depositH6';
 import { presenceChecklist, validatePresenceSelection } from '../utils/markPresent';
-import { reviewEligibility } from '../utils/reviewEligibility';
+import { listOutingsToRate, reviewEligibility } from '../utils/reviewEligibility';
 import { isDemoEnabled } from '../utils/devMode';
 import {
   advanceTableReport,
@@ -6084,64 +6084,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const getOutingsToRate = useCallback(() => {
-    const user = state.currentUser;
-    if (!user) return [];
-    const items: {
-      outing: Outing;
-      toUserId: string;
-      toUserName: string;
-      requestId?: string;
-    }[] = [];
-    const completed = state.outings.filter((o) => o.status === 'completed');
-    for (const outing of completed) {
-      if (outing.hostId === user.id) {
-        const guests = state.requests.filter(
-          (r) => r.outingId === outing.id && wasPresent(r),
-        );
-        for (const g of guests) {
-          // Filtre couple fromUserId + toUserId : déjà noté → hors liste.
-          const already = state.reviews.some(
-            (rev) =>
-              rev.outingId === outing.id &&
-              rev.fromUserId === user.id &&
-              rev.toUserId === g.userId,
-          );
-          if (!already) {
-            items.push({
-              outing,
-              toUserId: g.userId,
-              toUserName: g.userName,
-              requestId: g.id,
-            });
-          }
-        }
-      } else {
-        const myConfirmed = state.requests.find(
-          (r) =>
-            r.outingId === outing.id &&
-            r.userId === user.id &&
-            wasPresent(r),
-        );
-        if (!myConfirmed) continue;
-        const already = state.reviews.some(
-          (rev) =>
-            rev.outingId === outing.id &&
-            rev.fromUserId === user.id &&
-            rev.toUserId === outing.hostId,
-        );
-        if (!already) {
-          items.push({
-            outing,
-            toUserId: outing.hostId,
-            toUserName: outing.hostName,
-            requestId: myConfirmed.id,
-          });
-        }
-      }
-    }
-    return items;
-  }, [state.currentUser, state.outings, state.requests, state.reviews]);
+  const getOutingsToRate = useCallback(
+    () =>
+      // Mêmes droits que canLeaveReview (reviewEligibility), y compris L79.
+      listOutingsToRate({
+        userId: state.currentUser?.id,
+        outings: state.outings,
+        requests: state.requests,
+        reviews: state.reviews,
+      }),
+    [state.currentUser, state.outings, state.requests, state.reviews],
+  );
 
   const getMyReviewFor = useCallback(
     (outingId: string, toUserId: string): Review | undefined => {

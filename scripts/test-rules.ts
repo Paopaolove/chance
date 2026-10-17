@@ -1617,5 +1617,27 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const hostPresent=D(D({...withNote,currentUser:{...host}},{type:'CONTEST_HOST_NO_SHOW',payload:{outingId:'o1',note:'J’étais là',at:iso(NSAT+3*H)}}),{type:'ACCEPT_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(NSAT+4*H)}});
   ok(withNote.requests[0].noShowContest.viaHostNoShow===true&&hostPresent.requests[0].depositStatus==='forfeited'&&hostPresent.guestNoShowStrikes.u1===1,'B4: declarer with sentence, host present → lost and counted');
 }
+
+// QA : B2 écran (L79) — liste « À noter » alignée sur reviewEligibility
+{
+  const RE=require('../src/utils/reviewEligibility');
+  const MIN=60e3, T=now-2*H, NSAT=T+H;
+  const guest:any={...me};
+  const mk=()=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const ns=D(mk(),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const acc=D(D(ns,{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'j’y étais',at:iso(NSAT+MIN)}}),{type:'ACCEPT_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(NSAT+H)}});
+  const L=(x:any,uid:string)=>RE.listOutingsToRate({userId:uid,outings:x.outings,requests:x.requests,reviews:x.reviews});
+  const items=L(acc,'u1');
+  ok(acc.outings[0].status==='closed'&&items.length===1&&items[0].outing.id==='o1'&&items[0].toUserId==='h1'&&items[0].requestId==='r1','B2 screen: accepted contest on a closed table → listed in getOutingsToRate (host to rate)');
+  ok(L(acc,'u2').length===0&&L(acc,'h1').length===0&&L(ns,'u1').length===0,'B2 screen: nobody else listed (other guest, host, pending « Pas venu »)');
+  ok(L({...acc,reviews:[{outingId:'o1',fromUserId:'u1',toUserId:'h1',rating:5}]},'u1').length===0,'B2 screen: rated → out of the list');
+  // moment terminé : liste inchangée pour les présents et l’hôte
+  const done={...acc,outings:[{...acc.outings[0],status:'completed'}],requests:acc.requests.map((r:any)=>r.id==='r2'?{...r,attendance:'present'}:r)};
+  ok(JSON.stringify(L(done,'u2').map((i:any)=>i.toUserId))==='["h1"]'&&JSON.stringify(L(done,'h1').map((i:any)=>i.toUserId))==='["u2"]','B2 screen: completed table → present guest and host lists unchanged');
+  ok(L(done,'u1').length===1,'B2 screen: accepted contest also listed once completed');
+  const fs=require('node:fs'), path=require('node:path');
+  const ctx=fs.readFileSync(path.join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
+  ok(/const getOutingsToRate = useCallback\(\s*\(\) =>[\s\S]{0,120}listOutingsToRate\(/.test(ctx),'static: getOutingsToRate delegates to listOutingsToRate');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
