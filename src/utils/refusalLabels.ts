@@ -15,9 +15,10 @@ const LABELS: Record<string, string> = {
   not_participant: 'Seuls l’hôte de la table ou la personne concernée peuvent signaler cette absence.',
   already_present: 'Cette personne est marquée présente.',
   too_early: 'Possible seulement à partir de l’heure du moment.',
-  too_late: '« Pas venu » n’est plus possible 6 h après le début. Elle est rendue d’office.',
+  too_late: '« Pas venu » n’est plus possible 6 h après le début. La caution est rendue d’office.',
   host_no_show: 'Tu as été déclaré « Pas venu » sur cette table : tu ne peux plus signaler d’absence.',
   not_allowed_now: '« Pas venu » n’est possible qu’à partir de l’heure du moment et avant 6 h après le début.',
+  not_retained: 'Absence non retenue après contestation : elle ne peut pas être déclarée à nouveau.',
   // « Marquer présent »
   not_host: 'Seul l’hôte de la table peut marquer une présence.',
   already_absent: 'Cette personne a déjà été déclarée « Pas venu ».',

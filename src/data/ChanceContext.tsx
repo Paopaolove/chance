@@ -294,6 +294,38 @@ function applyPresence(r: Request, outing: Outing, markedAt: string): Request {
   };
 }
 
+/**
+ * Absence invité comptée (strike, priorité, mention, fermeture à la 3e).
+ * « Pas venu » de l’hôte : appliqué seulement quand la caution est
+ * définitivement perdue (24 h sans contestation ou revue « Pas venu confirmé »).
+ */
+function withGuestNoShowStrike(state: AppState, guestId: string): AppState {
+  const strike = (state.guestNoShowStrikes[guestId] ?? 0) + 1;
+  const { lowerPriority, banned } = guestSanctionFromStrike(strike);
+  let currentUser = state.currentUser;
+  if (currentUser && currentUser.id === guestId) {
+    currentUser = {
+      ...currentUser,
+      guestNoShowCount: strike,
+      lowerPriority: lowerPriority || currentUser.lowerPriority,
+      profileMention: lowerPriority
+        ? banned
+          ? '3e absence — compte fermé (démo)'
+          : 'Absence après confirmation (démo)'
+        : currentUser.profileMention,
+      banned: banned || currentUser.banned,
+      bannedReason: banned
+        ? '3e absence après confirmation — compte fermé (démo)'
+        : currentUser.bannedReason,
+    };
+  }
+  return {
+    ...state,
+    currentUser,
+    guestNoShowStrikes: { ...state.guestNoShowStrikes, [guestId]: strike },
+  };
+}
+
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'COMPLETE_ONBOARDING':
@@ -1691,6 +1723,14 @@ function reducer(state: AppState, action: AppAction): AppState {
               }
             : o,
         ),
+        // « Pas venu » d’invité encore en attente ou contesté : le moment n’a pas eu
+        // lieu → caution rendue, absence jamais comptée. Déjà perdue : inchangée.
+        requests: state.requests.map((r) =>
+          r.outingId === outingId &&
+          (r.depositStatus === 'noshow_pending' || r.depositStatus === 'contested')
+            ? { ...r, depositStatus: 'returned' as const }
+            : r,
+        ),
       };
     }
 
@@ -1866,6 +1906,27 @@ function reducer(state: AppState, action: AppAction): AppState {
       }
       // Hôte déclaré « Pas venu » : cautions des invités rendues, plus de « Pas venu » invité.
       if (outingNoShow.hostNoShowReported) return state;
+      // Absence non retenue après contestation : pas de nouvelle déclaration.
+      if (existing.noShowNotRetained) return state;
+      // Hôte d’une table normale : 24 h pour contester, rien n’est compté avant que ce soit définitif.
+      if (noShowOpensContest(outingNoShow, reportedByUserId)) {
+        return {
+          ...state,
+          requests: state.requests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  attendance: 'absent' as const,
+                  depositStatus: 'noshow_pending' as const,
+                  noShowReportedAt: reportedAt,
+                }
+              : r,
+          ),
+          outings: state.outings.map((o) =>
+            o.id === outingId ? { ...o, status: 'closed' as const } : o,
+          ),
+        };
+      }
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -1920,13 +1981,7 @@ function reducer(state: AppState, action: AppAction): AppState {
             ? {
                 ...r,
                 attendance: 'absent' as const,
-                // Hôte d’une table normale : 24 h pour contester (ni perdue ni rendue).
-                ...(noShowOpensContest(outingNoShow, reportedByUserId)
-                  ? {
-                      depositStatus: 'noshow_pending' as const,
-                      noShowReportedAt: reportedAt,
-                    }
-                  : { depositStatus: 'forfeited' as const }),
+                depositStatus: 'forfeited' as const,
               }
             : r,
         ),
@@ -2273,12 +2328,16 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!req || !Number.isFinite(atMs) || !shouldForfeitUncontested(req, atMs)) {
         return state;
       }
-      return {
-        ...state,
-        requests: state.requests.map((r) =>
-          r.id === requestId ? { ...r, depositStatus: 'forfeited' as const } : r,
-        ),
-      };
+      // Définitif : caution perdue et absence comptée maintenant.
+      return withGuestNoShowStrike(
+        {
+          ...state,
+          requests: state.requests.map((r) =>
+            r.id === requestId ? { ...r, depositStatus: 'forfeited' as const } : r,
+          ),
+        },
+        req.userId,
+      );
     }
 
     case 'CONFIRM_NO_SHOW_AFTER_REVIEW':
@@ -2288,22 +2347,30 @@ function reducer(state: AppState, action: AppAction): AppState {
       const req = state.requests.find((r) => r.id === requestId);
       if (!req || req.depositStatus !== 'contested' || !req.noShowContest) return state;
       const accepted = action.type === 'ACCEPT_NO_SHOW_CONTEST';
-      return {
+      const reviewed: AppState = {
         ...state,
-        requests: state.requests.map((r) =>
-          r.id === requestId
-            ? {
-                ...r,
-                depositStatus: accepted ? ('returned' as const) : ('forfeited' as const),
-                noShowContest: {
-                  ...r.noShowContest!,
-                  outcome: accepted ? ('contest_accepted' as const) : ('noshow_confirmed' as const),
-                  resolvedAt: at,
-                },
-              }
-            : r,
-        ),
+        requests: state.requests.map((r) => {
+          if (r.id !== requestId) return r;
+          const contest = {
+            ...r.noShowContest!,
+            outcome: accepted ? ('contest_accepted' as const) : ('noshow_confirmed' as const),
+            resolvedAt: at,
+          };
+          if (!accepted) {
+            return { ...r, depositStatus: 'forfeited' as const, noShowContest: contest };
+          }
+          // Absence effacée : traité comme non marqué, caution rendue, rien compté.
+          const { attendance: _absent, ...rest } = r;
+          return {
+            ...rest,
+            depositStatus: 'returned' as const,
+            noShowNotRetained: true,
+            noShowContest: contest,
+          };
+        }),
       };
+      // « Pas venu confirmé » : absence comptée maintenant (définitif).
+      return accepted ? reviewed : withGuestNoShowStrike(reviewed, req.userId);
     }
 
     case 'RETURN_DEPOSITS_H6': {
@@ -6330,9 +6397,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           jokerExempted: true,
         };
       }
+      if (req.noShowNotRetained) {
+        return { ok: false, reason: 'not_retained' };
+      }
+      // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité) ;
+      // l’absence n’est comptée qu’une fois définitive.
+      const pending = noShowOpensContest(outing, user.id);
       const prev = state.guestNoShowStrikes[guestId] ?? 0;
-      const strike = prev + 1;
-      const { lowerPriority, banned } = guestSanctionFromStrike(strike);
+      const strike = pending ? prev : prev + 1;
+      const { lowerPriority, banned } = pending
+        ? { lowerPriority: false, banned: false }
+        : guestSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_GUEST_NO_SHOW',
         payload: {
@@ -6346,8 +6421,6 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           reportedByUserId: user.id,
         },
       });
-      // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité).
-      const pending = noShowOpensContest(outing, user.id);
       const lossText = pending
         ? 'caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € hôte).'
         : 'caution perdue (6,90 € Moment / 13,10 € hôte).';

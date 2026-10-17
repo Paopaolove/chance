@@ -375,6 +375,8 @@ export interface Request {
   depositReturnCause?: 'h6';
   /** ISO UTC — « Pas venu » déclaré par l’hôte (départ du délai de contestation de 24 h). */
   noShowReportedAt?: string;
+  /** Contestation acceptée : absence non retenue (visible par l’hôte, sans détail). */
+  noShowNotRetained?: boolean;
   /** Contestation de l’invité (interne, jamais projetée vers l’hôte). */
   noShowContest?: {
     note: string;

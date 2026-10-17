@@ -11,6 +11,7 @@
  */
 import type { Outing, Request } from '../data/types';
 import { isPartnerListing } from './partners';
+import { DEPOSIT_FORFEIT_HOST_EUROS } from '../data/pricing';
 
 /** Délai pour contester un « Pas venu » : 24 h après la déclaration de l’hôte. */
 export const NOSHOW_CONTEST_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -104,4 +105,16 @@ export function contestTimeLeftLabel(r: ContestRequest, nowMs = Date.now()): str
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return h > 0 ? `${h} h ${String(m).padStart(2, '0')}` : `${m} min`;
+}
+
+/**
+ * Part hôte d’un « Pas venu » : 13,10 € seulement si la caution est
+ * finalement perdue (jamais pendant l’attente, jamais si l’absence n’est pas retenue).
+ */
+export function hostNoShowShareEuros(
+  r: Pick<Request, 'attendance' | 'depositStatus'> & { noShowNotRetained?: boolean },
+): number {
+  return r.attendance === 'absent' && r.depositStatus === 'forfeited' && !r.noShowNotRetained
+    ? DEPOSIT_FORFEIT_HOST_EUROS
+    : 0;
 }
