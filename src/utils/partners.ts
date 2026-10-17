@@ -341,6 +341,9 @@ export function shouldAutoRefundPartnerSilence(
   nowMs = Date.now(),
 ): boolean {
   if (!isPartnerListing(outing)) return false;
+  // Lieu déclaré absent, en délai ou en revue : cautions en attente.
+  const hs = outing.hostNoShowCase?.status;
+  if (hs === 'pending' || hs === 'contested') return false;
   if (request.status !== 'confirmed') return false;
   if (request.attendance || request.partnerDispute) return false;
   if (request.depositStatus !== 'held') return false;

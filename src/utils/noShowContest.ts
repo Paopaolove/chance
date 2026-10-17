@@ -18,7 +18,8 @@ export const NOSHOW_CONTEST_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Longueur max de la phrase de contestation. */
 export const NOSHOW_CONTEST_NOTE_MAX_CHARS = 280;
 
-type ContestRequest = Pick<Request, 'userId' | 'depositStatus' | 'noShowReportedAt'>;
+type ContestRequest = Pick<Request, 'userId' | 'depositStatus' | 'noShowReportedAt'> &
+  Partial<Pick<Request, 'noShowContestPausedAt' | 'noShowContestPausedMs'>>;
 
 /**
  * « Pas venu » ouvert à contestation : déclaré par l’hôte, table normale ou
@@ -31,15 +32,32 @@ export function noShowOpensContest(
   return !!reportedByUserId && reportedByUserId === outing.hostId;
 }
 
-export function contestDeadlineMs(r: Pick<Request, 'noShowReportedAt'>): number {
+/**
+ * Échéance des 24 h, décalée du temps de suspension (absence de l’hôte en
+ * attente). Pendant une suspension en cours, l’échéance avance avec l’horloge :
+ * le temps restant est figé.
+ */
+export function contestDeadlineMs(
+  r: Pick<Request, 'noShowReportedAt'> &
+    Partial<Pick<Request, 'noShowContestPausedAt' | 'noShowContestPausedMs'>>,
+  nowMs = Date.now(),
+): number {
   const t = r.noShowReportedAt ? new Date(r.noShowReportedAt).getTime() : NaN;
-  return Number.isFinite(t) ? t + NOSHOW_CONTEST_WINDOW_MS : NaN;
+  if (!Number.isFinite(t)) return NaN;
+  const pausedAt = r.noShowContestPausedAt ? new Date(r.noShowContestPausedAt).getTime() : NaN;
+  const running = Number.isFinite(pausedAt) ? Math.max(0, nowMs - pausedAt) : 0;
+  return t + NOSHOW_CONTEST_WINDOW_MS + (r.noShowContestPausedMs ?? 0) + running;
+}
+
+/** Délai de 24 h suspendu (absence de l’hôte en attente). */
+export function isContestPaused(r: Partial<Pick<Request, 'noShowContestPausedAt'>>): boolean {
+  return !!r.noShowContestPausedAt;
 }
 
 /** Délai de 24 h encore ouvert (strictement avant l’échéance). */
 export function isContestWindowOpen(r: ContestRequest, nowMs = Date.now()): boolean {
   if (r.depositStatus !== 'noshow_pending') return false;
-  const d = contestDeadlineMs(r);
+  const d = contestDeadlineMs(r, nowMs);
   return Number.isFinite(d) && nowMs < d;
 }
 
@@ -95,6 +113,8 @@ export function shouldReturnAfterReviewTimeout(
   nowMs = Date.now(),
 ): boolean {
   if (r.depositStatus !== 'contested' || !r.noShowContest || r.noShowContest.outcome) return false;
+  // Contestation par « hôte absent » : tranchée par la décision sur l’hôte, pas de revue propre.
+  if (r.noShowContest.viaHostNoShow) return false;
   const d = reviewDeadlineMs(r);
   return Number.isFinite(d) && nowMs >= d;
 }
@@ -126,14 +146,16 @@ export function canNoShowGuestDeclareHostAbsent(
 ): boolean {
   if (!isHostDeclaredNoShow(r)) return false;
   if (r.depositStatus !== 'noshow_pending' && r.depositStatus !== 'contested') return false;
-  const d = contestDeadlineMs(r);
+  const d = contestDeadlineMs(r, nowMs);
   return Number.isFinite(d) && nowMs < d;
 }
 
 /** Sans contestation à 24 h : caution perdue. */
 export function shouldForfeitUncontested(r: ContestRequest, nowMs = Date.now()): boolean {
   if (r.depositStatus !== 'noshow_pending') return false;
-  const d = contestDeadlineMs(r);
+  // Absence de l’hôte en attente : délai suspendu, aucune expiration.
+  if (isContestPaused(r)) return false;
+  const d = contestDeadlineMs(r, nowMs);
   return Number.isFinite(d) && nowMs >= d;
 }
 
@@ -147,7 +169,7 @@ export function requestsDueForContestExpiry(
 
 /** Temps restant, ex. « 23 h 05 » ou « 12 min ». */
 export function contestTimeLeftLabel(r: ContestRequest, nowMs = Date.now()): string {
-  const left = contestDeadlineMs(r) - nowMs;
+  const left = contestDeadlineMs(r, nowMs) - nowMs;
   if (!Number.isFinite(left) || left <= 0) return '0 min';
   const totalMin = Math.ceil(left / 60_000);
   const h = Math.floor(totalMin / 60);

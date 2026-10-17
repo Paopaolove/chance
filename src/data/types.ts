@@ -396,7 +396,13 @@ export interface Request {
     resolvedAt?: string;
     /** Contestation par déclaration de l’hôte absent (pas de phrase). */
     viaHostNoShow?: boolean;
+    /** Partenaire : « Je suis arrivé » après « Pas venu » vaut contestation (phrase auto). */
+    viaArrival?: boolean;
   };
+  /** Délai de 24 h suspendu tant que l’absence de l’hôte est en attente (début de la suspension). */
+  noShowContestPausedAt?: string;
+  /** Durée cumulée de suspension du délai de 24 h (ms), ajoutée à l’échéance. */
+  noShowContestPausedMs?: number;
   /** Absence définitive comptée : numéro de l’absence et fermeture causée (pour l’annuler si l’hôte est déclaré absent). */
   noShowStrikeApplied?: number;
   noShowCausedBan?: boolean;

@@ -597,7 +597,9 @@ export function OutingDetailScreen() {
           <HostNoShowContestCard outing={outing} />
         ) : myRequest && 'id' in myRequest && myRequest.status === 'confirmed' ? (
           <Text style={[styles.hint, { marginTop: spacing.md }]}>
-            Absence de l’hôte signalée : les cautions sont en attente de la décision.
+            {partner
+              ? 'Absence du lieu signalée : les cautions sont en attente de la décision.'
+              : 'Absence de l’hôte signalée : les cautions sont en attente de la décision.'}
           </Text>
         ) : null
       ) : null}
@@ -800,6 +802,8 @@ export function OutingDetailScreen() {
                               : `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
                             : r.noShowNotRetained
                               ? `${r.userName} · absence non retenue`
+                            : r.noShowVoided
+                              ? `${r.userName} · caution rendue`
                             : r.depositStatus === 'returned'
                               ? `${r.userName} · caution rendue (silence le lendemain)`
                               : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, le soir même.'}

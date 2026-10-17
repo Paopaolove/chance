@@ -40,7 +40,9 @@ export function HostNoShowContestCard({ outing }: { outing: Outing }) {
   const open = nowMs < hostContestDeadlineMs(outing);
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>Un invité t’a signalé absent</Text>
+      <Text style={styles.title}>
+        {outing.isPartnerListing ? 'Un invité a signalé ton lieu absent' : 'Un invité t’a signalé absent'}
+      </Text>
       <Text style={styles.body}>
         {open
           ? `Tu étais là ? Il te reste ${hostContestTimeLeftLabel(outing, nowMs)} pour contester, avec une phrase. Sans contestation, l’absence est retenue.`

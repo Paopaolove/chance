@@ -46,7 +46,9 @@ export function NoShowContestCard({ request }: { request: Request }) {
     <View style={styles.card}>
       <Text style={styles.title}>{partner ? 'Le lieu' : 'L’hôte'} t’a signalé « Pas venu »</Text>
       <Text style={styles.body}>
-        {open
+        {request.noShowContestPausedAt
+          ? `Délai suspendu tant que l’absence ${partner ? 'du lieu' : 'de l’hôte'} est en attente. Tu peux déjà contester, avec une phrase.`
+          : open
           ? `Tu étais là ? Il te reste ${contestTimeLeftLabel(request, nowMs)} pour contester, avec une phrase. Sans contestation, la caution est perdue (${describeDepositForfeitSplit()}).`
           : `Délai de 24 h écoulé — caution perdue (${describeDepositForfeitSplit()}).`}
       </Text>

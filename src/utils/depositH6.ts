@@ -90,7 +90,9 @@ export function hostReturnedDepositLine(
   if (r.attendance || r.leftTableAt || r.depositStatus !== 'returned') return null;
   // Contestation acceptée : mention seule, sans phrase ni détail.
   if (r.noShowNotRetained) return `${r.userName} · absence non retenue`;
-  if (outing.hostNoShowReported) return `${r.userName} · caution rendue`;
+  if (outing.hostNoShowReported || outing.hostNoShowCase?.status === 'review_expired') {
+    return `${r.userName} · caution rendue`;
+  }
   if (isAtOrAfterH6(outing, nowMs)) return `${r.userName} · caution rendue 6 h après le début`;
   return null;
 }
