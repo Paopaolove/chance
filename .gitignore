@@ -46,3 +46,6 @@ yarn-error.*
 TUNNEL.txt
 expo-tunnel.log
 expo-qr.png
+
+# npm run verify (export, captures, log)
+.verify/
