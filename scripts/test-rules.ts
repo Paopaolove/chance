@@ -611,24 +611,43 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     const rep=A(withOthers([cl('a','sans_suite'),cl('b','abusive')]),'closed','abusive','repeated_unconfirmed');
     ok(rep.tableReports[0].status==='closed'&&rep.tableReports[0].abusiveReason==='repeated_unconfirmed'&&rep.memberModeration.u1.warnings===1,'repeated: 2 others closed, none confirmed → abusive ok (warning)');
   }
-  // drapeau de revue : après « Pas venu » ou avis négatif de la personne visée contre le signaleur (même moment)
+  // « Pas venu » ≠ signalement : un invité marqué « Pas venu » ne signale pas ; drapeau = avis négatif seulement
   {
     const absentMe=(st:any)=>({...st,requests:st.requests.map((x:any)=>x.id==='r1'?{...x,attendance:'absent',depositStatus:'forfeited'}:x)});
     const rv=(x:any={})=>({id:'rv1',outingId:'o1',fromUserId:'h1',toUserId:'u1',rating:1,venueKey:'k',createdAt:iso(now),...x});
-    const f1=SUB(absentMe(base(me)),'h1');
-    ok(f1.tableReports[0].followsNoShowOrNegativeReview===true,'flag: report after host « Pas venu » on reporter');
-    ok(SUB(base(me),'h1').tableReports[0].followsNoShowOrNegativeReview===undefined,'flag: absent without prior no-show / review');
-    ok(SUB(absentMe(base(me)),'u2').tableReports[0].followsNoShowOrNegativeReview===undefined,'flag: no-show was by host, target is another guest → no flag');
-    ok(SUB({...base(me),reviews:[rv()]},'h1').tableReports[0].followsNoShowOrNegativeReview===true,'flag: report after negative review (1/5) from target');
-    ok(SUB({...base(me),reviews:[rv({rating:2})]},'h1').tableReports[0].followsNoShowOrNegativeReview===true&&SUB({...base(me),reviews:[rv({rating:3})]},'h1').tableReports[0].followsNoShowOrNegativeReview===undefined,'flag: negative = rating ≤ 2 (minimal)');
-    ok(SUB({...base(me),reviews:[rv({outingId:'o0'})]},'h1').tableReports[0].followsNoShowOrNegativeReview===undefined,'flag: same moment only (minimal)');
-    ok(SUB({...base(me),reviews:[rv({fromUserId:'u2'})]},'h1').tableReports[0].followsNoShowOrNegativeReview===undefined,'flag: review from someone else → no flag');
-    // pas une preuve : ne permet pas à lui seul « abusif »
+    // via le vrai flux « Pas venu » (reducer), puis signalement
+    const nsSt=D(base(me),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,banned:false,reportedAt:iso(now)}});
+    ok(nsSt.requests[0].attendance==='absent'&&nsSt.requests[0].depositStatus==='forfeited','no-show flow unchanged: absent + caution forfeited');
+    ok(SUB(nsSt,'h1').tableReports.length===0&&SUB(nsSt,'u2').tableReports.length===0,'guest marked « Pas venu »: report refused (reducer)');
+    ok(!TR.canOpenTableReport(nsSt.outings[0],nsSt.requests,'u1',now)&&TR.isMarkedNoShow(nsSt.outings[0],nsSt.requests,'u1'),'guest marked « Pas venu »: link hidden (canOpenTableReport false)');
+    ok(SUB(absentMe(base(me)),'h1').tableReports.length===0,'absent attendance: refused (model)');
+    ok(SUB({...nsSt,currentUser:{...me,id:'u2'}},'h1').tableReports.length===1&&TR.canOpenTableReport(nsSt.outings[0],nsSt.requests,'u2',now),'other guest (not marked) still allowed');
+    const pres=D({...base(me),currentUser:host},{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
+    ok(pres.requests[0].attendance==='present'&&SUB({...pres,currentUser:me},'h1').tableReports.length===1,'guest marked present still allowed');
+    const KEYS='["category","createdAt","id","messages","outingId","reporterId","status","targetUserId"]';
+    const keysOf=(x:any)=>JSON.stringify(Object.keys(x).filter((k)=>x[k]!==undefined).sort());
+    ok(SUB(base(me),'h1').tableReports.length===1&&keysOf(SUB(base(me),'h1').tableReports[0])===KEYS,'guest not marked: allowed, report = category + phrase only');
+    ok(SUB({...nsSt,currentUser:host},'u1').tableReports.length===1&&keysOf(SUB({...nsSt,currentUser:host},'u1').tableReports[0])===KEYS,'host may still report the no-show guest; no « after no-show » flag');
+    ok(JSON.stringify(SUB(nsSt,'h1').requests)===JSON.stringify(nsSt.requests),'refused report: no-show / caution untouched');
+    // notation et signalement séparés : aucun drapeau ni donnée d’avis, quel que soit l’avis
+    for(const rating of [1,2,3]){
+      const x=SUB({...base(me),reviews:[rv({rating})]},'h1',now,'t1','  un mot  ');
+      ok(keysOf(x.tableReports[0])==='["category","createdAt","id","messages","note","outingId","reporterId","status","targetUserId"]'&&!/rating|review|follows|rv1/i.test(JSON.stringify(x.tableReports)),'review '+rating+'/5: no flag, no review data in report');
+    }
+    ok(!/follows|rating|review/i.test(JSON.stringify(SUB({...nsSt,currentUser:host,reviews:[rv()]},'u1').tableReports)),'after « Pas venu » + review: no flag, no review data');
+    // abus : critères inchangés, jugés sans avis
+    const f1=SUB({...base(me),reviews:[rv()]},'h1');
     let fr=A(A(f1,'contact_reporter'),'contact_target');
-    ok(A(fr,'closed','abusive').tableReports[0].status==='contact_target','flag alone does not allow abusive');
-    ok(A(fr,'closed','sans_suite').tableReports[0].outcome==='sans_suite','flagged report closes sans suite');
-    // visible seulement côté Moment : rien côté hôte ni dans les messages
-    ok(!/followsNoShow/.test(JSON.stringify(TR.tableReportMessagesFor(fr.tableReports,'h1')))&&!/followsNoShow|report/i.test(JSON.stringify({o:fr.outings,r:fr.requests.map(LT.projectRequestForHost)})),'flag invisible to host / target');
+    ok(A(fr,'closed','abusive').tableReports[0].status==='contact_target'&&A(fr,'closed','sans_suite').tableReports[0].outcome==='sans_suite','negative review does not make abusive possible; sans suite ok');
+    ok(!/follows/.test(JSON.stringify(TR.tableReportMessagesFor(fr.tableReports,'h1'))),'nothing about reviews in messages');
+    {
+      const fs=require('node:fs'), path=require('node:path');
+      const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
+      const hits=walk(path.join(__dirname,'..','src')).filter((f:string)=>/\.tsx?$/.test(f)&&/followsNoShowOrNegativeReview|followsNegativeReview|NEGATIVE_REVIEW_MAX_RATING|hostNoShowReporters/.test(fs.readFileSync(f,'utf8')));
+      ok(hits.length===0,'static: review flag, its helper and hostNoShowReporters removed ('+hits.map((f:string)=>path.basename(f)).join(',')+')');
+      const tr=fs.readFileSync(path.join(__dirname,'..','src','utils','tableReports.ts'),'utf8');
+      ok(!/\breviews\b|\bReview\b/.test(tr.replace(/\/\*[\s\S]*?\*\//g,'')),'static: tableReports.ts reads no reviews');
+    }
   }
   // clos figé
   ok(A(nothing,'closed','warning').tableReports[0].outcome==='sans_suite'&&A(nothing,'open').tableReports[0].status==='closed'&&JSON.stringify(A(nothing,'closed','suspension').memberModeration)==='{}','closed report frozen');
@@ -711,24 +730,13 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(TR.tableReportMessagesFor(f2.tableReports,'h1').every((m:any)=>m.body===TR.REPORT_TARGET_MESSAGE)&&TR.tableReportMessagesFor(f2.tableReports,'u2').length===0&&!/abus|warning|manual/i.test(JSON.stringify(TR.tableReportMessagesFor(a2.tableReports,'h1'))),'target receives nothing about abuse / review');
   // abus : règle malaise côté invité inchangée
   ok(LT.isDiscomfortReasonOffered(a2.confidentialLeaveReports,'u1',a2.currentUser.manualReviewRequired,now)===true,'abuse: discomfort reason unchanged');
-  // auteur du « Pas venu » invité → hôte enregistré + drapeau dans ce sens
+  // « Pas venu » invité → hôte : flux inchangé (aucun auteur enregistré)
   {
-    const hn=D(st0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedBy:'u1'}});
-    ok(hn.hostNoShowReporters.o1==='u1'&&hn.outings[0].hostNoShowReported===true&&hn.hostNoShowStrikes.h1===1,'host no-show: author recorded, strike unchanged');
-    const hnLegacy=D(st0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}});
-    ok(JSON.stringify({...hn,hostNoShowReporters:{}})===JSON.stringify(hnLegacy),'host no-show: no other rule changes');
-    ok(D(hn,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:2,banned:false,reportedBy:'u2'}}).hostNoShowReporters.o1==='u1','host no-show: idempotent, first author kept');
-    ok(!/hostNoShowReporters|u1/.test(JSON.stringify(hn.outings)),'host no-show author not on the outing (Moment side only)');
+    const hn=D(st0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}});
+    ok(hn.outings[0].hostNoShowReported===true&&hn.outings[0].status==='closed'&&hn.hostNoShowStrikes.h1===1&&!('hostNoShowReporters' in hn),'host no-show: flow unchanged, no author map');
+    // état actuel (non modifié, question pour Paolo) : l’hôte déclaré « Pas venu » peut encore signaler
     const hostRep=SUB({...hn,currentUser:host},'hr1',now,'u1');
-    ok(rp(hostRep,'hr1').followsNoShowOrNegativeReview===true,'flag: host reports the guest who declared him « Pas venu »');
-    ok(rp(SUB({...hn,currentUser:host},'hr2',now,'u2'),'hr2').followsNoShowOrNegativeReview===undefined,'flag: other guest → no flag');
-    ok(rp(SUB({...st0,currentUser:host},'hr3',now,'u1'),'hr3').followsNoShowOrNegativeReview===undefined,'flag: no host no-show → no flag');
-    ok(rp(SUB(hn,'hr4',now,'h1'),'hr4').followsNoShowOrNegativeReview===undefined,'flag: guest reporting host after his own no-show declaration → no flag (direction)');
-    // avis : ≤ 2/5 négatif, 3 non (drapeau seulement)
-    const rv=(rating:number)=>({...st0,currentUser:host,reviews:[{id:'rv',outingId:'o1',fromUserId:'u1',toUserId:'h1',rating,venueKey:'k',createdAt:iso(now)}]});
-    ok(rp(SUB(rv(2),'rv2',now,'u1'),'rv2').followsNoShowOrNegativeReview===true&&rp(SUB(rv(3),'rv3',now,'u1'),'rv3').followsNoShowOrNegativeReview===undefined&&TR.NEGATIVE_REVIEW_MAX_RATING===2,'negative review: 2/5 flag, 3/5 no flag');
-    const flagged=SUB(rv(1),'rv1',now,'u1');
-    ok(JSON.stringify(flagged.memberModeration)===JSON.stringify(st0.memberModeration)&&flagged.currentUser.banned!==true,'negative-review flag: no automatic sanction');
+    ok(!!rp(hostRep,'hr1')&&!/follows/.test(JSON.stringify(rp(hostRep,'hr1'))),'host declared « Pas venu » by guest: report allowed (current behaviour), no flag');
   }
 }
 console.log({pass,fail});

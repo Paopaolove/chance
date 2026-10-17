@@ -613,11 +613,6 @@ export interface TableReport {
   outcome?: 'sans_suite' | 'warning' | 'suspension' | 'abusive';
   /** Motif établi exigé pour « abusif » (jamais « rien dans le chat »). */
   abusiveReason?: 'reporter_absent' | 'reporter_admitted_false' | 'repeated_unconfirmed';
-  /**
-   * Drapeau de revue (côté Moment seulement) : créé après un « Pas venu » ou
-   * un avis négatif de la personne visée contre le signaleur. Pas une preuve.
-   */
-  followsNoShowOrNegativeReview?: boolean;
   closedAt?: string;
 }
 
@@ -676,11 +671,6 @@ export interface AppState {
   tableReports: TableReport[];
   /** Suivi confidentiel par membre (côté Moment, démo). */
   memberModeration: Record<string, MemberModeration>;
-  /**
-   * Auteur d’un « Pas venu » déclaré par un invité contre l’hôte, par moment
-   * (côté Moment seulement — sert au drapeau de revue du signalement).
-   */
-  hostNoShowReporters: Record<string, string>;
 }
 
 export type DispoProfileUpdate = {
@@ -904,8 +894,6 @@ export type AppAction =
         hostId: string;
         strike: number;
         banned: boolean;
-        /** Invité confirmé qui déclare le « Pas venu » (trace côté Moment). */
-        reportedBy?: string;
       };
     }
   | {

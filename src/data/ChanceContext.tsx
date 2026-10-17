@@ -127,7 +127,6 @@ import {
   advanceTableReport,
   canSubmitTableReport,
   canOpenTableReport,
-  followsNoShowOrNegativeReview,
   hostNeedsReview,
   isTableReportCategory,
   normalizeTableReportNote,
@@ -219,7 +218,6 @@ const initialState: AppState = {
   momentPaidHostLines: [],
   tableReports: [],
   memberModeration: {},
-  hostNoShowReporters: {},
 };
 
 /** Paris neighborhoods default for a demo venue. */
@@ -949,7 +947,6 @@ function reducer(state: AppState, action: AppAction): AppState {
         momentPaidHostLines: [],
         tableReports: [],
         memberModeration: {},
-        hostNoShowReporters: {},
       };
     }
 
@@ -1317,17 +1314,6 @@ function reducer(state: AppState, action: AppAction): AppState {
             status: 'open',
             messages: [],
             ...(manualFirst ? { requiresManualReviewFirst: true } : {}),
-            // Drapeau de revue côté Moment — pas une preuve, ne suffit pas à « abusif ».
-            ...(followsNoShowOrNegativeReview({
-              outing,
-              requests: state.requests,
-              reviews: state.reviews,
-              hostNoShowReporters: state.hostNoShowReporters,
-              reporterId: me.id,
-              targetUserId,
-            })
-              ? { followsNoShowOrNegativeReview: true }
-              : {}),
           },
           ...state.tableReports,
         ],
@@ -1653,14 +1639,10 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'REPORT_HOST_NO_SHOW': {
-      const { outingId, hostId, strike, banned, reportedBy } = action.payload;
+      const { outingId, hostId, strike, banned } = action.payload;
       const outing = state.outings.find((o) => o.id === outingId);
       // Lot 6: same outing / event → no double strike.
       if (outing?.hostNoShowReported) return state;
-      // Auteur (côté Moment seulement) — aucune autre règle ne change.
-      const hostNoShowReporters = reportedBy
-        ? { ...state.hostNoShowReporters, [outingId]: reportedBy }
-        : state.hostNoShowReporters;
       let currentUser = state.currentUser;
       if (currentUser && currentUser.id === hostId) {
         currentUser = {
@@ -1675,7 +1657,6 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         currentUser,
-        hostNoShowReporters,
         hostNoShowStrikes: {
           ...state.hostNoShowStrikes,
           [hostId]: strike,
@@ -5623,7 +5604,6 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             hostId,
             strike: state.hostNoShowStrikes[hostId] ?? 0,
             banned: false,
-            reportedBy: user.id,
           },
         });
         const toast: AppToast = {
@@ -5642,7 +5622,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const { banned } = hostSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_HOST_NO_SHOW',
-        payload: { outingId, hostId, strike, banned, reportedBy: user.id },
+        payload: { outingId, hostId, strike, banned },
       });
       dispatch({
         type: 'RETURN_DEPOSITS_FOR_OUTING',

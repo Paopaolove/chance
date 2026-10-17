@@ -17,14 +17,15 @@
  *   abusif. « Abusif » exige l’un des trois motifs établis (ABUSIVE_REASONS),
  *   sinon refusé (un doute donne « sans suite ») ; enregistré sans aucun effet
  *   sur le signaleur.
- * - Drapeau de revue (côté Moment) : signalement créé après un « Pas venu » ou
- *   un avis négatif de la personne visée contre le signaleur, au même moment.
- *   Ce n’est pas une preuve et il ne permet pas à lui seul « abusif ».
+ * - Un invité marqué « Pas venu » sur la table ne peut pas signaler.
+ * - Notation et signalement sont deux mécaniques séparées : un signalement
+ *   est jugé uniquement sur sa catégorie et sa phrase (aucune donnée d’avis,
+ *   aucun drapeau lié à un avis ou à un « Pas venu »).
  * - Message au concerné fixe et neutre, sans identité du signaleur.
  * - Compteur hôte : 2 départs malaise à ses tables en 3 mois (même fenêtre
  *   Paris que l’invité) → revue de l’hôte (drapeau confidentiel).
  */
-import type { Outing, Request, Review } from '../data/types';
+import type { Outing, Request } from '../data/types';
 import { isOutingChatOpen } from './chat';
 import { parisYmd } from './parisTime';
 import {
@@ -86,8 +87,6 @@ export function isTableReportCategory(x: unknown): x is TableReportCategory {
   return (TABLE_REPORT_CATEGORIES as readonly unknown[]).includes(x);
 }
 
-/** Avis négatif (choix minimal) : note rencontre ≤ 2 sur 5. */
-export const NEGATIVE_REVIEW_MAX_RATING = 2;
 /** « Plusieurs signalements » (choix minimal) : au moins 2 autres, clos. */
 export const REPEATED_UNCONFIRMED_MIN_OTHERS = 2;
 
@@ -144,8 +143,6 @@ export type TableReportLite = {
   outcome?: TableReportOutcome;
   /** Motif établi, seulement avec l’issue « abusif ». */
   abusiveReason?: AbusiveReason;
-  /** Drapeau de revue côté Moment (pas une preuve). */
-  followsNoShowOrNegativeReview?: boolean;
   closedAt?: string;
 };
 
@@ -177,43 +174,6 @@ export function isAbusiveReasonEstablished(
 }
 
 /**
- * Drapeau de revue : la personne visée a déjà fait un « Pas venu » contre le
- * signaleur (hôte qui l’a marqué absent, ou invité qui a déclaré l’hôte
- * « Pas venu ») ou laissé un avis négatif contre lui (≤ 2/5), au même moment
- * (choix minimal). Pas une preuve, jamais de sanction automatique.
- */
-export function followsNoShowOrNegativeReview(input: {
-  outing: Pick<Outing, 'id' | 'hostId'>;
-  requests: Pick<Request, 'outingId' | 'userId' | 'status' | 'attendance'>[];
-  reviews: Pick<Review, 'outingId' | 'fromUserId' | 'toUserId' | 'rating'>[];
-  /** Auteur du « Pas venu » invité → hôte, par moment. */
-  hostNoShowReporters?: Record<string, string>;
-  reporterId: string;
-  targetUserId: string;
-}): boolean {
-  const { outing, requests, reviews, reporterId, targetUserId } = input;
-  const noShow =
-    targetUserId === outing.hostId &&
-    requests.some(
-      (r) =>
-        r.outingId === outing.id &&
-        r.userId === reporterId &&
-        r.attendance === 'absent',
-    );
-  const guestNoShowOnHost =
-    reporterId === outing.hostId &&
-    input.hostNoShowReporters?.[outing.id] === targetUserId;
-  const negative = reviews.some(
-    (rv) =>
-      rv.outingId === outing.id &&
-      rv.fromUserId === targetUserId &&
-      rv.toUserId === reporterId &&
-      rv.rating <= NEGATIVE_REVIEW_MAX_RATING,
-  );
-  return noShow || guestNoShowOnHost || negative;
-}
-
-/**
  * Membres de la table : l’hôte + les invités confirmés. Un invité parti
  * (« Je quitte la table ») reste confirmé, donc membre ; un annulé est exclu.
  */
@@ -237,10 +197,12 @@ type ReportOuting = Pick<
  * Peut ouvrir l’écran « Signaler » : membre, moment non annulé, la table
  * existe (au moins un invité confirmé) et le chat de la table est ouvert
  * (pas de signalement avant un échange possible — même règle que le chat).
+ * Un invité marqué « Pas venu » sur cette table ne peut pas signaler : il
+ * n’était pas là (le « Pas venu » de l’hôte est une démarche séparée).
  */
 export function canOpenTableReport(
   outing: ReportOuting,
-  requests: Pick<Request, 'outingId' | 'userId' | 'status'>[],
+  requests: Pick<Request, 'outingId' | 'userId' | 'status' | 'attendance'>[],
   reporterId: string,
   nowMs = Date.now(),
 ): boolean {
@@ -248,12 +210,28 @@ export function canOpenTableReport(
   const members = tableMemberIds(outing, requests);
   if (members.length < 2) return false; // personne de confirmé : pas de table
   if (!members.includes(reporterId)) return false;
+  if (isMarkedNoShow(outing, requests, reporterId)) return false;
   return isOutingChatOpen(outing, nowMs);
+}
+
+/** Invité marqué « Pas venu » (attendance 'absent') sur cette table. */
+export function isMarkedNoShow(
+  outing: Pick<Outing, 'id'>,
+  requests: Pick<Request, 'outingId' | 'userId' | 'status' | 'attendance'>[],
+  userId: string,
+): boolean {
+  return requests.some(
+    (r) =>
+      r.outingId === outing.id &&
+      r.userId === userId &&
+      r.status === 'confirmed' &&
+      r.attendance === 'absent',
+  );
 }
 
 export function canSubmitTableReport(
   outing: ReportOuting,
-  requests: Pick<Request, 'outingId' | 'userId' | 'status'>[],
+  requests: Pick<Request, 'outingId' | 'userId' | 'status' | 'attendance'>[],
   reporterId: string,
   targetUserId: string,
   nowMs = Date.now(),
