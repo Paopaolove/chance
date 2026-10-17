@@ -906,7 +906,7 @@ export function OutingDetailScreen() {
                               ? '2e absence — priorité baissée + mention profil. '
                               : '') +
                             (res.pending
-                              ? 'Caution en attente 24 h, puis perdue sans suite : 6,90 € Moment / 13,10 € hôte.'
+                              ? 'Caution en attente 24 h, puis perdue sans contestation : 6,90 € Moment / 13,10 € hôte.'
                               : 'Caution perdue : 6,90 € Moment / 13,10 € hôte.'),
                         );
                       } else {

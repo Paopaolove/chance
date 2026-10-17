@@ -1149,5 +1149,21 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(od.includes('absence signalée · caution en attente'),'static: host sees « caution en attente »');
   ok(NC.contestTimeLeftLabel(p0.requests[0],NSAT+60*MIN+30e3)==='23 h 00'&&NC.contestTimeLeftLabel(p0.requests[0],DL-12*MIN)==='12 min','time-left label');
 }
+
+// contestation v2 : montant via DEPOSIT_EUROS, refus en français, « sans contestation »
+{
+  const NC=require('../src/utils/noShowContest');
+  const fs=require('node:fs'), path=require('node:path');
+  const rd=(f:string)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8');
+  const card=rd('components/NoShowContestCard.tsx'), ctx=rd('data/ChanceContext.tsx'), od=rd('screens/OutingDetailScreen.tsx');
+  ok(!/\d+\s*€/.test(card)&&card.includes('{DEPOSIT_EUROS} €'),'contest card: no hard-coded amount, DEPOSIT_EUROS');
+  const codes=['not_guest','not_pending','too_late','note_required','not_found','no_user'];
+  ok(codes.every((c)=>NC.CONTEST_REFUSAL_CODES.includes(c)&&!/[a-z]+_[a-z]+/.test(NC.contestRefusalLabel(c))&&NC.contestRefusalLabel(c).length>5),'contest refusals: every code in clear French');
+  ok(NC.contestRefusalLabel('too_late').includes('24 h')&&!/_/.test(NC.contestRefusalLabel('zzz_x')),'contest refusal: 24 h wording, unknown → generic French');
+  ok(card.includes('contestRefusalLabel(res.reason)')&&!/Alert\.alert\([^)]*,\s*res\.reason\)/.test(card)&&!/:\s*res\.reason,/.test(card),'static: no raw code in contest alert');
+  ok(!/perdue sans suite/.test(ctx)&&!/perdue sans suite/.test(od)&&/puis perdue sans contestation \(6,90/.test(ctx)&&od.includes('puis perdue sans contestation : 6,90'),'host alert / toast / chat note: « puis perdue sans contestation »');
+  const lossIdx=ctx.indexOf('const lossText');
+  ok(lossIdx>0&&/text: banned[\s\S]{0,400}lossText/.test(ctx)&&/body: banned[\s\S]{0,600}lossText/.test(ctx),'static: chat note and toast share the same wording');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

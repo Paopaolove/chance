@@ -6,11 +6,12 @@ import type { Request } from '../data/types';
 import { colors, radius, spacing, typography } from '../theme';
 import {
   NOSHOW_CONTEST_NOTE_MAX_CHARS,
+  contestRefusalLabel,
   contestTimeLeftLabel,
   isContestWindowOpen,
   normalizeContestNote,
 } from '../utils/noShowContest';
-import { describeDepositForfeitSplit } from '../data/pricing';
+import { DEPOSIT_EUROS, describeDepositForfeitSplit } from '../data/pricing';
 
 /**
  * Encart invité « Contester » un « Pas venu » déclaré par l’hôte :
@@ -31,7 +32,7 @@ export function NoShowContestCard({ request }: { request: Request }) {
       <View style={styles.card}>
         <Text style={styles.title}>Contestation envoyée</Text>
         <Text style={styles.body}>
-          Ta caution de 20 € est en attente de revue. Ni perdue ni rendue tant que
+          Ta caution de {DEPOSIT_EUROS} € est en attente de revue. Ni perdue ni rendue tant que
           Moment n’a pas tranché.
         </Text>
       </View>
@@ -68,14 +69,7 @@ export function NoShowContestCard({ request }: { request: Request }) {
             onPress={() => {
               const res = contestNoShow(request.id, note);
               if (!res.ok) {
-                Alert.alert(
-                  'Impossible',
-                  res.reason === 'too_late'
-                    ? 'Le délai de 24 h est écoulé.'
-                    : res.reason === 'note_required'
-                      ? 'Écris une phrase pour contester.'
-                      : res.reason,
-                );
+                Alert.alert('Impossible', contestRefusalLabel(res.reason));
                 return;
               }
               setNote('');

@@ -6349,7 +6349,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité).
       const pending = noShowOpensContest(outing, user.id);
       const lossText = pending
-        ? 'caution en attente 24 h, puis perdue sans suite (6,90 € Moment / 13,10 € hôte).'
+        ? 'caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € hôte).'
         : 'caution perdue (6,90 € Moment / 13,10 € hôte).';
       const note: ChatMessage = {
         id: uid('msg'),

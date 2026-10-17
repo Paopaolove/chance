@@ -62,6 +62,25 @@ export function contestRefusal(
   return null;
 }
 
+/** Refus de contestation → français clair (jamais de code brut à l’écran). */
+const CONTEST_REFUSAL_LABELS: Record<ContestRefusal | 'not_found' | 'no_user', string> = {
+  not_guest: 'Seule la personne signalée « Pas venu » peut contester.',
+  not_pending: 'Cette caution n’est plus en attente : rien à contester.',
+  too_late: 'Le délai de 24 h pour contester est écoulé.',
+  note_required: 'Écris une phrase pour contester.',
+  not_found: 'Cette participation n’existe plus.',
+  no_user: 'Connecte-toi pour contester.',
+};
+
+export const CONTEST_REFUSAL_CODES = Object.keys(CONTEST_REFUSAL_LABELS);
+
+export function contestRefusalLabel(reason: string | undefined): string {
+  return (
+    (reason && CONTEST_REFUSAL_LABELS[reason as keyof typeof CONTEST_REFUSAL_LABELS]) ||
+    'Contestation impossible pour le moment.'
+  );
+}
+
 /** Sans contestation à 24 h : caution perdue. */
 export function shouldForfeitUncontested(r: ContestRequest, nowMs = Date.now()): boolean {
   if (r.depositStatus !== 'noshow_pending') return false;
