@@ -739,5 +739,43 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(!!rp(hostRep,'hr1')&&!/follows/.test(JSON.stringify(rp(hostRep,'hr1'))),'host declared « Pas venu » by guest: report allowed (current behaviour), no flag');
   }
 }
+
+// Après un départ malaise : « Tu veux signaler ? » (17/10) — séparé du départ
+{
+  const DP=require('../src/utils/discomfortReportPrompt');
+  const TR=require('../src/utils/tableReports');
+  const st0=S({currentUser:me,outings:[o({startsAt:iso(now-5*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const LV=(reason?:string)=>D(st0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lvp'}});
+  const lvD=LV('discomfort'), lvN=LV();
+  // le départ est enregistré avant la question ; le signalement reste ouvert pour l’invité parti (même règle que le chat)
+  ok(lvD.requests[0].leftTableAt&&lvD.requests[0].status==='confirmed'&&TR.tableMemberIds(lvD.outings[0],lvD.requests).includes('u1'),'discomfort leave: guest still a member');
+  const open=TR.canOpenTableReport(lvD.outings[0],lvD.requests,'u1',now);
+  ok(open===true&&C.isOutingChatOpen(lvD.outings[0],now),'discomfort leave: report open for leaver (chat open)');
+  ok(DP.shouldOfferReportAfterLeave({ok:true,discomfort:true},open)===true,'prompt after discomfort leave');
+  ok(DP.shouldOfferReportAfterLeave({ok:true,discomfort:false},open)===false,'no prompt after leave without reason');
+  ok(DP.shouldOfferReportAfterLeave({ok:false},open)===false&&DP.shouldOfferReportAfterLeave({ok:true,discomfort:true},false)===false&&DP.shouldOfferReportAfterLeave(null,true)===false,'no prompt if leave failed or report closed');
+  ok(DP.DISCOMFORT_REPORT_PROMPT_TEXT==='Tu veux signaler ?','prompt text');
+  // Non : ferme, rien n’est créé
+  const no=DP.discomfortReportPromptAction('no','o1');
+  ok(no.kind==='close'&&lvD.tableReports.length===0,'No: closes, no report created');
+  // Oui : écran Signaler vide (seulement outingId, ni catégorie ni phrase)
+  const yes=DP.discomfortReportPromptAction('yes','o1');
+  ok(yes.kind==='open_report'&&yes.screen==='ReportTable'&&JSON.stringify(yes.params)==='{"outingId":"o1"}','Yes: opens empty report form (no category / phrase passed)');
+  ok(lvD.tableReports.length===0,'Yes then abandon: nothing sent');
+  // rien n’est envoyé sans la confirmation normale (catégorie obligatoire) ; ensuite formulaire normal
+  ok(D(lvD,{type:'SUBMIT_TABLE_REPORT',payload:{id:'p1',outingId:'o1',targetUserId:'h1',createdAt:iso(now)}}).tableReports.length===0,'empty form cannot be sent');
+  const sent=D(lvD,{type:'SUBMIT_TABLE_REPORT',payload:{id:'p1',outingId:'o1',targetUserId:'h1',category:'other',createdAt:iso(now)}});
+  ok(sent.tableReports.length===1&&!/follows|rating|review/i.test(JSON.stringify(sent.tableReports)),'normal submit works after leave; no review flag');
+  // départ et caution inchangés dans tous les cas ; signalement confidentiel malaise inchangé
+  const same=(a:any,b:any)=>JSON.stringify({r:a.requests,c:a.confidentialLeaveReports,p:a.momentPaidHostLines,u:a.currentUser})===JSON.stringify({r:b.requests,c:b.confidentialLeaveReports,p:b.momentPaidHostLines,u:b.currentUser});
+  ok(same(sent,lvD),'leave + caution + confidential report unchanged after Yes + submit');
+  ok(lvD.requests[0].depositStatus!=='forfeited'&&lvD.confidentialLeaveReports.length===1&&lvD.confidentialLeaveReports[0].reason==='discomfort','discomfort leave: caution returned, confidential report as before');
+  ok(lvN.confidentialLeaveReports.length===0&&lvN.tableReports.length===0,'leave without reason: no confidential report, no table report');
+  // statique : l’écran n’envoie que outingId et n’utilise pas de bouton plein pour Oui / Non
+  const fs=require('node:fs'), path=require('node:path');
+  const od=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
+  ok(/shouldOfferReportAfterLeave\(res, canReportOnOuting\(outing\.id\)\)/.test(od)&&/navigation\.navigate\(act\.screen, act\.params\)/.test(od),'static: OutingDetail uses the helper');
+  ok(/title="Oui"\s*variant="secondary"/.test(od)&&/title="Non"\s*variant="secondary"/.test(od),'static: Oui / Non secondary');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

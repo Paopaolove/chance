@@ -1,3 +1,8 @@
+import {
+  DISCOMFORT_REPORT_PROMPT_TEXT,
+  discomfortReportPromptAction,
+  shouldOfferReportAfterLeave,
+} from '../utils/discomfortReportPrompt';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { openAccountFlow } from '../navigation/accountGate';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -97,6 +102,8 @@ export function OutingDetailScreen() {
   const outing = getOutingById(route.params.outingId);
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
   const [suggestedDate, setSuggestedDate] = useState('');
+  // Après un départ malaise : « Tu veux signaler ? » (Oui / Non), rien de prérempli.
+  const [reportPromptOutingId, setReportPromptOutingId] = useState<string | null>(null);
   const [joinedId, setJoinedId] = useState<string | null>(null);
   const { requireBeforeMoment, sheet: firstMomentSheet } = useFirstMomentGate();
 
@@ -1170,10 +1177,37 @@ export function OutingDetailScreen() {
                 const lr = getRequestById(myRequest.id);
                 if (!lr) return null;
                 if (lr.leftTableAt) {
+                  const choose = (choice: 'yes' | 'no') => {
+                    const act = discomfortReportPromptAction(choice, outing.id);
+                    setReportPromptOutingId(null);
+                    if (act.kind === 'open_report') {
+                      navigation.navigate(act.screen, act.params);
+                    }
+                  };
                   return (
-                    <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                      Tu as quitté la table.
-                    </Text>
+                    <>
+                      <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                        Tu as quitté la table.
+                      </Text>
+                      {reportPromptOutingId === outing.id ? (
+                        <View style={{ marginTop: spacing.sm }}>
+                          <Text style={styles.hint}>{DISCOMFORT_REPORT_PROMPT_TEXT}</Text>
+                          {/* Oui / Non en secondaire : un seul bouton plein par écran. */}
+                          <Button
+                            title="Oui"
+                            variant="secondary"
+                            onPress={() => choose('yes')}
+                            style={{ marginTop: spacing.sm }}
+                          />
+                          <Button
+                            title="Non"
+                            variant="secondary"
+                            onPress={() => choose('no')}
+                            style={{ marginTop: spacing.sm }}
+                          />
+                        </View>
+                      ) : null}
+                    </>
                   );
                 }
                 if (
@@ -1192,6 +1226,10 @@ export function OutingDetailScreen() {
                   if (!res.ok) {
                     Alert.alert('Impossible', 'Départ indisponible pour ce moment.');
                     return;
+                  }
+                  // Départ déjà enregistré ; la question ne change rien au départ.
+                  if (shouldOfferReportAfterLeave(res, canReportOnOuting(outing.id))) {
+                    setReportPromptOutingId(outing.id);
                   }
                   Alert.alert(
                     'Tu as quitté la table',
