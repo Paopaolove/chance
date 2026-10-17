@@ -82,6 +82,30 @@ export function contestRefusalLabel(reason: string | undefined): string {
   );
 }
 
+/** Message à l’invité quand l’absence devient définitive. */
+export const NOSHOW_FINAL_NOTICE_TEXT = 'Ton absence est retenue. La caution est perdue.';
+
+/** « Pas venu » déclaré par l’hôte (table normale, délai de contestation). */
+export function isHostDeclaredNoShow(
+  r: Pick<Request, 'attendance' | 'noShowReportedAt'>,
+): boolean {
+  return r.attendance === 'absent' && !!r.noShowReportedAt;
+}
+
+/**
+ * Invité « Pas venu » qui déclare l’hôte absent : seulement pendant ses 24 h,
+ * caution encore en attente ou en revue (jamais si définitive).
+ */
+export function canNoShowGuestDeclareHostAbsent(
+  r: ContestRequest & Pick<Request, 'attendance'>,
+  nowMs = Date.now(),
+): boolean {
+  if (!isHostDeclaredNoShow(r)) return false;
+  if (r.depositStatus !== 'noshow_pending' && r.depositStatus !== 'contested') return false;
+  const d = contestDeadlineMs(r);
+  return Number.isFinite(d) && nowMs < d;
+}
+
 /** Sans contestation à 24 h : caution perdue. */
 export function shouldForfeitUncontested(r: ContestRequest, nowMs = Date.now()): boolean {
   if (r.depositStatus !== 'noshow_pending') return false;

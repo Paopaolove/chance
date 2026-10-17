@@ -383,7 +383,16 @@ export interface Request {
     contestedAt: string;
     outcome?: 'noshow_confirmed' | 'contest_accepted';
     resolvedAt?: string;
+    /** Contestation par déclaration de l’hôte absent (pas de phrase). */
+    viaHostNoShow?: boolean;
   };
+  /** Absence définitive comptée : numéro de l’absence et fermeture causée (pour l’annuler si l’hôte est déclaré absent). */
+  noShowStrikeApplied?: number;
+  noShowCausedBan?: boolean;
+  /** « Pas venu » effacé parce que l’hôte a été déclaré absent (règle B). */
+  noShowVoided?: boolean;
+  /** Message à l’invité quand l’absence devient définitive (jamais projeté vers l’hôte). */
+  noShowFinalNotice?: { text: string; at: string };
   /** ISO UTC — « Je quitte la table » (invité, pendant le moment). */
   leftTableAt?: string;
   /** Départ avant H+30, avec ou sans motif (même indicateur côté hôte). Le motif n’est jamais stocké ici. */
@@ -921,6 +930,10 @@ export type AppAction =
         hostId: string;
         strike: number;
         banned: boolean;
+        /** ISO UTC — table normale : strictement avant H+6 (défaut : maintenant). */
+        reportedAt?: string;
+        /** Invité qui déclare l’hôte absent (contestation s’il est lui-même « Pas venu »). */
+        reportedByUserId?: string;
       };
     }
   | {

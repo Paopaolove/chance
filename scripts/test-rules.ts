@@ -988,7 +988,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const T=now-7*H;
   const st=()=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
   const R6=(s0:any)=>D(s0,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(now)}});
-  const HNS=(s0:any)=>D(D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}}),{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}});
+  const HNS=(s0:any)=>D(D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedAt:iso(T+H)}}),{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}});
   const h6=R6(st());
   ok(h6.requests.every((r:any)=>r.depositReturnCause==='h6')&&DH.hostReturnedDepositLine(h6.requests[0],h6.outings[0])==='Moi · caution rendue 6 h après le début','H+6 return: cause recorded, H+6 line');
   const hn=HNS(st());
@@ -996,7 +996,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(hn.requests.every((r:any)=>!/6 h/.test(DH.hostReturnedDepositLine(r,hn.outings[0])??''))&&DH.hostReturnedDepositLine(hn.requests[0],hn.outings[0])==='Moi · caution rendue','host « Pas venu »: no H+6 line, neutral label');
   const hn6=R6(hn);
   ok(JSON.stringify(hn6.requests)===JSON.stringify(hn.requests),'host « Pas venu » then H+6 tick: cause unchanged');
-  ok(DH.hostReturnedDepositLine({userName:'X',depositStatus:'returned'},o({startsAt:iso(T)}))==='X · caution rendue','other return cause at/after H+6: neutral label');
+  ok(DH.hostReturnedDepositLine({userName:'X',depositStatus:'returned'},o({startsAt:iso(T)}))==='X · caution rendue 6 h après le début','other return cause (joker…) at/after H+6: same label as silence (C)');
   // malaise : vue hôte identique à un départ simple
   const sl=S({currentUser:me,outings:[o({startsAt:iso(now-10*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
   const L=(reason?:any)=>D(sl,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lv'}});
@@ -1180,7 +1180,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(!a1.guestNoShowStrikes.u1&&!a1.currentUser.profileMention,'contest accepted (1st): nothing counted');
   ok(TR.canOpenTableReport({...a1.outings[0],startsAt:iso(T)},a1.requests,'u1',now)&&!TR.isMarkedNoShow(a1.outings[0],a1.requests,'u1'),'contest accepted: guest can report again');
   const done={...a1.outings[0],status:'completed'};
-  ok(RE.reviewEligibility({fromUserId:'u1',toUserId:'h1',outing:done,requests:a1.requests,reviews:[]}).reason==='not_participant'&&RE.reviewEligibility({fromUserId:'u1',toUserId:'h1',outing:done,requests:[{...a1.requests[0],attendance:'present'},a1.requests[1]],reviews:[]}).ok===true,'contest accepted: treated as unmarked — rating possible once other conditions met (presence)');
+  ok(RE.reviewEligibility({fromUserId:'u1',toUserId:'h1',outing:done,requests:a1.requests,reviews:[]}).ok===true&&a1.requests[0].attendance===undefined,'contest accepted: counts as presence for rating (A), attendance untouched');
   ok(D(a1,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT+2*H),reportedByUserId:'h1'}}).requests[0].depositStatus==='returned','contest accepted: no second « Pas venu »');
   const hp=LT.projectRequestForHost(ra);
   ok(DH.hostReturnedDepositLine(hp,a.outings[0])==='Moi · absence non retenue'&&DH.hostReturnedDepositLine(hp,{...a.outings[0],startsAt:iso(now+H)})==='Moi · absence non retenue','host sees « X · absence non retenue »');
@@ -1193,7 +1193,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(hw.requests[0].depositStatus==='returned'&&!hw.guestNoShowStrikes.u1&&EXP(hw).requests[0].depositStatus==='returned'&&!EXP(hw).guestNoShowStrikes.u1,'host absent during the 24 h: returned, never counted');
   ok(hr.requests[0].depositStatus==='returned'&&!CONF(hr).guestNoShowStrikes.u1&&CONF(hr).requests[0].depositStatus==='returned','host absent during review: returned, never counted');
   const hf=HNS(e);
-  ok(hf.requests[0].depositStatus==='forfeited'&&hf.guestNoShowStrikes.u1===1,'already finally lost, then host absent: unchanged (case for Paolo)');
+  ok(hf.requests[0].depositStatus==='returned'&&hf.requests[0].attendance===undefined&&hf.guestNoShowStrikes.u1===0,'already finally lost, then host absent: returned, absence removed (B)');
   // auto-déclaration : perte et comptage immédiats
   const self=NS(asGuest(st()),'u1',1);
   ok(self.requests[0].depositStatus==='forfeited'&&self.guestNoShowStrikes.u1===1&&self.currentUser.guestNoShowCount===1,'self-declared: immediate loss and count (unchanged)');
@@ -1227,7 +1227,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(jr.depositStatus==='returned'&&!jr.attendance&&!jr.leftTableAt&&!jr.depositReturnCause,'setup: joker-returned deposit, no presence / leave / H+6 cause');
   ok(DH.hostReturnedDepositLine(LT.projectRequestForHost(jr),jo,now)===null,'joker (imprévu refused) before H: no host line');
   ok(DH.hostReturnedDepositLine(jr,jo,T+6*H-MIN)===null,'joker: no host line at H+6 − 1 min');
-  ok(DH.hostReturnedDepositLine(jr,jo,T+6*H)==='Moi · caution rendue','at H+6: neutral line shown');
+  ok(DH.hostReturnedDepositLine(jr,jo,T+6*H)==='Moi · caution rendue 6 h après le début','at H+6: joker shows the silence label (C)');
   ok(DH.hostReturnedDepositLine({...jr,depositReturnCause:'h6'},jo,T+6*H)==='Moi · caution rendue 6 h après le début','H+6 cause line unchanged');
   ok(DH.hostReturnedDepositLine(jr,{...jo,hostNoShowReported:true},now)==='Moi · caution rendue','host declared « Pas venu » before H+6: line shown');
   ok(DH.hostReturnedDepositLine({...jr,noShowNotRetained:true},jo,now)==='Moi · absence non retenue','« absence non retenue » unaffected');
@@ -1259,6 +1259,99 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const c=ctx.indexOf("case 'REPORT_GUEST_NO_SHOW'");
   const body=ctx.slice(c,ctx.indexOf("case 'REPORT_HOST_NEVER_HONOR'",c));
   ok(body.indexOf('isJokerExempted(')>0&&body.indexOf('isJokerExempted(')<body.indexOf('noShowOpensContest(outingNoShow'),'static: joker checked before the contest branch');
+}
+
+// hôte déclaré absent (H+6, contestation par l’invité « Pas venu », règle B), A (note), C (joker invisible), message d’absence retenue
+{
+  const NC=require('../src/utils/noShowContest');
+  const DH=require('../src/utils/depositH6');
+  const LT=require('../src/utils/leaveTable');
+  const TR=require('../src/utils/tableReports');
+  const RE=require('../src/utils/reviewEligibility');
+  const RL=require('../src/utils/refusalLabels');
+  const MIN=60e3, T=now-2*H, NSAT=T+H, DL=NSAT+24*H;
+  const guest:any={...me};
+  const g2=rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'});
+  const st=(more:any={},ox:any={})=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed',...ox})],requests:[rq({status:'confirmed',depositStatus:'held'}),g2],...more});
+  const NS=(s0:any,by='h1',at=NSAT)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(at),reportedByUserId:by}});
+  const HN=(s0:any,at:number,by?:string)=>D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedAt:iso(at),reportedByUserId:by}});
+  const RET=(s0:any)=>D(s0,{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}});
+  const EXP=(s0:any,at=DL)=>D(s0,{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(at)}});
+  const CONF=(s0:any)=>D(s0,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(DL+H)}});
+  const ACC=(s0:any)=>D(s0,{type:'ACCEPT_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(DL+H)}});
+  // 1) hôte « Pas venu » : strictement avant H+6 (table normale), partenaires non concernés
+  ok(HN(st(),T+6*H-MIN).outings[0].hostNoShowReported===true,'host « Pas venu » accepted at H+6 − 1 min');
+  ok(!HN(st(),T+6*H).outings[0].hostNoShowReported&&!HN(st(),T+6*H).hostNoShowStrikes.h1,'host « Pas venu » refused at H+6 (reducer)');
+  ok(HN(st({},{isPartnerListing:true}),T+30*H).outings[0].hostNoShowReported===true,'partner: no H+6 bound on host « Pas venu » (unchanged)');
+  ok(RL.refusalLabel('too_late','host_noshow').includes('6 h')&&!/_/.test(RL.refusalLabel('too_late','host_noshow')),'too_late (host) in clear French');
+  // 2) invité « Pas venu » qui déclare l’hôte absent pendant ses 24 h = contestation en revue
+  const p0=NS(st());
+  const hc=RET(HN({...p0,currentUser:guest},NSAT+30*MIN,'u1'));
+  const r1=hc.requests[0];
+  ok(hc.outings[0].hostNoShowReported===true&&r1.depositStatus==='contested'&&r1.noShowContest.viaHostNoShow===true,'« Pas venu » guest declares host absent: own deposit goes to review');
+  ok(r1.depositStatus!=='returned'&&!hc.guestNoShowStrikes.u1,'no automatic return, nothing counted before review');
+  ok(hc.requests[1].depositStatus==='returned','other (unmarked) guest: returned as today');
+  ok(EXP(hc,DL).requests[0].depositStatus==='contested'&&D(hc,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(T+7*H)}}).requests[0].depositStatus==='contested','under review: neither 24 h expiry nor H+6 settles it');
+  const ha=ACC(hc), hf=CONF(hc);
+  ok(ha.requests[0].depositStatus==='returned'&&ha.requests[0].attendance===undefined&&ha.requests[0].noShowVoided===true&&!ha.guestNoShowStrikes.u1,'review: host absence retained → returned, « Pas venu » erased (B)');
+  ok(hf.requests[0].depositStatus==='forfeited'&&hf.guestNoShowStrikes.u1===1,'review: not retained → lost and absence counted');
+  ok(DH.hostReturnedDepositLine(LT.projectRequestForHost(ha.requests[0]),ha.outings[0])==='Moi · caution rendue','host view after B: « caution rendue », no « absence signalée »');
+  // hors délai / caution définitive : refus
+  const late={...p0,requests:p0.requests.map((r:any)=>r.id==='r1'?{...r,noShowReportedAt:iso(NSAT-30*H)}:r)};
+  ok(!NC.canNoShowGuestDeclareHostAbsent(late.requests[0],NSAT)&&!HN({...late,currentUser:guest},NSAT,'u1').outings[0].hostNoShowReported,'outside 24 h: guest cannot declare host absent');
+  const def=CONF(D({...p0,currentUser:guest},{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'x',at:iso(NSAT+MIN)}}));
+  ok(def.requests[0].depositStatus==='forfeited'&&!HN({...def,currentUser:guest},NSAT+2*H,'u1').outings[0].hostNoShowReported,'definitive deposit: guest cannot declare host absent');
+  const selfAbs=NS(st({currentUser:guest}),'u1');
+  ok(!HN(selfAbs,NSAT+MIN,'u1').outings[0].hostNoShowReported,'self-declared absent guest: cannot declare host absent');
+  ok(RL.refusalLabel('noshow_window_closed','host_noshow').includes('24 h'),'noshow_window_closed label');
+  // autre invité qui déclare l’hôte absent pendant les 24 h : règle B directe
+  const other=RET(HN({...p0,currentUser:{id:'u2',firstName:'Bea'}},NSAT+MIN,'u2'));
+  ok(other.requests[0].depositStatus==='returned'&&other.requests[0].attendance===undefined&&other.requests[0].noShowVoided===true&&!other.guestNoShowStrikes.u1,'other guest declares host absent: B applied to the « Pas venu » guest');
+  // B : caution déjà perdue → rendue, absence décomptée, fermeture annulée (si causée par elle) ; auto-déclaration exclue
+  const two={...st({guestNoShowStrikes:{u1:2}}),currentUser:guest};
+  const lost3=EXP(NS(two));
+  ok(lost3.requests[0].depositStatus==='forfeited'&&lost3.guestNoShowStrikes.u1===3&&lost3.currentUser.banned===true&&lost3.requests[0].noShowCausedBan===true,'setup: 3rd absence finalised → ban caused by it');
+  const unb=RET(HN(lost3,NSAT+2*H,'u2'));
+  ok(unb.requests[0].depositStatus==='returned'&&unb.requests[0].attendance===undefined&&unb.guestNoShowStrikes.u1===2&&unb.currentUser.banned===false&&unb.currentUser.guestNoShowCount===2,'B on finally lost: returned, absence removed, ban lifted');
+  const preBan={...st({guestNoShowStrikes:{u1:3}}),currentUser:{...guest,banned:true,bannedReason:'autre'}};
+  const lost4=EXP(NS(preBan));
+  const kb=RET(HN(lost4,NSAT+2*H,'u2'));
+  ok(!lost4.requests[0].noShowCausedBan&&kb.currentUser.banned===true&&kb.guestNoShowStrikes.u1===3,'ban not caused by this absence: kept');
+  const selfL=RET(HN(NS({...st(),currentUser:guest},'u1'),NSAT+MIN,'u2'));
+  ok(selfL.requests[0].depositStatus==='forfeited'&&selfL.requests[0].attendance==='absent'&&selfL.guestNoShowStrikes.u1===1,'B exception: self-declared absence stays lost');
+  ok(TR.canOpenTableReport(unb.outings[0],unb.requests,'u1',now),'B: guest can report again');
+  // A : contestation acceptée vaut présence pour la note (moment terminé), attendance réelle inchangée
+  const acc=ACC(D({...p0,currentUser:guest},{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'j’y étais',at:iso(NSAT+MIN)}}));
+  const done={...acc.outings[0],status:'completed'};
+  ok(acc.requests[0].attendance===undefined&&RE.reviewEligibility({fromUserId:'u1',toUserId:'h1',outing:done,requests:acc.requests,reviews:[]}).ok===true,'A: accepted contest counts as presence for rating');
+  ok(RE.reviewEligibility({fromUserId:'u1',toUserId:'h1',outing:acc.outings[0],requests:acc.requests,reviews:[]}).reason==='not_completed','A: other conditions still required (moment completed)');
+  ok(RE.reviewEligibility({fromUserId:'u1',toUserId:'h1',outing:done,requests:p0.requests,reviews:[]}).reason==='not_participant','pending « Pas venu »: cannot rate');
+  ok(NS(acc,'h1',NSAT+2*H).requests[0].depositStatus==='returned','accepted: new « Pas venu » still refused (kept)');
+  // 3) message « Ton absence est retenue. La caution est perdue. » : une fois, à l’invité seulement
+  const eg=EXP({...p0,currentUser:guest});
+  ok(eg.toast?.body===NC.NOSHOW_FINAL_NOTICE_TEXT&&eg.requests[0].noShowFinalNotice.text==='Ton absence est retenue. La caution est perdue.','expiry: guest receives the message');
+  const eh=EXP(p0);
+  ok(eh.toast?.body!==NC.NOSHOW_FINAL_NOTICE_TEXT&&eh.requests[0].noShowFinalNotice.text===NC.NOSHOW_FINAL_NOTICE_TEXT,'expiry on host device: no banner for the host, notice kept for the guest');
+  ok(!/absence est retenue/.test(JSON.stringify(eh.requests.map(LT.projectRequestForHost)))&&!/noShowFinalNotice|noShowStrikeApplied|noShowCausedBan/.test(JSON.stringify(eh.requests.map(LT.projectRequestForHost))),'message and sanctions invisible in host projection');
+  const cg=CONF(D({...p0,currentUser:guest},{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'x',at:iso(NSAT+MIN)}}));
+  ok(cg.toast?.body===NC.NOSHOW_FINAL_NOTICE_TEXT&&cg.requests[0].noShowFinalNotice,'review confirmed: guest receives the message');
+  const again=EXP({...eg,toast:null},DL+H);
+  ok(again.toast===null&&JSON.stringify(again.requests)===JSON.stringify(eg.requests),'message sent once (no repeat)');
+  // C : joker invisible — même vue hôte que le silence après H+6, refus neutre
+  const imp={id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'refused',respondedAt:iso(now-H),respondedByUserId:'h1',createdAt:iso(now-2*H)};
+  const TJ=now+H;
+  const js=D(S({currentUser:me,outings:[o({startsAt:iso(TJ),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],imprevuReports:[imp]}),{type:'USE_JOKER_ON_IMPREVU',payload:{imprevuId:'i1',requestId:'r1',monthKey:'2026-10',usedAt:iso(now)}});
+  const sil=D(S({currentUser:me,outings:[o({startsAt:iso(TJ),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(TJ+6*H)}});
+  const hv=(x:any,at:number)=>JSON.stringify({p:LT.projectRequestForHost(x.requests[0]),line:DH.hostReturnedDepositLine(x.requests[0],x.outings[0],at),o:x.outings[0]});
+  ok(js.requests[0].depositStatus==='returned'&&sil.requests[0].depositStatus==='returned'&&hv(js,TJ+6*H)===hv(sil,TJ+6*H),'C: host view identical joker vs silence after H+6');
+  ok(DH.hostReturnedDepositLine(js.requests[0],js.outings[0],TJ+6*H)==='Moi · caution rendue 6 h après le début'&&DH.hostReturnedDepositLine(js.requests[0],js.outings[0],TJ+6*H-MIN)===null,'C: joker line from H+6, nothing before');
+  ok(!/joker/i.test(hv(js,TJ+6*H))&&!/joker/i.test(hv(js,now)),'C: no « joker » in host view');
+  ok(RL.refusalLabel('not_declarable')==='Cette absence ne peut pas être déclarée.'&&!/joker/i.test(RL.refusalLabel('not_declarable')),'C: neutral refusal label');
+  const fs=require('node:fs'), path=require('node:path');
+  const ctx=fs.readFileSync(path.join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
+  const cb=ctx.slice(ctx.indexOf('const reportGuestNoShow = useCallback('),ctx.indexOf('const reportGuestNoShow = useCallback(')+5000);
+  const jb=cb.slice(cb.indexOf('if (!shouldApplyGuestNoShowPenalty(jokerExempted))'),cb.indexOf('if (!shouldApplyGuestNoShowPenalty(jokerExempted))')+300);
+  ok(/reason: 'not_declarable'/.test(jb)&&!/Joker/.test(jb)&&!/dispatch/.test(jb),'C: joker refusal neutral, nothing sent, no toast');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

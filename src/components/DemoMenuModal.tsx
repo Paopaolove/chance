@@ -524,7 +524,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   return;
                 }
                 const r = reportHostNoShow(req.outingId);
-                if (!r.ok) Alert.alert('Impossible', r.reason);
+                if (!r.ok) Alert.alert('Impossible', refusalLabel(r.reason, 'host_noshow'));
                 else
                   Alert.alert(
                     r.banned ? 'Compte suspendu' : 'Avertissement',

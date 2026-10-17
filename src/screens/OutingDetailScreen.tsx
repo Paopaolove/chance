@@ -1135,6 +1135,10 @@ export function OutingDetailScreen() {
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'forfeited' ? (
                 <Text style={styles.hint}>
+                  {/* Absence devenue définitive : message à l’invité seulement. */}
+                  {getRequestById(myRequest.id)?.noShowFinalNotice
+                    ? `${getRequestById(myRequest.id)!.noShowFinalNotice!.text} `
+                    : ''}
                   {describeDepositForfeitMoment()}
                 </Text>
               ) : 'id' in myRequest &&

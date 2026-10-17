@@ -219,15 +219,39 @@ export function hostDepositStatus(r: {
  * qui distingue un départ malaise d’un départ sans motif.
  */
 export function projectRequestForHost<
-  T extends { depositStatus?: string; leftTableEarly?: boolean; noShowContest?: unknown },
+  T extends {
+    depositStatus?: string;
+    leftTableEarly?: boolean;
+    noShowContest?: unknown;
+    noShowFinalNotice?: unknown;
+    noShowStrikeApplied?: unknown;
+    noShowCausedBan?: unknown;
+    depositReturnCause?: unknown;
+  },
 >(
   r: T,
-): Omit<T, 'depositStatus' | 'noShowContest'> & { depositStatus?: HostVisibleDepositStatus } {
+): Omit<T, 'depositStatus' | 'noShowContest' | 'noShowFinalNotice' | 'noShowStrikeApplied' | 'noShowCausedBan' | 'depositReturnCause'> & {
+  depositStatus?: HostVisibleDepositStatus;
+} {
   // La contestation (phrase, date, issue) n’est jamais transmise à l’hôte.
-  const { noShowContest: _contest, ...rest } = r;
+  const {
+    noShowContest: _contest,
+    noShowFinalNotice: _notice,
+    noShowStrikeApplied: _strike,
+    noShowCausedBan: _ban,
+    depositReturnCause: _cause,
+    ...rest
+  } = r as T & {
+    depositReturnCause?: unknown;
+    noShowFinalNotice?: unknown;
+    noShowStrikeApplied?: unknown;
+    noShowCausedBan?: unknown;
+  };
+  // Sanctions internes (numéro d’absence, fermeture) et cause du rendu (joker ou
+  // silence) : jamais transmises à l’hôte.
   return { ...rest, depositStatus: hostDepositStatus(r) } as Omit<
     T,
-    'depositStatus' | 'noShowContest'
+    'depositStatus' | 'noShowContest' | 'noShowFinalNotice' | 'noShowStrikeApplied' | 'noShowCausedBan' | 'depositReturnCause'
   > & { depositStatus?: HostVisibleDepositStatus };
 }
 
