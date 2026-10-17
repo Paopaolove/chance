@@ -371,6 +371,8 @@ export interface Request {
    * Reviews / sorties honorées use present, never confirmed alone.
    */
   attendance?: 'present' | 'absent';
+  /** Cause d’un rendu de caution quand elle a un libellé propre (« h6 » : rendue d’office à H+6). */
+  depositReturnCause?: 'h6';
   /** ISO UTC — « Je quitte la table » (invité, pendant le moment). */
   leftTableAt?: string;
   /** Départ avant H+30, avec ou sans motif (même indicateur côté hôte). Le motif n’est jamais stocké ici. */

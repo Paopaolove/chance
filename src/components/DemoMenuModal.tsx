@@ -1,3 +1,4 @@
+import { refusalLabel } from '../utils/refusalLabels';
 import React, { useCallback, useState } from 'react';
 import {
   Alert,
@@ -231,7 +232,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 Alert.alert(
                   'H+6',
                   !res.ok
-                    ? `Refusé (${res.reason}).`
+                    ? refusalLabel(res.reason)
                     : res.returned > 0
                       ? `${res.returned} caution${res.returned > 1 ? 's' : ''} rendue${res.returned > 1 ? 's' : ''}. « Pas venu » n’est plus possible.`
                       : 'Aucune caution à rendre (présents, « Pas venu », partenaire ou déjà rendue).',
@@ -391,7 +392,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   return;
                 }
                 const r = reportGuestNoShow(req.id);
-                if (!r.ok) Alert.alert('Impossible', r.reason);
+                if (!r.ok) Alert.alert('Impossible', refusalLabel(r.reason));
                 else if (r.jokerExempted)
                   Alert.alert(
                     'Joker — caution protégée',
@@ -428,7 +429,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   return;
                 }
                 const r = reportGuestNoShow(req.id);
-                if (!r.ok) Alert.alert('Impossible', r.reason);
+                if (!r.ok) Alert.alert('Impossible', refusalLabel(r.reason));
                 else if (r.jokerExempted)
                   Alert.alert(
                     'Joker — caution protégée',

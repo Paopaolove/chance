@@ -980,5 +980,40 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(od.slice(bi-500,bi).includes('!outing.hostNoShowReported'),'static: « Signaler absence » hidden after host no-show');
   ok(/canReportOnOuting\(outing\.id\) \? \(/.test(od),'static: report link gated by canReportOnOuting (model)');
 }
+
+// ligne hôte « caution rendue 6 h après le début » : seulement si rendue par la règle H+6 ; codes bruts traduits
+{
+  const DH=require('../src/utils/depositH6');
+  const RL=require('../src/utils/refusalLabels');
+  const T=now-7*H;
+  const st=()=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const R6=(s0:any)=>D(s0,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(now)}});
+  const HNS=(s0:any)=>D(D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}}),{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}});
+  const h6=R6(st());
+  ok(h6.requests.every((r:any)=>r.depositReturnCause==='h6')&&DH.hostReturnedDepositLine(h6.requests[0])==='Moi · caution rendue 6 h après le début','H+6 return: cause recorded, H+6 line');
+  const hn=HNS(st());
+  ok(hn.requests.every((r:any)=>r.depositStatus==='returned'&&r.depositReturnCause===undefined),'host « Pas venu »: returned, no H+6 cause (even past H+6)');
+  ok(hn.requests.every((r:any)=>!/6 h/.test(DH.hostReturnedDepositLine(r)??''))&&DH.hostReturnedDepositLine(hn.requests[0])==='Moi · caution rendue','host « Pas venu »: no H+6 line, neutral label');
+  const hn6=R6(hn);
+  ok(JSON.stringify(hn6.requests)===JSON.stringify(hn.requests),'host « Pas venu » then H+6 tick: cause unchanged');
+  ok(DH.hostReturnedDepositLine({userName:'X',depositStatus:'returned'})==='X · caution rendue','other return cause: neutral label');
+  // malaise : vue hôte identique à un départ simple
+  const sl=S({currentUser:me,outings:[o({startsAt:iso(now-10*60e3),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  const L=(reason?:any)=>D(sl,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lv'}});
+  const LT=require('../src/utils/leaveTable');
+  const a=R6({...L(),outings:[{...L().outings[0],startsAt:iso(T)}]}), b=R6({...L('discomfort'),outings:[{...L('discomfort').outings[0],startsAt:iso(T)}]});
+  ok(DH.hostReturnedDepositLine(LT.projectRequestForHost(a.requests[0]))===null&&DH.hostReturnedDepositLine(LT.projectRequestForHost(b.requests[0]))===null&&JSON.stringify(LT.projectRequestForHost(a.requests[0]))===JSON.stringify(LT.projectRequestForHost(b.requests[0])),'malaise vs plain leave: same host view, no deposit line, untouched by H+6');
+  // codes bruts → français
+  const codes=['too_late','host_no_show','too_early','not_participant','not_confirmed','not_found','outing_cancelled','already_present','no_user','not_allowed_now','demo_disabled','outing_not_found','invalid_start'];
+  ok(codes.every((c)=>RL.REFUSAL_CODES.includes(c)&&!/[a-z]+_[a-z]+/.test(RL.refusalLabel(c))&&RL.refusalLabel(c).length>5),'refusal labels: every code in clear French');
+  ok(RL.refusalLabel('zzz_unknown')===RL.REFUSAL_FALLBACK&&!/_/.test(RL.REFUSAL_FALLBACK),'refusal labels: unknown code → generic French');
+  ok(RL.refusalLabel('too_late').includes('6 h')&&RL.refusalLabel('host_no_show').includes('« Pas venu »'),'too_late / host_no_show labels');
+  const fs=require('node:fs'), path=require('node:path');
+  const rd=(f:string)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8');
+  const od=rd('screens/OutingDetailScreen.tsx'), dm=rd('components/DemoMenuModal.tsx');
+  const raw=(src:string,call:string)=>{const out:string[]=[];let i=-1;while((i=src.indexOf(call,i+1))>=0){const nx=src.indexOf('onPress',i+1);const w=src.slice(i,nx>0?nx:i+1500);if(/Alert\.alert\([^)]*\b(res|r)\.reason\)/.test(w)&&!/refusalLabel\((res|r)\.reason\)/.test(w))out.push(String(i));if(/\$\{(res|r)\.reason\}/.test(w))out.push('tpl'+i);}return out;};
+  ok(raw(od,'reportGuestNoShow(').length===0&&raw(od,'partnerMarkNoShow(').length===0&&raw(dm,'reportGuestNoShow(').length===0&&raw(dm,'demoSimulateDepositH6(').length===0,'static: no raw code in « Pas venu » / H+6 alerts');
+  ok(!od.includes('isAtOrAfterH6(outing)')&&od.includes('hostReturnedDepositLine(r)'),'static: host line driven by recorded cause, not by the clock');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

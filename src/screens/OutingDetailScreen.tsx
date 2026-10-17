@@ -1,4 +1,5 @@
-import { isAtOrAfterH6, isNoShowWindowOpen } from '../utils/depositH6';
+import { hostReturnedDepositLine, isNoShowWindowOpen } from '../utils/depositH6';
+import { refusalLabel } from '../utils/refusalLabels';
 import {
   DISCOMFORT_REPORT_PROMPT_TEXT,
   discomfortReportPromptAction,
@@ -800,7 +801,7 @@ export function OutingDetailScreen() {
                                 style: 'destructive',
                                 onPress: () => {
                                   const res = partnerMarkNoShow(r.id);
-                                  if (!res.ok) Alert.alert('Impossible', res.reason);
+                                  if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason));
                                 },
                               },
                             ],
@@ -815,7 +816,7 @@ export function OutingDetailScreen() {
                         variant="ghost"
                         onPress={() => {
                           const res = partnerMarkNoShow(r.id);
-                          if (!res.ok) Alert.alert('Impossible', res.reason);
+                          if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason));
                           else
                             Alert.alert(
                               'Litige ouvert',
@@ -866,13 +867,10 @@ export function OutingDetailScreen() {
                     {r.userName} · absence · caution perdue
                   </Text>
                 ) : null}
-                {!partner &&
-                !r.attendance &&
-                !r.leftTableAt &&
-                r.depositStatus === 'returned' &&
-                isAtOrAfterH6(outing) ? (
+                {!partner && hostReturnedDepositLine(r) ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                    {r.userName} · caution rendue 6 h après le début
+                    {/* Libellé H+6 seulement si la règle H+6 a rendu la caution ; sinon neutre. */}
+                    {hostReturnedDepositLine(r)}
                   </Text>
                 ) : null}
                 {!partner &&
@@ -902,7 +900,7 @@ export function OutingDetailScreen() {
                               : 'Caution perdue : 6,90 € Moment / 13,10 € hôte.',
                         );
                       } else {
-                        Alert.alert('Impossible', res.reason);
+                        Alert.alert('Impossible', refusalLabel(res.reason));
                       }
                     }}
                     style={{ marginTop: spacing.sm }}

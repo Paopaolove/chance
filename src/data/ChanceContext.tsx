@@ -2244,7 +2244,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         requests: state.requests.map((r) =>
-          ids.has(r.id) ? { ...r, depositStatus: 'returned' as const } : r,
+          ids.has(r.id)
+            ? { ...r, depositStatus: 'returned' as const, depositReturnCause: 'h6' as const }
+            : r,
         ),
       };
     }

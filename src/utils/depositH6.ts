@@ -67,3 +67,18 @@ export function h6AtIso(outing: Pick<Outing, 'startsAt'>): string | null {
   if (!Number.isFinite(s)) return null;
   return new Date(s + DEPOSIT_SILENCE_RETURN_AFTER_MS).toISOString();
 }
+
+/**
+ * Ligne hôte pour une caution rendue d’un confirmé sans présence ni départ.
+ * Libellé H+6 seulement si la règle H+6 l’a rendue (depositReturnCause) ;
+ * sinon (hôte déclaré « Pas venu », autre rendu) : libellé neutre.
+ * Départs (avec ou sans malaise) : null — la ligne de départ s’affiche, identique.
+ */
+export function hostReturnedDepositLine(
+  r: Pick<Request, 'userName' | 'attendance' | 'leftTableAt' | 'depositStatus' | 'depositReturnCause'>,
+): string | null {
+  if (r.attendance || r.leftTableAt || r.depositStatus !== 'returned') return null;
+  return r.depositReturnCause === 'h6'
+    ? `${r.userName} · caution rendue 6 h après le début`
+    : `${r.userName} · caution rendue`;
+}
