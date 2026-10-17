@@ -36,11 +36,14 @@ export function isNoShowWindowOpen(outing: H6Outing, nowMs = Date.now()): boolea
 
 /** Caution à rendre à H+6 : confirmé, non « Pas venu », encore held, table normale non annulée. */
 export function shouldReturnDepositH6(
-  outing: H6Outing & Pick<Outing, 'status'>,
+  outing: H6Outing & Pick<Outing, 'status'> & Partial<Pick<Outing, 'hostNoShowCase'>>,
   request: Pick<Request, 'status' | 'attendance' | 'depositStatus'>,
   nowMs = Date.now(),
 ): boolean {
   if (outing.status === 'cancelled') return false;
+  // Absence de l’hôte en délai ou en revue : cautions en attente.
+  const hs = outing.hostNoShowCase?.status;
+  if (hs === 'pending' || hs === 'contested') return false;
   if (!isAtOrAfterH6(outing, nowMs)) return false;
   if (request.status !== 'confirmed') return false;
   if (request.attendance === 'absent') return false;
@@ -50,7 +53,7 @@ export function shouldReturnDepositH6(
 
 /** Moments ayant au moins une caution à rendre à H+6 (pour la minuterie locale). */
 export function outingsDueForH6(
-  outings: (H6Outing & Pick<Outing, 'id' | 'status'>)[],
+  outings: (H6Outing & Pick<Outing, 'id' | 'status'> & Partial<Pick<Outing, 'hostNoShowCase'>>)[],
   requests: (Pick<Request, 'outingId' | 'status' | 'attendance' | 'depositStatus'>)[],
   nowMs = Date.now(),
 ): string[] {

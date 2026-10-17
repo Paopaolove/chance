@@ -134,6 +134,14 @@ import {
   type ContestRefusal,
 } from '../utils/noShowContest';
 import {
+  type HostContestRefusal,
+  hostContestRefusal,
+  outingsDueForHostContestExpiry,
+  outingsDueForHostReviewTimeout,
+  shouldRetainUncontestedHostNoShow,
+  shouldTimeoutHostReview,
+} from '../utils/hostNoShowContest';
+import {
   h6AtIso,
   isNoShowWindowOpen,
   outingsDueForH6,
@@ -226,6 +234,7 @@ const initialState: AppState = {
   lateReports: [],
   imprevuReports: [],
   hostNoShowStrikes: {},
+  hostNoShowContestNotes: {},
   guestNoShowStrikes: {},
   hostPublishStrikes: {},
   toast: null,
@@ -391,6 +400,53 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
       } = r;
       return { ...rest, depositStatus: 'returned' as const, noShowVoided: true };
     }),
+  };
+}
+
+/**
+ * Absence de l’hôte retenue (pas de contestation à 24 h, ou revue rejetée) :
+ * sanction hôte, règle B pour les « Pas venu » déclarés par l’hôte, cautions rendues.
+ * L’invité « Pas venu » qui a lui-même déclaré l’hôte absent garde sa revue.
+ */
+function retainHostNoShow(state: AppState, outingId: string, at: string): AppState {
+  const outing = state.outings.find((o) => o.id === outingId);
+  if (!outing) return state;
+  const hostId = outing.hostId;
+  const strike = (state.hostNoShowStrikes[hostId] ?? 0) + 1;
+  const { banned } = hostSanctionFromStrike(strike);
+  let currentUser = state.currentUser;
+  if (currentUser && currentUser.id === hostId) {
+    currentUser = {
+      ...currentUser,
+      hostNoShowCount: strike,
+      banned: banned || currentUser.banned,
+      bannedReason: banned ? '2e no-show hôte — compte suspendu (démo)' : currentUser.bannedReason,
+    };
+  }
+  let next: AppState = {
+    ...state,
+    currentUser,
+    hostNoShowStrikes: { ...state.hostNoShowStrikes, [hostId]: strike },
+    outings: state.outings.map((o) =>
+      o.id === outingId && o.hostNoShowCase
+        ? { ...o, hostNoShowCase: { ...o.hostNoShowCase, status: 'retained' as const, resolvedAt: at } }
+        : o,
+    ),
+  };
+  for (const r of next.requests) {
+    if (r.outingId !== outingId) continue;
+    if (r.depositStatus === 'contested' && r.noShowContest?.viaHostNoShow) continue;
+    if (isHostDeclaredNoShow(r)) next = voidHostDeclaredNoShow(next, r.id);
+  }
+  return {
+    ...next,
+    requests: next.requests.map((r) =>
+      r.outingId === outingId &&
+      r.status === 'confirmed' &&
+      (r.depositStatus === 'held' || !r.depositStatus)
+        ? { ...r, depositStatus: 'returned' as const }
+        : r,
+    ),
   };
 }
 
@@ -1050,6 +1106,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         lateReports: [],
         imprevuReports: [],
         hostNoShowStrikes: {},
+        hostNoShowContestNotes: {},
         guestNoShowStrikes: {},
         hostPublishStrikes: {},
         toast: null,
@@ -1781,30 +1838,42 @@ function reducer(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
-      let currentUser = state.currentUser;
-      if (currentUser && currentUser.id === hostId) {
-        currentUser = {
-          ...currentUser,
-          hostNoShowCount: strike,
-          banned: banned || currentUser.banned,
-          bannedReason: banned
-            ? '2e no-show hôte — compte suspendu (démo)'
-            : currentUser.bannedReason,
+      if (isPartnerListing(outing)) {
+        // Partenaire : inchangé (avertissement lieu géré par le callback).
+        let currentUser = state.currentUser;
+        if (currentUser && currentUser.id === hostId) {
+          currentUser = {
+            ...currentUser,
+            hostNoShowCount: strike,
+            banned: banned || currentUser.banned,
+            bannedReason: banned
+              ? '2e no-show hôte — compte suspendu (démo)'
+              : currentUser.bannedReason,
+          };
+        }
+        return {
+          ...state,
+          currentUser,
+          hostNoShowStrikes: { ...state.hostNoShowStrikes, [hostId]: strike },
+          outings: state.outings.map((o) =>
+            o.id === outingId
+              ? { ...o, status: 'closed' as const, hostNoShowReported: true }
+              : o,
+          ),
         };
       }
+      // Table normale : l’hôte a 24 h pour contester. Sanction hôte, règle B et
+      // rendu des cautions attendent l’issue (rien d’immédiat).
+      const reportedAtIso = reportedAt ?? new Date(reportedAtMs).toISOString();
       let next: AppState = {
         ...state,
-        currentUser,
-        hostNoShowStrikes: {
-          ...state.hostNoShowStrikes,
-          [hostId]: strike,
-        },
         outings: state.outings.map((o) =>
           o.id === outingId
             ? {
                 ...o,
                 status: 'closed' as const,
                 hostNoShowReported: true,
+                hostNoShowCase: { reportedAt: reportedAtIso, status: 'pending' as const },
               }
             : o,
         ),
@@ -1820,7 +1889,7 @@ function reducer(state: AppState, action: AppAction): AppState {
                   ...r,
                   depositStatus: 'contested' as const,
                   noShowContest: {
-                    ...(r.noShowContest ?? { note: '', contestedAt: reportedAt ?? new Date(reportedAtMs).toISOString() }),
+                    ...(r.noShowContest ?? { note: '', contestedAt: reportedAtIso }),
                     viaHostNoShow: true,
                   },
                 }
@@ -1828,12 +1897,91 @@ function reducer(state: AppState, action: AppAction): AppState {
           ),
         };
       }
-      // Règle B pour les autres « Pas venu » déclarés par l’hôte (même définitifs).
-      for (const r of next.requests) {
-        if (r.outingId !== outingId || r.id === declarer?.id) continue;
-        if (isHostDeclaredNoShow(r)) next = voidHostDeclaredNoShow(next, r.id);
-      }
       return next;
+    }
+
+    case 'CONTEST_HOST_NO_SHOW': {
+      const { outingId, note, at } = action.payload;
+      const o = state.outings.find((x) => x.id === outingId);
+      const user = state.currentUser;
+      const atMs = new Date(at).getTime();
+      if (!o || !user || !Number.isFinite(atMs)) return state;
+      if (hostContestRefusal(o, user.id, note, atMs)) return state;
+      return {
+        ...state,
+        hostNoShowContestNotes: {
+          ...(state.hostNoShowContestNotes ?? {}),
+          [outingId]: normalizeContestNote(note),
+        },
+        outings: state.outings.map((x) =>
+          x.id === outingId && x.hostNoShowCase
+            ? { ...x, hostNoShowCase: { ...x.hostNoShowCase, status: 'contested' as const, contestedAt: at } }
+            : x,
+        ),
+      };
+    }
+
+    case 'EXPIRE_HOST_NO_SHOW_CONTEST': {
+      const { outingId, at } = action.payload;
+      const o = state.outings.find((x) => x.id === outingId);
+      const atMs = new Date(at).getTime();
+      if (!o || !Number.isFinite(atMs) || !shouldRetainUncontestedHostNoShow(o, atMs)) return state;
+      return retainHostNoShow(state, outingId, at);
+    }
+
+    case 'CONFIRM_HOST_NO_SHOW_AFTER_REVIEW': {
+      const { outingId, at } = action.payload;
+      const o = state.outings.find((x) => x.id === outingId);
+      const atMs = new Date(at).getTime();
+      if (!o || o.hostNoShowCase?.status !== 'contested' || !Number.isFinite(atMs)) return state;
+      if (shouldTimeoutHostReview(o, atMs)) return state;
+      return retainHostNoShow(state, outingId, at);
+    }
+
+    case 'ACCEPT_HOST_NO_SHOW_CONTEST': {
+      // Contestation de l’hôte acceptée : absence effacée, invités dans leur
+      // situation normale (présence, H+30, H+6…).
+      const { outingId, at } = action.payload;
+      const o = state.outings.find((x) => x.id === outingId);
+      const atMs = new Date(at).getTime();
+      if (!o || o.hostNoShowCase?.status !== 'contested' || !Number.isFinite(atMs)) return state;
+      if (shouldTimeoutHostReview(o, atMs)) return state;
+      return {
+        ...state,
+        outings: state.outings.map((x) =>
+          x.id === outingId && x.hostNoShowCase
+            ? {
+                ...x,
+                hostNoShowReported: false,
+                hostNoShowCase: { ...x.hostNoShowCase, status: 'not_retained' as const, resolvedAt: at },
+              }
+            : x,
+        ),
+      };
+    }
+
+    case 'EXPIRE_HOST_NO_SHOW_REVIEW': {
+      // Revue de l’hôte sans décision à 7 jours : cautions des invités rendues ;
+      // l’absence de l’hôte n’est pas tranchée (ni sanction, ni effacement).
+      const { outingId, at } = action.payload;
+      const o = state.outings.find((x) => x.id === outingId);
+      const atMs = new Date(at).getTime();
+      if (!o || !Number.isFinite(atMs) || !shouldTimeoutHostReview(o, atMs)) return state;
+      return {
+        ...state,
+        outings: state.outings.map((x) =>
+          x.id === outingId && x.hostNoShowCase
+            ? { ...x, hostNoShowCase: { ...x.hostNoShowCase, status: 'review_expired' as const, resolvedAt: at } }
+            : x,
+        ),
+        requests: state.requests.map((r) =>
+          r.outingId === outingId &&
+          r.status === 'confirmed' &&
+          (r.depositStatus === 'held' || !r.depositStatus)
+            ? { ...r, depositStatus: 'returned' as const }
+            : r,
+        ),
+      };
     }
 
     case 'SET_USER_BAN_STATE': {
@@ -2874,6 +3022,11 @@ interface ChanceContextValue {
     requestId: string,
     note: string,
   ) => { ok: true } | { ok: false; reason: ContestRefusal | 'not_found' | 'no_user' };
+  /** Hôte : contester son « absent » (phrase obligatoire, avant 24 h). */
+  contestHostNoShow: (
+    outingId: string,
+    note: string,
+  ) => { ok: true } | { ok: false; reason: HostContestRefusal | 'not_found' | 'no_user' };
   /** Démo QA (__DEV__) : envoie RETURN_DEPOSITS_H6 daté de H+6. Nombre de cautions rendues. */
   demoSimulateDepositH6: (
     outingId: string,
@@ -5021,6 +5174,29 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.requests]);
 
+  /** Absence de l’hôte : 24 h sans contestation → retenue ; revue sans décision à 7 jours → cautions rendues. */
+  useEffect(() => {
+    const tick = () => {
+      const now = Date.now();
+      const at = new Date(now).toISOString();
+      for (const outingId of outingsDueForHostContestExpiry(state.outings, now)) {
+        dispatch({ type: 'EXPIRE_HOST_NO_SHOW_CONTEST', payload: { outingId, at } });
+      }
+      for (const outingId of outingsDueForHostReviewTimeout(state.outings, now)) {
+        dispatch({ type: 'EXPIRE_HOST_NO_SHOW_REVIEW', payload: { outingId, at } });
+      }
+    };
+    tick();
+    const id = setInterval(tick, 60_000);
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [state.outings]);
+
   /**
    * Table normale — H+6 : caution encore bloquée d’un confirmé non « Pas venu »
    * rendue d’office (minuterie locale, même modèle que le partenaire).
@@ -5452,6 +5628,21 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       return { ok: true as const };
     },
     [state.currentUser, state.requests],
+  );
+
+  const contestHostNoShow = useCallback(
+    (outingId: string, note: string) => {
+      const user = state.currentUser;
+      if (!user) return { ok: false as const, reason: 'no_user' as const };
+      const o = state.outings.find((x) => x.id === outingId);
+      if (!o) return { ok: false as const, reason: 'not_found' as const };
+      const at = new Date().toISOString();
+      const refusal = hostContestRefusal(o, user.id, note, new Date(at).getTime());
+      if (refusal) return { ok: false as const, reason: refusal };
+      dispatch({ type: 'CONTEST_HOST_NO_SHOW', payload: { outingId, note, at } });
+      return { ok: true as const };
+    },
+    [state.currentUser, state.outings],
   );
 
   const demoSimulateDepositH6 = useCallback(
@@ -6052,24 +6243,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SET_TOAST', payload: toast });
         return { ok: true, strike: nextW.partnerWarnings, banned: nextW.closed };
       }
+      // Table normale : l’hôte a 24 h pour contester ; sanction et cautions en attente.
       const prev = state.hostNoShowStrikes[hostId] ?? 0;
-      const strike = prev + 1;
-      const { banned } = hostSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_HOST_NO_SHOW',
-        payload: { outingId, hostId, strike, banned, reportedAt, reportedByUserId: user.id },
+        payload: { outingId, hostId, strike: prev, banned: false, reportedAt, reportedByUserId: user.id },
       });
-      dispatch({
-        type: 'RETURN_DEPOSITS_FOR_OUTING',
-        payload: { outingId, reason: 'host_no_show' },
-      });
-      // Auto note in chat threads for confirmed guests.
+      // Note auto neutre (aucun nom du déclarant).
       const confirmedReqs = state.requests.filter(
         (r) => r.outingId === outingId && r.status === 'confirmed',
       );
-      const noteBody = banned
-        ? 'Note auto · 2e no-show hôte — compte suspendu. Cautions remboursées.'
-        : 'Note auto · no-show hôte — avertissement. Cautions des invités remboursées.';
+      const noteBody =
+        'Note auto · absence de l’hôte signalée. L’hôte a 24 h pour contester ; les cautions sont en attente.';
       const targets =
         confirmedReqs.length > 0
           ? confirmedReqs
@@ -6096,14 +6281,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           }
         : {
             id: uid('toast'),
-            title: banned ? 'Hôte banni (démo)' : 'Avertissement hôte',
-            body: banned
-              ? '2e no-show — compte suspendu. Cautions des invités remboursées.'
-              : '1er no-show — avertissement. Cautions des invités remboursées.',
-            createdAt: new Date().toISOString(),
+            title: 'Absence de l’hôte signalée',
+            body: 'L’hôte a 24 h pour contester. Les cautions sont en attente jusqu’à la décision.',
+            createdAt: reportedAt,
           };
       dispatch({ type: 'SET_TOAST', payload: toast });
-      return { ok: true, strike, banned };
+      return { ok: true, strike: prev, banned: false };
     },
     [
       state.currentUser,
@@ -7551,6 +7734,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
       contestNoShow,
+      contestHostNoShow,
       demoMarkConfirmedPresent,
       getPresenceChecklist,
       markGuestsPresentAndRate,
@@ -7663,6 +7847,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
       contestNoShow,
+      contestHostNoShow,
       demoMarkConfirmedPresent,
       getPresenceChecklist,
       markGuestsPresentAndRate,

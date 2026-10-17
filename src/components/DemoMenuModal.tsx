@@ -527,10 +527,8 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 if (!r.ok) Alert.alert('Impossible', refusalLabel(r.reason, 'host_noshow'));
                 else
                   Alert.alert(
-                    r.banned ? 'Compte suspendu' : 'Avertissement',
-                    r.banned
-                      ? '2e no-show hôte — ban + cautions remboursées.'
-                      : '1er no-show — warning + note auto + cautions remboursées.',
+                    'Absence de l’hôte signalée',
+                    'L’hôte a 24 h pour contester. Cautions en attente jusqu’à la décision.',
                   );
               })
             }

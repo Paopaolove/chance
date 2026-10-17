@@ -64,6 +64,8 @@ import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 import { CheckNote } from '../components/CheckNote';
 import { NoShowContestCard } from '../components/NoShowContestCard';
+import { HostNoShowContestCard } from '../components/HostNoShowContestCard';
+import { isHostNoShowUnresolved } from '../utils/hostNoShowContest';
 import { useFirstMomentGate } from '../components/FirstMomentSheet';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -589,6 +591,16 @@ export function OutingDetailScreen() {
           {outing.capacity}
         </Text>
       </View>
+
+      {isHostNoShowUnresolved(outing) ? (
+        isHost ? (
+          <HostNoShowContestCard outing={outing} />
+        ) : myRequest && 'id' in myRequest && myRequest.status === 'confirmed' ? (
+          <Text style={[styles.hint, { marginTop: spacing.md }]}>
+            Absence de l’hôte signalée : les cautions sont en attente de la décision.
+          </Text>
+        ) : null
+      ) : null}
 
       {(() => {
         // Host: pending/accepted/confirmed. Autres: confirmés seulement (pas les demandes).

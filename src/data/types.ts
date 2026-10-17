@@ -320,6 +320,17 @@ export interface Outing {
    * Same event must not increment strikes twice.
    */
   hostNoShowReported?: boolean;
+  /**
+   * Table normale : absence de l’hôte déclarée, contestable 24 h par l’hôte.
+   * pending/contested = sanction et cautions en attente. La phrase de l’hôte
+   * est dans AppState.hostNoShowContestNotes (jamais sur la sortie).
+   */
+  hostNoShowCase?: {
+    reportedAt: string;
+    status: 'pending' | 'contested' | 'retained' | 'not_retained' | 'review_expired';
+    contestedAt?: string;
+    resolvedAt?: string;
+  };
   /** Lot 6: never-honor sanction already applied on this outing. */
   hostNeverHonorReported?: boolean;
   /**
@@ -669,6 +680,8 @@ export interface AppState {
   entryIntent: EntryIntent | null;
   chatMessages: ChatMessage[];
   reviews: Review[];
+  /** Phrase de contestation de l’hôte, par sortie (jamais montrée aux invités). */
+  hostNoShowContestNotes?: Record<string, string>;
   /** Late signals — bandeau for other party(ies) in chat/outing UI. */
   lateReports: LateReport[];
   /** Unexpected-event signals (once per person per outing). */
@@ -908,6 +921,11 @@ export type AppAction =
   | { type: 'EXPIRE_NO_SHOW_CONTEST'; payload: { requestId: string; at: string } }
   /** Revue sans décision 7 jours après la contestation : caution rendue, absence non comptée. Refusée avant l’heure. */
   | { type: 'EXPIRE_NO_SHOW_REVIEW'; payload: { requestId: string; at: string } }
+  | { type: 'CONTEST_HOST_NO_SHOW'; payload: { outingId: string; note: string; at: string } }
+  | { type: 'EXPIRE_HOST_NO_SHOW_CONTEST'; payload: { outingId: string; at: string } }
+  | { type: 'CONFIRM_HOST_NO_SHOW_AFTER_REVIEW'; payload: { outingId: string; at: string } }
+  | { type: 'ACCEPT_HOST_NO_SHOW_CONTEST'; payload: { outingId: string; at: string } }
+  | { type: 'EXPIRE_HOST_NO_SHOW_REVIEW'; payload: { outingId: string; at: string } }
   /** Revue : « Pas venu confirmé » → caution perdue (6,90 / 13,10). */
   | { type: 'CONFIRM_NO_SHOW_AFTER_REVIEW'; payload: { requestId: string; at: string } }
   /** Revue : « contestation acceptée » → caution rendue. */
