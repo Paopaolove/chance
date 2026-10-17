@@ -375,5 +375,19 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   // règles existantes inchangées : passé (non urgent) hors du fil, urgent H+31 hors du fil
   ok(!OA.isVisibleOnAnnoncesFeed(o({startsAt:iso(now-60e3),spotsLeft:1}))&&!OA.isVisibleOnAnnoncesFeed(o({urgentOnSite:true,startsAt:iso(now-31*60e3),spotsLeft:1})),'existing time rules unchanged');
 }
+
+// urgent 1 place (QA 17/10) : acceptée → hors du fil ; confirmation expirée avant H+30 → revient
+{
+  const uo=o({urgentOnSite:true,startsAt:iso(now),capacity:1,spotsLeft:1,status:'open'});
+  let u1=S({outings:[uo],requests:[rq()]});
+  ok(OA.isVisibleOnAnnoncesFeed(u1.outings[0],now),'urgent 1 seat: in feed before accept');
+  u1=D(u1,{type:'ACCEPT_REQUEST',payload:{requestId:'r1',acceptedAt:iso(now),confirmDeadlineAt:iso(now+10*60e3)}});
+  ok(u1.requests[0].status==='accepted'&&u1.outings[0].spotsLeft===0&&!OA.isVisibleOnAnnoncesFeed(u1.outings[0],now+60e3),'urgent 1 seat accepted: out of feed');
+  const ue=D(u1,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+11*60e3)}});
+  ok(ue.requests[0].status==='expired'&&ue.outings[0].spotsLeft===1&&OA.isVisibleOnAnnoncesFeed(ue.outings[0],now+11*60e3),'urgent 1 seat: late confirm expired before H+30 → back in feed');
+  const ut=D(u1,{type:'EXPIRE_REQUEST',payload:{requestId:'r1'}});
+  ok(ut.requests[0].status==='expired'&&ut.outings[0].spotsLeft===1&&OA.isVisibleOnAnnoncesFeed(ut.outings[0],now+10*60e3+1),'urgent 1 seat: timer expiry (EXPIRE_REQUEST) → back in feed');
+  ok(!OA.isVisibleOnAnnoncesFeed(ue.outings[0],now+31*60e3),'urgent: still leaves feed after H+30');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
