@@ -881,7 +881,8 @@ export function OutingDetailScreen() {
                 !r.leftTableAt &&
                 isStartsAtPast(outing.startsAt) &&
                 // Plus de « Pas venu » à partir de H+6 (caution rendue d’office).
-                isNoShowWindowOpen(outing) ? (
+                isNoShowWindowOpen(outing) &&
+                !outing.hostNoShowReported ? (
                   <Button
                     title={`Signaler absence de ${r.userName}`}
                     variant="ghost"

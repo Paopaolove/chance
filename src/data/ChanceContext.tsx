@@ -1855,6 +1855,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (!isNoShowWindowOpen(outingNoShow, new Date(reportedAt).getTime())) {
         return state;
       }
+      // Hôte déclaré « Pas venu » : cautions des invités rendues, plus de « Pas venu » invité.
+      if (outingNoShow.hostNoShowReported) return state;
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -6165,6 +6167,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // Table normale : à partir de H+6, plus de « Pas venu ».
       if (!isNoShowWindowOpen(outing, new Date(reportedAt).getTime())) {
         return { ok: false, reason: 'too_late' };
+      }
+      if (outing.hostNoShowReported) {
+        return { ok: false, reason: 'host_no_show' };
       }
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,

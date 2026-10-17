@@ -734,9 +734,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   {
     const hn=D(st0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}});
     ok(hn.outings[0].hostNoShowReported===true&&hn.outings[0].status==='closed'&&hn.hostNoShowStrikes.h1===1&&!('hostNoShowReporters' in hn),'host no-show: flow unchanged, no author map');
-    // état actuel (non modifié, question pour Paolo) : l’hôte déclaré « Pas venu » peut encore signaler
+    // décision Paolo 17/10 15 h 44 : l’hôte déclaré « Pas venu » ne peut plus signaler sur cette table
     const hostRep=SUB({...hn,currentUser:host},'hr1',now,'u1');
-    ok(!!rp(hostRep,'hr1')&&!/follows/.test(JSON.stringify(rp(hostRep,'hr1'))),'host declared « Pas venu » by guest: report allowed (current behaviour), no flag');
+    ok(!rp(hostRep,'hr1')&&!/follows/.test(JSON.stringify(hostRep.tableReports)),'host declared « Pas venu » by guest: report refused, no flag');
   }
 }
 
@@ -928,6 +928,57 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const ep=fs.readFileSync(path.join(__dirname,'..','src','screens','EditProfileScreen.tsx'),'utf8');
   ok(!/draguer/.test(ep)&&!ep.includes('il sert à l’option'),'edit profile: « Pas pour draguer » sentence removed');
   ok(/<Text style=\{styles\.label\}>Genre \(optionnel\)<\/Text>\s*<GenderPills/.test(ep),'edit profile: gender label directly followed by pills (no empty hint)');
+}
+
+// hôte déclaré « Pas venu » : ne signale personne, cautions rendues ; signalement ouvert avant un « Pas venu » maintenu (Paolo 17/10, 15 h 44)
+{
+  const TRx=require('../src/utils/tableReports');
+  const NOTEx='Il a eu des propos déplacés pendant le dîner.';
+  const T0=now-10*60e3;
+  const g1=rq({status:'confirmed',depositStatus:'held'}), g2=rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'});
+  const base=(rx:any[]=[g1,g2])=>S({currentUser:me,outings:[o({startsAt:iso(T0),status:'closed'})],requests:rx});
+  const SUBx=(st:any,id:string,user:any,target:string)=>D({...st,currentUser:user},{type:'SUBMIT_TABLE_REPORT',payload:{id,outingId:'o1',targetUserId:target,category:'sexism',note:NOTEx,createdAt:iso(now)}});
+  const ADVx=(st:any,id:string,to:string,outcome?:string)=>D(st,{type:'ADVANCE_TABLE_REPORT',payload:{reportId:id,to,at:iso(now),outcome}});
+  const HNS=(st:any)=>D(D(st,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false}}),{type:'RETURN_DEPOSITS_FOR_OUTING',payload:{outingId:'o1',reason:'host_no_show'}});
+  const GNS=(st:any,rid='r1',uid='u1')=>D(st,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:rid,guestId:uid,strike:1,lowerPriority:false,reportedAt:iso(now)}});
+  const b0=base();
+  ok(TRx.canOpenTableReport(b0.outings[0],b0.requests,'h1',now)&&TRx.canOpenTableReport(b0.outings[0],b0.requests,'u1',now),'setup: host and guest can report before any « Pas venu »');
+  // 2) hôte déclaré « Pas venu »
+  const hn=HNS(b0);
+  ok(hn.outings[0].hostNoShowReported===true&&TRx.isHostMarkedNoShow(hn.outings[0],'h1')&&!TRx.isHostMarkedNoShow(hn.outings[0],'u1'),'host no-show: model flag');
+  ok(!TRx.canOpenTableReport(hn.outings[0],hn.requests,'h1',now)&&!TRx.canSubmitTableReport(hn.outings[0],hn.requests,'h1','u1',now),'host no-show: host cannot report anyone (model)');
+  ok(SUBx(hn,'hx',host,'u1').tableReports.length===0&&SUBx(hn,'hy',host,'u2').tableReports.length===0,'host no-show: host report refused (reducer)');
+  ok(TRx.canOpenTableReport(hn.outings[0],hn.requests,'u1',now)&&SUBx(hn,'gx',me,'h1').tableReports.length===1,'host no-show: guests can still report');
+  ok(hn.requests.every((r:any)=>r.depositStatus==='returned'),'host no-show: guests’ deposits returned (RETURN_DEPOSITS_FOR_OUTING)');
+  const pres=HNS(base([rq({status:'confirmed',depositStatus:'held',attendance:'present'}),g2]));
+  ok(pres.requests.every((r:any)=>r.depositStatus==='returned'),'host no-show: present guest’s held deposit returned too');
+  const hng=GNS(hn);
+  ok(hng.requests[0].attendance===undefined&&hng.requests[0].depositStatus==='returned'&&!(hng.guestNoShowStrikes?.u1),'host no-show: later « Pas venu » on a guest refused (reducer)');
+  ok(HNS(hn)===hn||JSON.stringify(HNS(hn))===JSON.stringify(hn),'host no-show: idempotent');
+  // 3) signalement ouvert avant un « Pas venu » : maintenu, revue normale — invité
+  const gr=SUBx(b0,'c1',me,'h1');
+  ok(gr.tableReports.length===1,'setup: guest report open');
+  const grn=GNS({...gr,currentUser:host});
+  ok(grn.requests[0].attendance==='absent'&&grn.tableReports.length===1&&grn.tableReports[0].status===gr.tableReports[0].status,'guest marked « Pas venu » after reporting: report kept');
+  ok(!TRx.canOpenTableReport(grn.outings[0],grn.requests,'u1',now)&&SUBx(grn,'c1b',me,'u2').tableReports.length===1,'guest « Pas venu »: no new report');
+  let gflow=ADVx(ADVx(grn,'c1','contact_reporter'),'c1','contact_target');
+  ok(gflow.tableReports[0].status==='contact_target','guest report: review continues after « Pas venu »');
+  gflow=ADVx(gflow,'c1','closed','warning');
+  ok(gflow.tableReports[0].status==='closed'&&gflow.tableReports[0].outcome==='warning','guest report: normal outcome after « Pas venu »');
+  // 3) — hôte
+  const hr=SUBx(b0,'c2',host,'u1');
+  ok(hr.tableReports.length===1,'setup: host report open');
+  const hrn=HNS(hr);
+  ok(hrn.tableReports.length===1&&hrn.tableReports[0].status===hr.tableReports[0].status,'host declared « Pas venu » after reporting: report kept');
+  let hflow=ADVx(ADVx(hrn,'c2','contact_reporter'),'c2','contact_target');
+  hflow=ADVx(hflow,'c2','closed','sans_suite');
+  ok(hflow.tableReports[0].status==='closed'&&hflow.tableReports[0].outcome==='sans_suite','host report: normal review to the end after host « Pas venu »');
+  // écran : lien « Signaler » piloté par le modèle, bouton « Signaler absence » masqué
+  const fs=require('node:fs'), path=require('node:path');
+  const od=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
+  const bi=od.indexOf('title={`Signaler absence de ${r.userName}`}');
+  ok(od.slice(bi-500,bi).includes('!outing.hostNoShowReported'),'static: « Signaler absence » hidden after host no-show');
+  ok(/canReportOnOuting\(outing\.id\) \? \(/.test(od),'static: report link gated by canReportOnOuting (model)');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

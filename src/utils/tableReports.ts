@@ -190,7 +190,13 @@ export function tableMemberIds(
 
 type ReportOuting = Pick<
   Outing,
-  'id' | 'hostId' | 'status' | 'startsAt' | 'urgentOnSite' | 'isPartnerListing'
+  | 'id'
+  | 'hostId'
+  | 'status'
+  | 'startsAt'
+  | 'urgentOnSite'
+  | 'isPartnerListing'
+  | 'hostNoShowReported'
 >;
 
 /**
@@ -199,6 +205,8 @@ type ReportOuting = Pick<
  * (pas de signalement avant un échange possible — même règle que le chat).
  * Un invité marqué « Pas venu » sur cette table ne peut pas signaler : il
  * n’était pas là (le « Pas venu » de l’hôte est une démarche séparée).
+ * De même, un hôte déclaré « Pas venu » ne peut signaler personne sur cette
+ * table. Un signalement ouvert avant le « Pas venu » reste en revue normale.
  */
 export function canOpenTableReport(
   outing: ReportOuting,
@@ -211,7 +219,16 @@ export function canOpenTableReport(
   if (members.length < 2) return false; // personne de confirmé : pas de table
   if (!members.includes(reporterId)) return false;
   if (isMarkedNoShow(outing, requests, reporterId)) return false;
+  if (isHostMarkedNoShow(outing, reporterId)) return false;
   return isOutingChatOpen(outing, nowMs);
+}
+
+/** Hôte de cette table déclaré « Pas venu » (hostNoShowReported). */
+export function isHostMarkedNoShow(
+  outing: Pick<Outing, 'hostId' | 'hostNoShowReported'>,
+  userId: string,
+): boolean {
+  return outing.hostNoShowReported === true && outing.hostId === userId;
 }
 
 /** Invité marqué « Pas venu » (attendance 'absent') sur cette table. */
