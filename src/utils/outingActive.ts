@@ -134,14 +134,19 @@ export function outingOccupiesActiveSlot(
 }
 
 /**
- * Public Annonces list: open/full and not yet started — except urgent on-site,
- * which stays visible/joinable until startsAt+30 min despite startsAt = now.
+ * Public Annonces list: open with at least one seat left, not yet started —
+ * except urgent on-site, which stays visible/joinable until startsAt+30 min
+ * despite startsAt = now.
+ * Complet (status 'full' ou spotsLeft ≤ 0) → hors du fil, même urgent ;
+ * revient dès qu’une place se libère (status repasse 'open', spotsLeft > 0).
+ * Un accepté qui laisse une place ne retire pas l’annonce.
  */
 export function isVisibleOnAnnoncesFeed(
   outing: Outing,
   nowMs = Date.now(),
 ): boolean {
-  if (outing.status !== 'open' && outing.status !== 'full') return false;
+  if (outing.status !== 'open') return false;
+  if (!(outing.spotsLeft > 0)) return false;
   if (isUrgentOnSite(outing)) {
     return isUrgentAcceptWindowOpen(outing, nowMs);
   }

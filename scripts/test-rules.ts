@@ -350,5 +350,30 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(D(base(me),{type:'COMPLETE_OUTING',payload:{outingId:'o1',at:iso(start+30*60e3)}}).outings[0].status==='closed','real rule unchanged: guest by host refused');
   ok(D(D(base(me),act),act).outings[0].status==='completed','demo closure idempotent');
 }
+
+// fil d’annonces : un moment complet sort du fil (17/10)
+{
+  ok(!OA.isVisibleOnAnnoncesFeed(o({status:'full',spotsLeft:0})),'full outing hidden');
+  ok(!OA.isVisibleOnAnnoncesFeed(o({status:'open',spotsLeft:0})),'spotsLeft 0 hidden even if status open');
+  ok(!OA.isVisibleOnAnnoncesFeed(o({status:'full',spotsLeft:0,urgentOnSite:true,startsAt:iso(now-5*60e3)})),'urgent full hidden');
+  ok(!OA.isVisibleOnAnnoncesFeed(o({status:'open',spotsLeft:0,urgentOnSite:true,startsAt:iso(now-5*60e3)})),'urgent spotsLeft 0 hidden');
+  ok(OA.isVisibleOnAnnoncesFeed(o({status:'open',spotsLeft:1,urgentOnSite:true,startsAt:iso(now-5*60e3)})),'urgent with a seat still visible');
+  // 2 places, 1 accepté → reste dans le fil ; 2e accepté → complet, hors du fil
+  let f=S({requests:[rq(),rq({id:'r2',userId:'u2',userName:'B'})]});
+  f=D(f,{type:'ACCEPT_REQUEST',payload:{requestId:'r1',acceptedAt:iso(now),confirmDeadlineAt:iso(now+600e3)}});
+  ok(f.outings[0].spotsLeft===1&&OA.isVisibleOnAnnoncesFeed(f.outings[0]),'one seat left + one accepted: in feed');
+  f=D(f,{type:'ACCEPT_REQUEST',payload:{requestId:'r2',acceptedAt:iso(now),confirmDeadlineAt:iso(now+600e3)}});
+  ok(f.outings[0].spotsLeft===0&&!OA.isVisibleOnAnnoncesFeed(f.outings[0]),'all seats taken: out of feed');
+  // place libérée par expiration (confirm hors délai) → revient
+  const ex=D(f,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+11*60e3)}});
+  ok(ex.requests[0].status==='expired'&&ex.outings[0].spotsLeft===1&&OA.isVisibleOnAnnoncesFeed(ex.outings[0]),'seat freed by expiry: back in feed');
+  // place libérée par annulation d’un confirmé → revient
+  let cf=D(f,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+60e3)}});
+  ok(!OA.isVisibleOnAnnoncesFeed(cf.outings[0]),'full after confirm: out of feed');
+  cf=D(cf,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+2*60e3),by:'guest'}});
+  ok(cf.outings[0].spotsLeft===1&&OA.isVisibleOnAnnoncesFeed(cf.outings[0]),'seat freed by cancel: back in feed');
+  // règles existantes inchangées : passé (non urgent) hors du fil, urgent H+31 hors du fil
+  ok(!OA.isVisibleOnAnnoncesFeed(o({startsAt:iso(now-60e3),spotsLeft:1}))&&!OA.isVisibleOnAnnoncesFeed(o({urgentOnSite:true,startsAt:iso(now-31*60e3),spotsLeft:1})),'existing time rules unchanged');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
