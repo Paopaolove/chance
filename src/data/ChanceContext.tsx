@@ -119,6 +119,7 @@ import {
   presenceReturnsDepositNow,
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
+import { planMarkPresentAndRate } from '../utils/markPresent';
 import { isDemoEnabled } from '../utils/devMode';
 import {
   canActorBlockUser,
@@ -2385,7 +2386,18 @@ interface ChanceContextValue {
         } | null;
       }
     | { ok: false; reason: string };
-  /** Completed outings where user took part but nobody present → nothing to rate (démo recovery). */
+  /**
+   * Profil « Marquer présent et noter » : vraie action de présence (hôte, H−15,
+   * pas après « Pas venu »). ok seulement si la présence est enregistrée ou
+   * déjà marquée ; sinon motif (cf. markPresentReasonLabel).
+   */
+  markPresentAndRate: (outingId: string) =>
+    | {
+        ok: true;
+        rateTarget: { outingId: string; toUserId: string; toUserName: string };
+      }
+    | { ok: false; reason: string };
+  /** Completed outings where user took part but nobody present → nothing to rate. */
   getCompletedOutingsMissingPresent: () => {
     outing: Outing;
     rateTarget: { toUserId: string; toUserName: string };
@@ -4825,6 +4837,28 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.currentUser, state.requests, state.outings],
   );
 
+  const markPresentAndRate = useCallback(
+    (outingId: string) => {
+      const outing = state.outings.find((o) => o.id === outingId);
+      const plan = planMarkPresentAndRate({
+        userId: state.currentUser?.id,
+        outing,
+        requests: state.requests,
+      });
+      if (!plan.ok) return { ok: false as const, reason: plan.reason };
+      // Vraie action, demande par demande (mêmes contrôles + MARK_GUEST_PRESENT).
+      for (const requestId of plan.requestIds) {
+        const res = markGuestPresent(requestId);
+        if (!res.ok) return { ok: false as const, reason: res.reason };
+      }
+      return {
+        ok: true as const,
+        rateTarget: { outingId, ...plan.rateTarget },
+      };
+    },
+    [state.currentUser, state.outings, state.requests, markGuestPresent],
+  );
+
   /**
    * Demo QA: force presence so getOutingsToRate / LeaveReview unlock.
    * Does not weaken prod markGuestPresent (host-only).
@@ -6869,6 +6903,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       markGuestPresent,
       demoSimulateAutoComplete,
       demoMarkConfirmedPresent,
+      markPresentAndRate,
       getCompletedOutingsMissingPresent,
       addReview,
       replyToReview,
@@ -6975,6 +7010,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       markGuestPresent,
       demoSimulateAutoComplete,
       demoMarkConfirmedPresent,
+      markPresentAndRate,
       getCompletedOutingsMissingPresent,
       addReview,
       replyToReview,

@@ -437,11 +437,55 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     const t=fs.readFileSync(f,'utf8');
     for(const n of names){ if(new RegExp('\\b'+n+'\\b').test(t)) outside.push(path.basename(f)+':'+n); }
   }
-  ok(JSON.stringify(outside.sort())===JSON.stringify(['ProfileScreen.tsx:demoMarkConfirmedPresent','ReviewsScreen.tsx:simulateOtherHideConsent']),'static: demo calls outside menu = '+outside.join(','));
+  ok(JSON.stringify(outside.sort())===JSON.stringify(['ReviewsScreen.tsx:simulateOtherHideConsent']),'static: demo calls outside menu = '+outside.join(','));
   const rv=src('screens/ReviewsScreen.tsx'), pf=src('screens/ProfileScreen.tsx');
   ok(/isDemoEnabled\(\) \? \(\s*<Pressable[\s\S]{0,200}simulateOtherHideConsent/.test(rv),'static: ReviewsScreen demo entry behind isDemoEnabled()');
-  ok(/missingPresent = isDemoEnabled\(\)\s*\?\s*getCompletedOutingsMissingPresent\(\)\s*:\s*\[\]/.test(pf),'static: ProfileScreen missingPresent hidden outside dev');
+  ok(/const missingPresent = getCompletedOutingsMissingPresent\(\);/.test(pf)&&!/demoMarkConfirmedPresent/.test(pf)&&/markPresentAndRate\(item\.outing\.id\)/.test(pf),'static: ProfileScreen « Marquer présent et noter » visible hors dev, branché sur la vraie action');
+  ok(/if \(!marked\.ok\) \{\s*Alert\.alert\([\s\S]{0,240}markPresentReasonLabel\(marked\.reason\)[\s\S]{0,120}return;/.test(pf),'static: ProfileScreen — alerte avec motif, pas d’avis si présence refusée');
   ok(/isDemoEnabled\(\) \? ' Outils QA : 5 taps sur le logo Moment\.' : ''/.test(pf)&&!/Outils QA :\s*\n\s*5 taps/.test(pf),'static: QA note hidden outside dev');
+}
+
+// « Marquer présent et noter » (Profil) — vraie action de présence, aussi hors dev (17/10)
+{
+  (globalThis as any).__DEV__=false;
+  const MK=require('../src/utils/markPresent');
+  const DM=require('../src/utils/devMode');
+  ok(DM.isDemoEnabled()===false,'present button: tests run with __DEV__ false');
+  const hostU:any={id:'h1',firstName:'Hôte'};
+  const end=now-2*H; // moment terminé
+  const out=(x:any={})=>o({startsAt:iso(end),status:'completed',...x});
+  const g=(x:any={})=>rq({status:'confirmed',depositStatus:'held',...x});
+  const plan=(userId:any,outing:any,reqs:any[],nowMs=now)=>MK.planMarkPresentAndRate({userId,outing,requests:reqs,nowMs});
+  // hôte : marque les confirmés, cible = invité
+  const p1=plan('h1',out(),[g(),g({id:'r2',userId:'u2',userName:'Bea'}),g({id:'r3',userId:'u3',status:'cancelled'})]);
+  ok(p1.ok&&JSON.stringify(p1.requestIds)==='["r1","r2"]'&&p1.rateTarget.toUserId==='u1','present: host marks confirmed guests (cancelled excluded), rate guest');
+  // la vraie action (reducer) applique la règle de caution existante
+  let st=S({currentUser:hostU,outings:[out()],requests:[g()]});
+  for(const id of p1.requestIds.filter((x:string)=>x==='r1')) st=D(st,{type:'MARK_GUEST_PRESENT',payload:{requestId:id,markedAt:iso(now)}});
+  ok(st.requests[0].attendance==='present'&&st.requests[0].depositStatus==='returned','present on completed moment: caution returned (existing rule)');
+  let st2=S({currentUser:hostU,outings:[o({startsAt:iso(now-5*60e3),status:'closed'})],requests:[g()]});
+  const p2=plan('h1',st2.outings[0],st2.requests);
+  st2=D(st2,{type:'MARK_GUEST_PRESENT',payload:{requestId:p2.requestIds[0],markedAt:iso(now)}});
+  ok(p2.ok&&st2.requests[0].attendance==='present'&&st2.requests[0].depositStatus==='held','present before H+30: caution held until H+30 (unchanged)');
+  // invité : pas l’hôte → refus avec motif
+  const p3=plan('u1',out(),[g()]);
+  ok(!p3.ok&&p3.reason==='not_host'&&/hôte/.test(MK.markPresentReasonLabel(p3.reason)),'present: guest refused (not_host) + label');
+  // avant H−15 → refus
+  const p4=plan('h1',o({startsAt:iso(now+20*60e3)}),[g()]);
+  ok(!p4.ok&&p4.reason==='too_early','present: refused before H−15');
+  ok(plan('h1',o({startsAt:iso(now+14*60e3)}),[g()]).ok,'present: allowed from H−15');
+  // après « Pas venu » → refus
+  const p5=plan('h1',out(),[g({attendance:'absent',depositStatus:'forfeited'})]);
+  ok(!p5.ok&&p5.reason==='already_absent'&&/Pas venu/.test(MK.markPresentReasonLabel(p5.reason)),'present: refused after « Pas venu »');
+  ok(D(S({outings:[out()],requests:[g({attendance:'absent',depositStatus:'forfeited'})]}),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}}).requests[0].attendance==='absent','present: reducer keeps absent');
+  // déjà marqué → ok sans rien enregistrer (l’avis s’ouvre)
+  const p6=plan('h1',out(),[g({attendance:'present',depositStatus:'returned'})]);
+  ok(p6.ok&&p6.requestIds.length===0&&p6.rateTarget.toUserId==='u1','present: already marked → ok, nothing to record');
+  // départ, annulé, sans invité, sans utilisateur
+  ok(!plan('h1',out(),[g({leftTableAt:iso(end+10*60e3)})]).ok,'present: guest who left not marked');
+  ok(plan('h1',out({status:'cancelled'}),[g()]).reason==='outing_cancelled','present: cancelled moment refused');
+  ok(plan('h1',out(),[]).reason==='no_guest'&&plan(null,out(),[g()]).reason==='no_user'&&plan('h1',undefined,[]).reason==='outing_not_found','present: no guest / no user / no moment');
+  (globalThis as any).__DEV__=true;
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

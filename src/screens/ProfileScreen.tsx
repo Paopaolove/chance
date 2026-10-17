@@ -44,6 +44,7 @@ import {
   PARTNER_WARNINGS_BEFORE_CLOSE,
 } from '../utils/partners';
 import { isDemoEnabled } from '../utils/devMode';
+import { markPresentReasonLabel } from '../utils/markPresent';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Profile'>,
@@ -68,7 +69,7 @@ function ProfileScreenInner() {
     getOutingsToRate,
     getMyRatedOutingPairs,
     getCompletedOutingsMissingPresent,
-    demoMarkConfirmedPresent,
+    markPresentAndRate,
     hasJokerAvailable,
     getMyPastMoments,
     getPendingMomentPhotoConsentsForMe,
@@ -736,11 +737,8 @@ function ProfileScreenInner() {
           {(() => {
             const toRate = getOutingsToRate();
             const rated = getMyRatedOutingPairs();
-            // Provisoire : « Marquer présent et noter » (outil démo) seulement
-            // en développement (__DEV__) — décision Paolo en attente.
-            const missingPresent = isDemoEnabled()
-              ? getCompletedOutingsMissingPresent()
-              : [];
+            // « Marquer présent et noter » : vraie action de présence (17/10).
+            const missingPresent = getCompletedOutingsMissingPresent();
             if (!toRate.length && !rated.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
@@ -799,24 +797,21 @@ function ProfileScreenInner() {
                       >
                         <Text style={styles.cardValue}>{item.outing.title}</Text>
                         <Text style={styles.cardHint}>
-                          Moment terminé — personne n’est marquée présente
-                          (démo).
+                          Moment terminé — personne n’est marquée présente.
                         </Text>
                         <Button
                           title="Marquer présent et noter"
                           variant="secondary"
                           onPress={() => {
-                            const marked = demoMarkConfirmedPresent(
-                              item.outing.id,
-                            );
-                            const toUserId =
-                              marked.ok && marked.rateTarget
-                                ? marked.rateTarget.toUserId
-                                : item.rateTarget.toUserId;
-                            const toUserName =
-                              marked.ok && marked.rateTarget
-                                ? marked.rateTarget.toUserName
-                                : item.rateTarget.toUserName;
+                            const marked = markPresentAndRate(item.outing.id);
+                            if (!marked.ok) {
+                              Alert.alert(
+                                'Présence non enregistrée',
+                                markPresentReasonLabel(marked.reason),
+                              );
+                              return;
+                            }
+                            const { toUserId, toUserName } = marked.rateTarget;
                             // Defer so MARK_GUEST_PRESENT is committed before LeaveReview gates.
                             setTimeout(() => {
                               navigation.navigate('LeaveReview', {
