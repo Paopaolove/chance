@@ -440,7 +440,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(JSON.stringify(outside.sort())===JSON.stringify(['ReviewsScreen.tsx:simulateOtherHideConsent']),'static: demo calls outside menu = '+outside.join(','));
   const rv=src('screens/ReviewsScreen.tsx'), pf=src('screens/ProfileScreen.tsx');
   ok(/isDemoEnabled\(\) \? \(\s*<Pressable[\s\S]{0,200}simulateOtherHideConsent/.test(rv),'static: ReviewsScreen demo entry behind isDemoEnabled()');
-  ok(/const missingPresent = getCompletedOutingsMissingPresent\(\)\.filter\(\s*\(item\) => item\.outing\.hostId === state\.currentUser\?\.id,?\s*\);/.test(pf)&&!/isDemoEnabled\(\)\s*\?\s*getCompletedOutingsMissingPresent/.test(pf)&&!/demoMarkConfirmedPresent/.test(pf)&&/markGuestsPresentAndRate\(\s*item\.outing\.id,\s*presenceChecked,?\s*\)/.test(pf),'static: ProfileScreen « Marquer présent et noter » hôte seulement, visible hors dev, cochés seulement');
+  ok(/const missingPresent = getCompletedOutingsMissingPresent\(\);/.test(pf)&&!/isDemoEnabled\(\)\s*\?\s*getCompletedOutingsMissingPresent/.test(pf)&&!/demoMarkConfirmedPresent/.test(pf)&&/markGuestsPresentAndRate\(\s*item\.outing\.id,\s*presenceChecked,?\s*\)/.test(pf),'static: ProfileScreen « Marquer présent et noter » hôte et invité (18/10), visible hors dev, cochés seulement');
   ok(/setPresenceChecked\(\[\]\); \/\/ rien de pré-coché/.test(pf),'static: nothing pre-checked');
   ok(/if \(!marked\.ok\) \{\s*Alert\.alert\([\s\S]{0,240}markPresentReasonLabel\(marked\.reason\)[\s\S]{0,120}return;/.test(pf),'static: ProfileScreen — alerte avec motif, pas d’avis si présence refusée');
   ok(/isDemoEnabled\(\) \? ' Outils QA : 5 taps sur le logo Moment\.' : ''/.test(pf)&&!/Outils QA :\s*\n\s*5 taps/.test(pf),'static: QA note hidden outside dev');
@@ -858,9 +858,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const pres=D(st({},{startsAt:iso(now+10*MIN)}),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
   ok(pres.requests[0].attendance==='present'&&pres.requests[0].depositStatus==='held','present before H+30: held (unchanged)');
   ok(D(pres,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(now+40*MIN)}}).requests[0].depositStatus==='returned','present: returned at closure / H+30 (unchanged)');
-  ok(D(st(),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}}).requests[0].depositStatus==='returned','present marked ≥ H+30: returned now (unchanged)');
+  ok(D(st(),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(T+H)}}).requests[0].depositStatus==='returned','present marked ≥ H+30: returned now (unchanged)');
   const late=D(R6(st(),H6),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(H6+H)}});
-  ok(late.requests[0].attendance==='present'&&late.requests[0].depositStatus==='returned','presence marked after H+6 still possible, deposit stays returned');
+  ok(late.requests[0].attendance===undefined&&late.requests[0].depositStatus==='returned','18/10: presence window closes at H+6 (refused after), deposit stays returned');
   // notes 1 à 5 : aucun effet sur la caution (invité et hôte)
   {
     const g2=rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'});
@@ -1210,7 +1210,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const od=rd('screens/OutingDetailScreen.tsx'), ctx=rd('data/ChanceContext.tsx');
   const bi=od.indexOf('title={`Signaler absence de ${r.userName}`}');
   ok(od.slice(bi-500,bi).includes('!r.noShowNotRetained'),'static: « Signaler absence » hidden after « absence non retenue »');
-  ok(/const strike = pending \? prev : prev \+ 1;/.test(ctx),'static: callback does not count at a pending declaration');
+  ok(/const strike = pending \|\| disagreement \? prev : prev \+ 1;/.test(ctx),'static: callback does not count at a pending declaration');
 }
 
 // ligne hôte « X · caution rendue » : à partir de H+6 ou si l’hôte est déclaré « Pas venu » ; rien avant H+6 (joker invisible)
@@ -1754,6 +1754,78 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const first=EXP(NS(mk()));
   const b1=RETH(HN(first,NSAT+2*H));
   ok(first.guestNoShowStrikes.u1===1&&!b1.guestNoShowStrikes.u1&&b1.currentUser.lowerPriority===false&&b1.currentUser.profileMention===undefined&&!b1.currentUser.banned,'gel 4: 1st erased, 0 left → no sanction');
+}
+
+// 18/10 · Présence : confirmation croisée (décision Paolo)
+{
+  const PC=require('../src/utils/presenceCheck');
+  const RL=require('../src/utils/refusalLabels');
+  const MIN=60e3, T=now-2*H; // début du moment il y a 2 h (fenêtre H−15 → H+6 ouverte)
+  const g2=(x:any={})=>rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held',...x});
+  const mk=(x:any={},ox:any={},more:any={})=>S({outings:[o({startsAt:iso(T),status:'closed',...ox})],requests:[rq({status:'confirmed',depositStatus:'held',...x})],...more});
+  const SELF=(s0:any,at:number)=>D({...s0,currentUser:me},{type:'GUEST_SELF_PRESENT',payload:{requestId:'r1',at:iso(at)}});
+  const HP=(s0:any,by:string,at:number)=>D(s0,{type:'CONFIRM_HOST_PRESENT',payload:{outingId:'o1',byUserId:by,at:iso(at)}});
+  const MARK=(s0:any,at:number)=>D({...s0,currentUser:host},{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(at)}});
+  const NS=(s0:any,at:number,by='h1')=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(at),reportedByUserId:by}});
+  const HNS=(s0:any,at:number,by='u1')=>D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:0,banned:false,reportedAt:iso(at),reportedByUserId:by}});
+  const COMPLETE=(s0:any,at:number)=>D(s0,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'auto',at:iso(at)}});
+  // point 1 : confirmation croisée, une seule suffit
+  const self=SELF(mk(),T+10*MIN);
+  ok(self.requests[0].attendance==='present'&&self.requests[0].presenceBy==='guest','presence 1: guest « Je suis présent » → present (by guest)');
+  ok(self.requests[0].depositStatus==='held','presence 1: deposit kept until H+30 / closure (existing rule)');
+  ok(COMPLETE(self,T+31*MIN).requests[0].depositStatus==='returned'&&SELF(mk({},{status:'completed'}),T+40*MIN).requests[0].depositStatus==='returned','presence 1: deposit returned at closure / H+30, or immediately when self-confirmed after closure');
+  ok(D({...COMPLETE(self,T+31*MIN),currentUser:me},{type:'ADD_REVIEW',payload:{id:'rvp',outingId:'o1',fromUserId:'u1',toUserId:'h1',rating:4,venueRating:4,venueKey:'k',createdAt:iso(T+H)}}).reviews.some((x:any)=>x.id==='rvp'),'presence 1: self-confirmed guest can rate after the moment');
+  ok(D({...COMPLETE(self,T+31*MIN),currentUser:host},{type:'ADD_REVIEW',payload:{id:'rvh',outingId:'o1',fromUserId:'h1',toUserId:'u1',rating:4,venueRating:4,venueKey:'k',createdAt:iso(T+H)}}).reviews.some((x:any)=>x.id==='rvh'),'presence 1: host can rate a self-confirmed guest');
+  ok(MARK(mk(),T+10*MIN).requests[0].presenceBy==='host','presence 1: host confirms guest → present (by host)');
+  ok(SELF(MARK(mk(),T+10*MIN),T+20*MIN).requests[0].presenceBy==='host','presence 1: one confirmation is enough (second one is a no-op)');
+  ok(D({...mk(),currentUser:host},{type:'GUEST_SELF_PRESENT',payload:{requestId:'r1',at:iso(T)}}).requests[0].attendance===undefined,'presence 1: only the guest can say « Je suis présent » for himself');
+  const hpSelf=HP(mk(),'h1',T+5*MIN), hpGuest=HP(mk(),'u1',T+5*MIN);
+  ok(hpSelf.outings[0].hostPresence?.byUserId==='h1'&&hpGuest.outings[0].hostPresence?.byUserId==='u1','presence 1: host says present / guest confirms host');
+  ok(HP(mk(),'zz',T).outings[0].hostPresence===undefined,'presence 1: stranger cannot confirm the host');
+  ok(HP(hpGuest,'h1',T+10*MIN).outings[0].hostPresence.byUserId==='u1','presence 1: host presence set once');
+  ok(SELF(mk({},{isPartnerListing:true}),T).requests[0].attendance===undefined,'presence 1: partner listing keeps « Je suis arrivé »');
+  const md=require('node:fs').readFileSync(require('node:path').join(__dirname,'../src/screens/ProfileScreen.tsx'),'utf8');
+  ok(!md.includes("(item) => item.outing.hostId === state.currentUser?.id")&&md.includes('guestSelfPresent(requestId)'),'presence 1: « Marquer présent et noter » no longer hidden for guests');
+  // point 2 : désaccord → contestation existante (24 h, revue 7 jours max)
+  const dis=NS(self,T+H);
+  ok(dis.requests[0].attendance==='absent'&&dis.requests[0].depositStatus==='contested'&&dis.requests[0].noShowContest?.viaPresence,'disagreement: guest present + host « Pas venu » → contested');
+  ok((dis.guestNoShowStrikes?.u1??0)===0,'disagreement: no strike before the review');
+  const disRev=D(dis,{type:'EXPIRE_NO_SHOW_REVIEW',payload:{requestId:'r1',at:iso(T+H+7*24*H)}});
+  ok(disRev.requests[0].depositStatus==='returned','disagreement: review undecided at 7 days → returned (existing rule)');
+  ok(NS(MARK(mk(),T+10*MIN),T+H).requests[0].attendance==='present','disagreement: host cannot contradict his own confirmation');
+  const late=SELF(NS(mk(),T+H),T+90*MIN);
+  ok(late.requests[0].depositStatus==='contested'&&late.requests[0].attendance==='absent'&&late.requests[0].noShowContest?.viaPresence,'disagreement: « Je suis présent » after « Pas venu » → contested (presence not recorded)');
+  const hostDis=HNS(hpSelf,T+H,'u1');
+  ok(hostDis.outings[0].hostNoShowCase?.status==='contested'&&hostDis.outings[0].hostNoShowCase?.viaPresence,'disagreement: host present + « Pas venu » host → contested');
+  ok(!HNS(hpGuest,T+H,'u1').outings[0].hostNoShowCase,'disagreement: guest cannot declare absent the host he confirmed');
+  const hostLate=HP(HNS(mk({},{},{requests:[rq({status:'confirmed',depositStatus:'held'}),g2()]}),T+H,'u1'),'u2',T+2*H);
+  ok(hostLate.outings[0].hostNoShowCase?.status==='contested'&&!hostLate.outings[0].hostPresence,'disagreement: host confirmed after a pending « Pas venu » → contested');
+  ok(HP(HNS(mk(),T+H,'u1'),'u1',T+2*H).outings[0].hostNoShowCase.status==='pending','disagreement: declarer cannot confirm the host afterwards');
+  const pa=D(mk({},{isPartnerListing:true}),{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(T+5*MIN)}});
+  ok(pa.requests[0].attendance==='present'&&pa.requests[0].presenceBy==='guest','partner: « Je suis arrivé » = guest self-confirmation');
+  const pd=D({...pa,currentUser:host},{type:'OPEN_PARTNER_DISPUTE',payload:{requestId:'r1',note:'x',at:iso(T+H)}});
+  ok(pd.requests[0].depositStatus==='contested'&&pd.requests[0].noShowContest?.viaArrival,'partner: « Pas venu » after arrival → contested');
+  // point 3 : silence → rendue à H+6 (inchangé)
+  const R6=(s0:any,at:number)=>D(s0,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(at)}});
+  ok(R6(mk(),T+6*H).requests[0].depositStatus==='returned'&&R6(mk(),T+6*H-MIN).requests[0].depositStatus==='held','silence: returned at H+6, not before');
+  // point 4 : notification de fin à qui n’a rien indiqué
+  ok(PC.PRESENCE_CHECK_BODY==='Alors, comment ça s’est passé ? Es-tu bien présent ?','end notification: exact text');
+  const two=mk({},{},{requests:[rq({status:'confirmed',depositStatus:'held'}),g2()]});
+  ok(JSON.stringify(PC.presenceCheckUserIds(two.outings[0],two.requests))==='["h1","u1","u2"]','end notification: nobody indicated → host + guests');
+  const sTwo=SELF(two,T+5*MIN);
+  ok(JSON.stringify(PC.presenceCheckUserIds(sTwo.outings[0],sTwo.requests))==='["h1","u2"]','end notification: guest who said present is not notified');
+  const hTwo=HP(MARK(two,T+5*MIN),'u2',T+6*MIN);
+  ok(JSON.stringify(PC.presenceCheckUserIds(hTwo.outings[0],hTwo.requests))==='["u1"]','end notification: host who marked and guest who confirmed host not notified');
+  ok(PC.presenceCheckUserIds({...two.outings[0],status:'cancelled'},two.requests).length===0,'end notification: none for a cancelled moment');
+  const ctx=require('node:fs').readFileSync(require('node:path').join(__dirname,'../src/data/ChanceContext.tsx'),'utf8');
+  ok(ctx.includes("type: 'presence_check'")&&ctx.includes('notifyPresenceCheck(outing.id)')&&ctx.includes('notifyPresenceCheck(outingId, { demo: true })'),'end notification: app push (no SMS) on auto-close, closure and demo');
+  // bornes H−15 et H+6
+  ok(SELF(mk(),T-15*MIN-MIN).requests[0].attendance===undefined&&SELF(mk(),T-15*MIN).requests[0].attendance==='present','edge H−15: refused at H−16 min, ok at H−15');
+  ok(SELF(mk(),T+6*H-MIN).requests[0].attendance==='present'&&SELF(mk(),T+6*H).requests[0].attendance===undefined,'edge H+6: ok at H+6 − 1 min, refused at H+6');
+  ok(!HP(mk(),'u1',T+6*H).outings[0].hostPresence&&HP(mk(),'u1',T-15*MIN).outings[0].hostPresence,'edge: host presence H−15 → H+6');
+  ok(MARK(mk({},{status:'completed'}),T+6*H-MIN).requests[0].attendance==='present'&&MARK(mk({},{status:'completed'}),T+6*H).requests[0].attendance===undefined,'edge: closure no longer cuts presence; H+6 does');
+  ok(OA.presenceWindowRefusal(o({startsAt:iso(T)}),T-16*MIN)==='too_early'&&OA.presenceWindowRefusal(o({startsAt:iso(T)}),T+6*H)==='too_late','edge: refusal codes');
+  ok(RL.refusalLabel('too_late','presence')==='La présence se confirme jusqu’à 6 h après le début.','edge: too_late label (presence)');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

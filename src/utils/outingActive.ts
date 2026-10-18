@@ -22,6 +22,9 @@ export const AUTO_URGENT_BEFORE_MS = 90 * 60 * 1000; // H−90
 /** Host may mark guest present from H−15 (same bound as partner « Je suis arrivé »). */
 export const PRESENCE_MARK_FROM_BEFORE_MS = 15 * 60 * 1000;
 
+/** 18/10 · Fin de la fenêtre de présence : H+6 (exclu), clôture comprise. */
+export const PRESENCE_MARK_UNTIL_AFTER_MS = 6 * 60 * 60 * 1000;
+
 export function isUrgentOnSite(outing: Outing): boolean {
   return outing.urgentOnSite === true;
 }
@@ -73,14 +76,27 @@ export function isUrgentAcceptWindowOpen(
  * Urgent: open + within startsAt+30 min (startsAt may already be « now »).
  */
 
-/** Host « Marquer présent » / caution return: only from H−15 onward. */
+/**
+ * Fenêtre de présence (18/10, confirmation croisée) : de H−15 jusqu’à H+6
+ * (exclu), pour l’invité comme pour l’hôte. La clôture du moment ne la coupe pas.
+ */
 export function isPresenceWindowOpen(
-  outing: Outing,
+  outing: Pick<Outing, 'startsAt'>,
   nowMs = Date.now(),
 ): boolean {
+  return presenceWindowRefusal(outing, nowMs) === null;
+}
+
+/** Refus lié à la fenêtre de présence : trop tôt (avant H−15) ou trop tard (H+6). */
+export function presenceWindowRefusal(
+  outing: Pick<Outing, 'startsAt'>,
+  nowMs = Date.now(),
+): 'too_early' | 'too_late' | null {
   const startMs = new Date(outing.startsAt).getTime();
-  if (!Number.isFinite(startMs)) return false;
-  return nowMs >= startMs - PRESENCE_MARK_FROM_BEFORE_MS;
+  if (!Number.isFinite(startMs)) return 'too_early';
+  if (nowMs < startMs - PRESENCE_MARK_FROM_BEFORE_MS) return 'too_early';
+  if (nowMs >= startMs + PRESENCE_MARK_UNTIL_AFTER_MS) return 'too_late';
+  return null;
 }
 
 export function isOutingAcceptingRequests(

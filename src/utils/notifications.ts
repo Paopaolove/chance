@@ -25,7 +25,9 @@ export type PriorityNotifType =
   | 'new_venue'
   | 'rate_after'
   /** Photo d’un moment passé à accepter (ou réponse à ma photo) → Profil. */
-  | 'moment_photo';
+  | 'moment_photo'
+  /** 18/10 · Fin du moment, présence non indiquée → détail du moment. */
+  | 'presence_check';
 
 export type ScheduledNotifIds = {
   accepted?: string;

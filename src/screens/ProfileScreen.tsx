@@ -45,6 +45,7 @@ import {
 } from '../utils/partners';
 import { isDemoEnabled } from '../utils/devMode';
 import { markPresentReasonLabel } from '../utils/markPresent';
+import { refusalLabel } from '../utils/refusalLabels';
 
 type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'Profile'>,
@@ -71,6 +72,8 @@ function ProfileScreenInner() {
     getCompletedOutingsMissingPresent,
     getPresenceChecklist,
     markGuestsPresentAndRate,
+    guestSelfPresent,
+    guestArrivedPartner,
     hasJokerAvailable,
     getMyPastMoments,
     getPendingMomentPhotoConsentsForMe,
@@ -741,11 +744,8 @@ function ProfileScreenInner() {
           {(() => {
             const toRate = getOutingsToRate();
             const rated = getMyRatedOutingPairs();
-            // « Marquer présent et noter » : hôte seulement (décision Paolo
-            // 17/10) — l’invité ne note qu’après coup, si sa présence est établie.
-            const missingPresent = getCompletedOutingsMissingPresent().filter(
-              (item) => item.outing.hostId === state.currentUser?.id,
-            );
+            // « Marquer présent et noter » : hôte et invité (18/10, présence croisée).
+            const missingPresent = getCompletedOutingsMissingPresent();
             if (!toRate.length && !rated.length && !missingPresent.length) {
               return (
                 <Text style={[styles.cardHint, { marginTop: spacing.sm }]}>
@@ -804,9 +804,36 @@ function ProfileScreenInner() {
                       >
                         <Text style={styles.cardValue}>{item.outing.title}</Text>
                         <Text style={styles.cardHint}>
-                          Moment terminé — personne n’est marquée présente.
+                          {item.requestId
+                            ? 'Moment terminé — ta présence n’est pas encore confirmée.'
+                            : 'Moment terminé — personne n’est marquée présente.'}
                         </Text>
-                        {presenceOutingId !== item.outing.id ? (
+                        {item.requestId ? (
+                          // Invité : « Je suis présent » (ou « Je suis arrivé » en lieu partenaire), puis note de l’hôte.
+                          <Button
+                            title="Marquer présent et noter"
+                            variant="secondary"
+                            onPress={() => {
+                              const requestId = item.requestId!;
+                              const res = isPartnerListing(item.outing)
+                                ? guestArrivedPartner(requestId)
+                                : guestSelfPresent(requestId);
+                              if (!res.ok) {
+                                Alert.alert(
+                                  'Présence non enregistrée',
+                                  refusalLabel(res.reason, 'presence'),
+                                );
+                                return;
+                              }
+                              navigation.navigate('LeaveReview', {
+                                outingId: item.outing.id,
+                                toUserId: item.rateTarget.toUserId,
+                                toUserName: item.rateTarget.toUserName,
+                              });
+                            }}
+                            style={{ marginTop: spacing.sm }}
+                          />
+                        ) : presenceOutingId !== item.outing.id ? (
                           <Button
                             title="Marquer présent et noter"
                             variant="secondary"

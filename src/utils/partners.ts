@@ -16,7 +16,7 @@ import type {
   User,
 } from '../data/types';
 import { getTravelMinutes } from '../data/travelTime';
-import { isParisSameDay, parisYmd } from './parisTime';
+import { parisYmd } from './parisTime';
 import { outingOccupiesActiveSlot } from './outingActive';
 
 /** Culture partenaire : max invitations le même soir (date calendaire Paris). */
@@ -269,8 +269,12 @@ export function canPartnerOrUserCreateOuting(
 
 // ---------- Présence ----------
 
+/** Fenêtre de déclaration d’absence : 6 h après le début (même borne que depositH6). */
+const PARTNER_ABSENCE_DECLARATION_MS = 6 * 60 * 60 * 1000;
+
 /**
- * Invité : « Je suis arrivé » dès H−15, jusqu’à la fin du soir (Paris).
+ * Invité : « Je suis arrivé » dès H−15, jusqu’à H+6 (18/10, même fenêtre que
+ * la confirmation croisée de présence).
  * Pas déjà présent. Si le lieu a déjà tapé « Pas venu », le bouton reste
  * dispo et ouvre un litige (pas de sanction auto).
  */
@@ -289,11 +293,8 @@ export function canGuestSelfArrivePartner(
   const startMs = new Date(outing.startsAt).getTime();
   if (!Number.isFinite(startMs)) return false;
   if (nowMs < startMs - PARTNER_GUEST_ARRIVED_BEFORE_MS) return false;
-  return isParisSameDay(outing.startsAt, nowMs);
+  return nowMs < startMs + PARTNER_ABSENCE_DECLARATION_MS;
 }
-
-/** Fenêtre de déclaration d’absence : 6 h après le début (même borne que depositH6). */
-const PARTNER_ABSENCE_DECLARATION_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Lieu : « Pas venu » seulement si chaise vide, de H à H+6.
@@ -319,7 +320,10 @@ export function canPartnerMarkGuestAbsent(
   return nowMs > startMs && nowMs < startMs + PARTNER_ABSENCE_DECLARATION_MS;
 }
 
-/** Lieu : invité « arrivé » mais chaise vide → litige (soir même). */
+/**
+ * Lieu : invité « arrivé » mais chaise vide → litige, et (18/10) désaccord de
+ * présence : contestation ouverte. Déclaration d’absence : de H à H+6, une seule.
+ */
 export function canPartnerFlagDispute(
   outing: Outing,
   request: Request,
@@ -331,9 +335,9 @@ export function canPartnerFlagDispute(
   if (actorId !== outing.hostId) return false;
   if (request.status !== 'confirmed') return false;
   if (!request.guestArrivedAt || request.partnerDispute) return false;
-  if (!isParisSameDay(outing.startsAt, nowMs)) return false;
+  if (request.noShowNotRetained || request.noShowVoided) return false;
   const startMs = new Date(outing.startsAt).getTime();
-  return Number.isFinite(startMs) && nowMs >= startMs;
+  return Number.isFinite(startMs) && nowMs > startMs && nowMs < startMs + PARTNER_ABSENCE_DECLARATION_MS;
 }
 
 /**

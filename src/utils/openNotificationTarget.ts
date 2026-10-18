@@ -240,6 +240,14 @@ export function openNotificationTarget(
       return true;
     }
 
+    case 'presence_check': {
+      // 18/10 · « Es-tu bien présent ? » → détail du moment (boutons de présence).
+      const oid = outing?.id ?? outingId;
+      if (oid) goOuting(nav, oid);
+      else goRequests(nav);
+      return true;
+    }
+
     case 'moment_photo': {
       // Photos de moments passés : uniquement dans le Profil (jamais le fil).
       goProfilePhotos(nav);

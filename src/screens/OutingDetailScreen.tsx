@@ -64,6 +64,7 @@ import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
 import { CheckNote } from '../components/CheckNote';
 import { NoShowContestCard } from '../components/NoShowContestCard';
+import { isContestWindowOpen } from '../utils/noShowContest';
 import { HostNoShowContestCard } from '../components/HostNoShowContestCard';
 import { isHostNoShowUnresolved } from '../utils/hostNoShowContest';
 import { useFirstMomentGate } from '../components/FirstMomentSheet';
@@ -88,6 +89,8 @@ export function OutingDetailScreen() {
     cancelOuting,
     completeOuting,
     markGuestPresent,
+    guestSelfPresent,
+    confirmHostPresent,
     reportGuestNoShow,
     cancelRequest,
     getLateReportsForOthers,
@@ -760,6 +763,33 @@ export function OutingDetailScreen() {
               style={{ marginTop: spacing.md }}
             />
           ) : null}
+          {/* 18/10 · Présence croisée : l’hôte se dit présent (un invité peut aussi le confirmer). */}
+          {!partner &&
+          outing.status !== 'cancelled' &&
+          incomingRequests.some((r) => r.outingId === outing.id && r.status === 'confirmed') ? (
+            outing.hostPresence ? (
+              <Text style={[styles.hint, { marginTop: spacing.md }]}>
+                {outing.hostPresence.byUserId === outing.hostId
+                  ? 'Ta présence est confirmée.'
+                  : `Ta présence a été confirmée par ${
+                      incomingRequests.find(
+                        (r) => r.outingId === outing.id && r.userId === outing.hostPresence!.byUserId,
+                      )?.userName ?? 'un invité'
+                    }.`}
+              </Text>
+            ) : !outing.hostNoShowCase && isPresenceWindowOpen(outing) ? (
+              <Button
+                title="Je suis présent"
+                variant="secondary"
+                onPress={() => {
+                  const res = confirmHostPresent(outing.id);
+                  if (res.ok) Alert.alert('Présent', 'Ta présence est confirmée.');
+                  else Alert.alert('Impossible', refusalLabel(res.reason, 'presence'));
+                }}
+                style={{ marginTop: spacing.md }}
+              />
+            ) : null
+          ) : null}
           {incomingRequests
             .filter((r) => r.outingId === outing.id && r.status === 'confirmed')
             // Vue hôte : statut caution projeté (départ malaise = sans motif).
@@ -881,7 +911,9 @@ export function OutingDetailScreen() {
                   </Text>
                 ) : !partner && r.attendance === 'present' ? (
                   <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                    {r.userName} · présent · caution rendue après 30 min
+                    {r.presenceBy === 'guest'
+                      ? `${r.userName} · s’est dit présent · caution rendue après 30 min`
+                      : `${r.userName} · présent · caution rendue après 30 min`}
                   </Text>
                 ) : null}
                 {!partner && r.attendance === 'absent' ? (
@@ -902,7 +934,8 @@ export function OutingDetailScreen() {
                 ) : null}
                 {!partner &&
                 outing.status !== 'cancelled' &&
-                !r.attendance &&
+                // 18/10 : « présent » déclaré par l’invité + « Pas venu » de l’hôte = contestation.
+                (!r.attendance || (r.attendance === 'present' && r.presenceBy === 'guest')) &&
                 !r.leftTableAt &&
                 isStartsAtPast(outing.startsAt) &&
                 // Plus de « Pas venu » à partir de H+6 (caution rendue d’office).
@@ -914,7 +947,12 @@ export function OutingDetailScreen() {
                     variant="ghost"
                     onPress={() => {
                       const res = reportGuestNoShow(r.id);
-                      if (res.ok) {
+                      if (res.ok && res.disagreement) {
+                        Alert.alert(
+                          'Contestation ouverte',
+                          `${r.userName} s’est dit présent : contestation ouverte, caution en attente de revue (7 jours max).`,
+                        );
+                      } else if (res.ok) {
                         Alert.alert(
                           res.banned
                             ? 'Compte fermé'
@@ -1077,7 +1115,7 @@ export function OutingDetailScreen() {
                         withPhoto ? { arrivalPhotoUri: 'stub://facade' } : undefined,
                       );
                       if (!res.ok) {
-                        Alert.alert('Pas encore', 'Disponible dès 15 min avant l’heure, le soir même.');
+                        Alert.alert('Impossible', 'Disponible de 15 min avant l’heure à 6 h après le début.');
                         return;
                       }
                       Alert.alert(
@@ -1108,9 +1146,86 @@ export function OutingDetailScreen() {
                       />
                     ) : (
                       <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                        Sur place : bouton « Je suis arrivé » dès 15 min avant
-                        l’heure. Pas de scan obligatoire.
+                        Sur place : bouton « Je suis arrivé » de 15 min avant
+                        l’heure à 6 h après le début. Pas de scan obligatoire.
                       </Text>
+                    );
+                  })()
+                : null}
+              {!partner && 'id' in myRequest && outing.status !== 'cancelled'
+                ? (() => {
+                    // 18/10 · Présence croisée (table normale) : pour soi et pour l’hôte.
+                    const full = getRequestById(myRequest.id);
+                    if (!full || full.leftTableAt) return null;
+                    const me = state.currentUser?.id ?? '';
+                    const windowOpen = isPresenceWindowOpen(outing);
+                    // Après un « Pas venu », « Je suis présent » vaut contestation (pendant les 24 h).
+                    const canContestByPresence =
+                      full.attendance === 'absent' &&
+                      full.depositStatus === 'noshow_pending' &&
+                      !full.noShowContest &&
+                      isContestWindowOpen(full);
+                    const hostCase = outing.hostNoShowCase;
+                    const canConfirmHost =
+                      !outing.hostPresence &&
+                      windowOpen &&
+                      (!hostCase || (hostCase.status === 'pending' && hostCase.reportedBy !== me));
+                    return (
+                      <>
+                        {full.attendance === 'present' ? (
+                          <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                            {full.presenceBy === 'guest'
+                              ? 'Tu t’es dit présent.'
+                              : 'L’hôte a confirmé ta présence.'}
+                          </Text>
+                        ) : windowOpen && (!full.attendance || canContestByPresence) ? (
+                          <Button
+                            title="Je suis présent"
+                            variant="secondary"
+                            onPress={() => {
+                              const res = guestSelfPresent(full.id);
+                              if (!res.ok) {
+                                Alert.alert('Impossible', refusalLabel(res.reason, 'presence'));
+                              } else if (res.contested) {
+                                Alert.alert(
+                                  'Contestation ouverte',
+                                  'L’hôte t’avait signalé « Pas venu » : ta caution est en attente de revue (7 jours max).',
+                                );
+                              } else {
+                                Alert.alert(
+                                  'Présent',
+                                  'Ta présence est confirmée : caution rendue après 30 min, note possible.',
+                                );
+                              }
+                            }}
+                            style={{ marginTop: spacing.md }}
+                          />
+                        ) : null}
+                        {outing.hostPresence ? (
+                          <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                            Présence de l’hôte confirmée.
+                          </Text>
+                        ) : canConfirmHost ? (
+                          <Button
+                            title="L’hôte est présent"
+                            variant="ghost"
+                            onPress={() => {
+                              const res = confirmHostPresent(outing.id);
+                              if (!res.ok) {
+                                Alert.alert('Impossible', refusalLabel(res.reason, 'presence'));
+                              } else if (res.contested) {
+                                Alert.alert(
+                                  'Contestation ouverte',
+                                  'Son absence avait été signalée : contestation ouverte, revue sous 7 jours max.',
+                                );
+                              } else {
+                                Alert.alert('Merci', 'Présence de l’hôte confirmée.');
+                              }
+                            }}
+                            style={{ marginTop: spacing.sm }}
+                          />
+                        ) : null}
+                      </>
                     );
                   })()
                 : null}

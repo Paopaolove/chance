@@ -330,7 +330,16 @@ export interface Outing {
     status: 'pending' | 'contested' | 'retained' | 'not_retained' | 'review_expired';
     contestedAt?: string;
     resolvedAt?: string;
+    /** Invité qui a déclaré l’hôte absent (18/10 : il ne contredit pas sa propre confirmation). */
+    reportedBy?: string;
+    /** 18/10 : présence de l’hôte confirmée d’un côté, absence déclarée de l’autre → revue directe. */
+    viaPresence?: boolean;
   };
+  /**
+   * 18/10 · Confirmation croisée : présence de l’hôte établie, par lui-même
+   * ou par un invité confirmé (une seule confirmation suffit), de H−15 à H+6.
+   */
+  hostPresence?: { at: string; byUserId: string };
   /** Lot 6: never-honor sanction already applied on this outing. */
   hostNeverHonorReported?: boolean;
   /**
@@ -382,6 +391,11 @@ export interface Request {
    * Reviews / sorties honorées use present, never confirmed alone.
    */
   attendance?: 'present' | 'absent';
+  /**
+   * 18/10 · Qui a établi la présence : l’invité lui-même (« Je suis présent »,
+   * « Je suis arrivé ») ou l’hôte. Absent (ancien état) = hôte.
+   */
+  presenceBy?: 'guest' | 'host';
   /** Cause d’un rendu de caution quand elle a un libellé propre (« h6 » : rendue d’office à H+6). */
   depositReturnCause?: 'h6';
   /** ISO UTC — « Pas venu » déclaré par l’hôte (départ du délai de contestation de 24 h). */
@@ -398,6 +412,8 @@ export interface Request {
     viaHostNoShow?: boolean;
     /** Partenaire : « Je suis arrivé » après « Pas venu » vaut contestation (phrase auto). */
     viaArrival?: boolean;
+    /** 18/10 : désaccord, présence confirmée d’un côté et « Pas venu » de l’autre (phrase auto). */
+    viaPresence?: boolean;
   };
   /** Délai de 24 h suspendu tant que l’absence de l’hôte est en attente (début de la suspension). */
   noShowContestPausedAt?: string;
@@ -921,6 +937,10 @@ export type AppAction =
    * returned. Idempotent. Cannot override absent. ≠ COMPLETE_OUTING / CLOSE.
    */
   | { type: 'MARK_GUEST_PRESENT'; payload: { requestId: string; markedAt: string } }
+  /** 18/10 · Invité : « Je suis présent » pour lui-même (H−15 à H+6). Après un « Pas venu » : vaut contestation. */
+  | { type: 'GUEST_SELF_PRESENT'; payload: { requestId: string; at: string } }
+  /** 18/10 · Présence de l’hôte confirmée par lui-même ou par un invité confirmé (H−15 à H+6). */
+  | { type: 'CONFIRM_HOST_PRESENT'; payload: { outingId: string; byUserId: string; at: string } }
   /** Invité : contester un « Pas venu » de l’hôte (phrase obligatoire, avant 24 h). */
   | { type: 'CONTEST_NO_SHOW'; payload: { requestId: string; note: string; at: string } }
   /** Sans contestation à 24 h : caution perdue. Refusée avant l’échéance. */

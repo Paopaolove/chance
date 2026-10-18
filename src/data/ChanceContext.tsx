@@ -82,6 +82,7 @@ import {
 import {
   isOutingAcceptingRequests,
   isPresenceWindowOpen,
+  presenceWindowRefusal,
   isUrgentAcceptWindowOpen,
   isUrgentOnSite,
   isVisibleOnAnnoncesFeed,
@@ -91,6 +92,11 @@ import {
   URGENT_ON_SITE_ACCEPT_MS,
   wasPresent,
 } from '../utils/outingActive';
+import {
+  PRESENCE_CHECK_BODY,
+  PRESENCE_CHECK_TITLE,
+  presenceCheckUserIds,
+} from '../utils/presenceCheck';
 import {
   chatThreadKey,
   lateLabel,
@@ -124,6 +130,7 @@ import {
   NOSHOW_FINAL_NOTICE_TEXT,
   canNoShowGuestDeclareHostAbsent,
   contestRefusal,
+  isContestWindowOpen,
   isHostDeclaredNoShow,
   normalizeContestNote,
   noShowOpensContest,
@@ -292,7 +299,12 @@ export type ProfileUpdate = {
  * fin du moment), pour que « Je quitte la table » avant H+30 sans motif
  * puisse encore la faire perdre.
  */
-function applyPresence(r: Request, outing: Outing, markedAt: string): Request {
+function applyPresence(
+  r: Request,
+  outing: Outing,
+  markedAt: string,
+  by: 'guest' | 'host' = 'host',
+): Request {
   const returnNow = presenceReturnsDepositNow({
     startsAt: outing.startsAt,
     outingStatus: outing.status,
@@ -301,6 +313,7 @@ function applyPresence(r: Request, outing: Outing, markedAt: string): Request {
   return {
     ...r,
     attendance: 'present' as const,
+    presenceBy: by,
     depositStatus:
       r.depositStatus === 'held' || !r.depositStatus
         ? returnNow
@@ -309,6 +322,9 @@ function applyPresence(r: Request, outing: Outing, markedAt: string): Request {
         : r.depositStatus,
   };
 }
+
+/** 18/10 · Phrase automatique d’une contestation ouverte par un désaccord de présence. */
+const PRESENCE_CONTEST_NOTE = '« Je suis présent »';
 
 /**
  * Absence invité comptée (strike, priorité, mention, fermeture à la 3e).
@@ -1751,7 +1767,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       }
       const outingMark = state.outings.find((o) => o.id === reqMark.outingId);
       if (!outingMark || outingMark.status === 'cancelled') return state;
-      // Caution return only from H−15.
+      // 18/10 : de H−15 à H+6, clôture comprise.
       if (
         !isPresenceWindowOpen(
           outingMark,
@@ -1791,6 +1807,82 @@ function reducer(state: AppState, action: AppAction): AppState {
         ...state,
         requests: state.requests.map((r) =>
           ids.has(r.id) ? applyPresence(r, outingSel, markedAt) : r,
+        ),
+      };
+    }
+
+    case 'GUEST_SELF_PRESENT': {
+      // 18/10 · « Je suis présent » de l’invité pour lui-même : une seule
+      // confirmation suffit. Après un « Pas venu » de l’hôte : désaccord,
+      // vaut contestation (la présence n’est pas enregistrée pour autant).
+      const { requestId, at } = action.payload;
+      const atMs = new Date(at).getTime();
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req || req.status !== 'confirmed' || !Number.isFinite(atMs)) return state;
+      if (!state.currentUser || state.currentUser.id !== req.userId) return state;
+      const o = state.outings.find((x) => x.id === req.outingId);
+      if (!o || o.status === 'cancelled') return state;
+      // Partenaire : « Je suis arrivé » (GUEST_ARRIVED_PARTNER) reste le geste de l’invité.
+      if (isPartnerListing(o)) return state;
+      if (req.leftTableAt || req.attendance === 'present') return state;
+      if (!isPresenceWindowOpen(o, atMs)) return state;
+      if (req.attendance === 'absent') {
+        if (req.depositStatus !== 'noshow_pending' || req.noShowContest) return state;
+        if (!isContestWindowOpen(req, atMs)) return state;
+        return {
+          ...state,
+          requests: state.requests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  depositStatus: 'contested' as const,
+                  noShowContest: { note: PRESENCE_CONTEST_NOTE, contestedAt: at, viaPresence: true },
+                }
+              : r,
+          ),
+        };
+      }
+      return {
+        ...state,
+        requests: state.requests.map((r) =>
+          r.id === requestId ? applyPresence(r, o, at, 'guest') : r,
+        ),
+      };
+    }
+
+    case 'CONFIRM_HOST_PRESENT': {
+      // 18/10 · Présence de l’hôte : par lui-même ou par un invité confirmé.
+      const { outingId, byUserId, at } = action.payload;
+      const atMs = new Date(at).getTime();
+      const o = state.outings.find((x) => x.id === outingId);
+      if (!o || o.status === 'cancelled' || !Number.isFinite(atMs)) return state;
+      const byGuest = state.requests.some(
+        (r) => r.outingId === outingId && r.userId === byUserId && r.status === 'confirmed',
+      );
+      if (byUserId !== o.hostId && !byGuest) return state;
+      if (!isPresenceWindowOpen(o, atMs)) return state;
+      if (o.hostPresence) return state;
+      if (o.hostNoShowCase) {
+        // Absence déjà déclarée : désaccord → revue directe (contestation),
+        // sauf pour celui qui l’a déclarée (il ne contredit pas sa déclaration).
+        if (o.hostNoShowCase.status !== 'pending') return state;
+        if (o.hostNoShowCase.reportedBy && o.hostNoShowCase.reportedBy === byUserId) return state;
+        return {
+          ...state,
+          outings: state.outings.map((x) =>
+            x.id === outingId && x.hostNoShowCase
+              ? {
+                  ...x,
+                  hostNoShowCase: { ...x.hostNoShowCase, status: 'contested' as const, contestedAt: at, viaPresence: true },
+                }
+              : x,
+          ),
+        };
+      }
+      return {
+        ...state,
+        outings: state.outings.map((x) =>
+          x.id === outingId ? { ...x, hostPresence: { at, byUserId } } : x,
         ),
       };
     }
@@ -1875,6 +1967,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
+      // 18/10 : présence de l’hôte confirmée. Celui qui l’a confirmée ne la
+      // contredit pas ; un autre déclarant ouvre directement la revue (désaccord).
+      if (outing.hostPresence && outing.hostPresence.byUserId === reportedByUserId) return state;
+      const disagreement = !!outing.hostPresence;
       // Table normale et lieu partenaire : 24 h pour contester. Sanction, règle B et
       // rendu des cautions attendent l’issue (rien d’immédiat).
       const reportedAtIso = reportedAt ?? new Date(reportedAtMs).toISOString();
@@ -1886,7 +1982,19 @@ function reducer(state: AppState, action: AppAction): AppState {
                 ...o,
                 status: 'closed' as const,
                 hostNoShowReported: true,
-                hostNoShowCase: { reportedAt: reportedAtIso, status: 'pending' as const },
+                hostNoShowCase: disagreement
+                  ? {
+                      reportedAt: reportedAtIso,
+                      status: 'contested' as const,
+                      contestedAt: reportedAtIso,
+                      viaPresence: true,
+                      ...(reportedByUserId ? { reportedBy: reportedByUserId } : {}),
+                    }
+                  : {
+                      reportedAt: reportedAtIso,
+                      status: 'pending' as const,
+                      ...(reportedByUserId ? { reportedBy: reportedByUserId } : {}),
+                    },
               }
             : o,
         ),
@@ -2210,7 +2318,15 @@ function reducer(state: AppState, action: AppAction): AppState {
       const existing = state.requests.find((r) => r.id === requestId);
       // Must be confirmed and not already present.
       if (!existing || existing.status !== 'confirmed') return state;
-      if (existing.attendance === 'present') return state;
+      // 18/10 : présent par sa propre confirmation et « Pas venu » de l’autre côté
+      // (hôte ou lieu) = désaccord, plus refusé (contestation directe, plus bas).
+      // Présence confirmée par le déclarant lui-même : toujours refusé.
+      const presenceDisagreement =
+        existing.attendance === 'present' &&
+        existing.presenceBy === 'guest' &&
+        !!reportedByUserId &&
+        reportedByUserId !== guestId;
+      if (existing.attendance === 'present' && !presenceDisagreement) return state;
       // Parti de la table (« Je quitte la table ») ≠ absent.
       if (existing.leftTableAt) return state;
       // Lot 6: same absence event → no double strike / forfeit.
@@ -2235,6 +2351,24 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Absence non retenue après contestation, ou effacée : pas de nouvelle
       // déclaration (gel 17/10, point 2 : une seule par personne et par moment).
       if (existing.noShowNotRetained || existing.noShowVoided) return state;
+      // 18/10 · Désaccord : contestation existante ouverte directement
+      // (caution en attente de revue, 7 jours max ; rien n’est compté avant l’issue).
+      if (presenceDisagreement) {
+        return {
+          ...state,
+          requests: state.requests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  attendance: 'absent' as const,
+                  depositStatus: 'contested' as const,
+                  noShowReportedAt: reportedAt,
+                  noShowContest: { note: PRESENCE_CONTEST_NOTE, contestedAt: reportedAt, viaPresence: true },
+                }
+              : r,
+          ),
+        };
+      }
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
@@ -2597,6 +2731,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           return {
             ...r,
             attendance: 'present' as const,
+            presenceBy: 'guest' as const,
             guestArrivedAt: arrivedAt,
             ...photo,
             depositStatus:
@@ -2617,8 +2752,20 @@ function reducer(state: AppState, action: AppAction): AppState {
         requests: state.requests.map((r) => {
           if (r.id !== requestId || r.status !== 'confirmed') return r;
           if (r.partnerDispute || !r.guestArrivedAt) return r;
+          // 18/10 · Désaccord (arrivé selon l’invité, « Pas venu » selon le lieu) :
+          // contestation existante ouverte directement (caution en attente de revue).
+          const contest =
+            r.attendance === 'present' && !r.noShowContest
+              ? {
+                  attendance: 'absent' as const,
+                  depositStatus: 'contested' as const,
+                  noShowReportedAt: at,
+                  noShowContest: { note: '« Je suis arrivé »', contestedAt: at, viaArrival: true },
+                }
+              : {};
           return {
             ...r,
+            ...contest,
             partnerMarkedAbsentAt: at,
             partnerDispute: {
               openedAt: at,
@@ -3110,6 +3257,14 @@ interface ChanceContextValue {
   markGuestPresent: (
     requestId: string,
   ) => { ok: true } | { ok: false; reason: string };
+  /** 18/10 · Invité : « Je suis présent » (après un « Pas venu » : vaut contestation). */
+  guestSelfPresent: (
+    requestId: string,
+  ) => { ok: true; contested: boolean } | { ok: false; reason: string };
+  /** 18/10 · Présence de l’hôte confirmée par lui-même ou par un invité confirmé. */
+  confirmHostPresent: (
+    outingId: string,
+  ) => { ok: true; contested: boolean } | { ok: false; reason: string };
   /**
    * Demo QA only — marks confirmed guests present without the host-only gate
    * (prod markGuestPresent stays host-only / lot 6).
@@ -3173,6 +3328,8 @@ interface ChanceContextValue {
   getCompletedOutingsMissingPresent: () => {
     outing: Outing;
     rateTarget: { toUserId: string; toUserName: string };
+    /** Invité (18/10) : sa participation, pour « Je suis présent ». */
+    requestId?: string;
   }[];
   addReview: (input: {
     outingId: string;
@@ -3379,6 +3536,7 @@ interface ChanceContextValue {
         banned?: boolean;
         jokerExempted?: boolean;
         pending?: boolean;
+        disagreement?: boolean;
       }
     | { ok: false; reason: string };
   /** Host publishes often and never honors: 1 warning, 2nd ban. */
@@ -5357,6 +5515,43 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
    * terminée is distinct: status → completed, never marks attendance present.
    * Host may also completeOuting once startsAt is past.
    */
+  // 18/10 · Fin du moment : notification de l’app (pas de SMS) à qui n’a rien
+  // indiqué. Côté app locale, seul l’utilisateur courant peut être relancé.
+  const presenceStateRef = useRef(state);
+  presenceStateRef.current = state;
+  const notifyPresenceCheck = useCallback(
+    (outingId: string, opts?: { demo?: boolean }) => {
+      const st = presenceStateRef.current;
+      const user = st.currentUser;
+      const outing = st.outings.find((o) => o.id === outingId);
+      if (!user || !outing) return false;
+      // Hors démo : seulement tant que la présence peut encore être indiquée (H+6).
+      if (!opts?.demo && !isPresenceWindowOpen(outing, Date.now())) return false;
+      if (!presenceCheckUserIds(outing, st.requests).includes(user.id)) return false;
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: PRESENCE_CHECK_TITLE,
+        body: PRESENCE_CHECK_BODY,
+        createdAt: new Date().toISOString(),
+        type: 'presence_check',
+        outingId,
+      };
+      void (async () => {
+        void ensureAndroidChannel();
+        const push = await sendPriorityPush({
+          type: 'presence_check',
+          title: toast.title,
+          body: toast.body,
+          data: { outingId },
+        });
+        // Push indisponible (web, refus) : relance dans l’app.
+        if (!push.pushOk) dispatch({ type: 'SET_TOAST', payload: toast });
+      })();
+      return true;
+    },
+    [],
+  );
+
   useEffect(() => {
     const tick = () => {
       const now = Date.now();
@@ -5384,6 +5579,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             at: new Date(now).toISOString(),
           },
         });
+        notifyPresenceCheck(outing.id);
       }
     };
     tick();
@@ -5395,7 +5591,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       clearInterval(id);
       sub.remove();
     };
-  }, [state.outings]);
+  }, [state.outings, notifyPresenceCheck]);
 
   const clearToast = useCallback(() => {
     dispatch({ type: 'SET_TOAST', payload: null });
@@ -5469,8 +5665,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       });
       if (!push.pushOk) Alert.alert(toast.title, toast.body);
     })();
+    // 18/10 · Relance de fin de moment si l’hôte n’a rien indiqué.
+    notifyPresenceCheck(outingId);
     return true;
-  }, [state.outings, state.currentUser]);
+  }, [state.outings, state.currentUser, notifyPresenceCheck]);
 
   const getDisplayName = useCallback(
     (userId: string) => {
@@ -5655,15 +5853,73 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: true }; // idempotent
       }
       const markedAt = new Date().toISOString();
-      // Caution return only from H−15.
-      if (!isPresenceWindowOpen(outing, new Date(markedAt).getTime())) {
-        return { ok: false, reason: 'too_early' };
+      // 18/10 : de H−15 à H+6, clôture comprise.
+      const windowRefusal = presenceWindowRefusal(outing, new Date(markedAt).getTime());
+      if (windowRefusal) {
+        return { ok: false, reason: windowRefusal };
       }
       dispatch({
         type: 'MARK_GUEST_PRESENT',
         payload: { requestId, markedAt },
       });
       return { ok: true };
+    },
+    [state.currentUser, state.requests, state.outings],
+  );
+
+  const guestSelfPresent = useCallback(
+    (requestId: string): { ok: true; contested: boolean } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req || req.status !== 'confirmed') return { ok: false, reason: 'not_confirmed' };
+      if (req.userId !== user.id) return { ok: false, reason: 'not_participant' };
+      const outing = state.outings.find((o) => o.id === req.outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      if (outing.status === 'cancelled') return { ok: false, reason: 'outing_cancelled' };
+      if (req.attendance === 'present') return { ok: true, contested: false };
+      const at = new Date().toISOString();
+      const atMs = new Date(at).getTime();
+      const windowRefusal = presenceWindowRefusal(outing, atMs);
+      if (windowRefusal) return { ok: false, reason: windowRefusal };
+      if (req.leftTableAt) return { ok: false, reason: 'not_declarable' };
+      const contested = req.attendance === 'absent';
+      if (
+        contested &&
+        (req.depositStatus !== 'noshow_pending' || req.noShowContest || !isContestWindowOpen(req, atMs))
+      ) {
+        return { ok: false, reason: 'contest_closed' };
+      }
+      dispatch({ type: 'GUEST_SELF_PRESENT', payload: { requestId, at } });
+      return { ok: true, contested };
+    },
+    [state.currentUser, state.requests, state.outings],
+  );
+
+  const confirmHostPresent = useCallback(
+    (outingId: string): { ok: true; contested: boolean } | { ok: false; reason: string } => {
+      const user = state.currentUser;
+      if (!user) return { ok: false, reason: 'no_user' };
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing) return { ok: false, reason: 'not_found' };
+      if (outing.status === 'cancelled') return { ok: false, reason: 'outing_cancelled' };
+      const isGuest = state.requests.some(
+        (r) => r.outingId === outingId && r.userId === user.id && r.status === 'confirmed',
+      );
+      if (user.id !== outing.hostId && !isGuest) return { ok: false, reason: 'not_participant' };
+      if (outing.hostPresence) return { ok: true, contested: false };
+      const at = new Date().toISOString();
+      const windowRefusal = presenceWindowRefusal(outing, new Date(at).getTime());
+      if (windowRefusal) return { ok: false, reason: windowRefusal };
+      const contested = !!outing.hostNoShowCase;
+      if (
+        contested &&
+        (outing.hostNoShowCase!.status !== 'pending' || outing.hostNoShowCase!.reportedBy === user.id)
+      ) {
+        return { ok: false, reason: 'not_declarable' };
+      }
+      dispatch({ type: 'CONFIRM_HOST_PRESENT', payload: { outingId, byUserId: user.id, at } });
+      return { ok: true, contested };
     },
     [state.currentUser, state.requests, state.outings],
   );
@@ -5714,9 +5970,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       );
       if (!action) return false;
       dispatch(action);
+      // Simulation locale de la relance de fin de moment (18/10).
+      notifyPresenceCheck(outingId, { demo: true });
       return true;
     },
-    [state.outings],
+    [state.outings, notifyPresenceCheck],
   );
 
   const contestNoShow = useCallback(
@@ -5842,6 +6100,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     const items: {
       outing: Outing;
       rateTarget: { toUserId: string; toUserName: string };
+      requestId?: string;
     }[] = [];
     for (const outing of state.outings) {
       if (outing.status !== 'completed') continue;
@@ -5860,13 +6119,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           outing,
           rateTarget: { toUserId: guest.userId, toUserName: guest.userName },
         });
-      } else if (mine && mine.attendance !== 'present') {
+      } else if (
+        mine &&
+        !mine.attendance &&
+        !mine.leftTableAt &&
+        // 18/10 : l’invité confirme lui-même sa présence, seulement jusqu’à H+6.
+        isPresenceWindowOpen(outing, Date.now())
+      ) {
         items.push({
           outing,
           rateTarget: {
             toUserId: outing.hostId,
             toUserName: outing.hostName,
           },
+          requestId: mine.id,
         });
       }
     }
@@ -6255,6 +6521,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!canActorReportHostNoShow(user.id, hostId, actorIsConfirmedGuest)) {
         return { ok: false, reason: 'not_participant' };
       }
+      // 18/10 : on ne contredit pas sa propre confirmation de présence.
+      if (outing.hostPresence?.byUserId === user.id) {
+        return { ok: false, reason: 'not_declarable' };
+      }
+      // Présence de l’hôte déjà confirmée par l’autre côté : désaccord, contestation directe.
+      const disagreement = !!outing.hostPresence;
       const reportedAt = new Date().toISOString();
       const reportedAtMs = new Date(reportedAt).getTime();
       // Gel 17/10 (point 1) : de H à H+6, table normale comme lieu partenaire.
@@ -6286,9 +6558,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const confirmedReqs = state.requests.filter(
         (r) => r.outingId === outingId && r.status === 'confirmed',
       );
-      const noteBody = partnerOuting
-        ? 'Note auto · absence du lieu signalée. Le lieu a 24 h pour contester ; les cautions sont en attente.'
-        : 'Note auto · absence de l’hôte signalée. L’hôte a 24 h pour contester ; les cautions sont en attente.';
+      const noteBody = disagreement
+        ? 'Note auto · absence de l’hôte signalée alors que sa présence a été confirmée : contestation ouverte, revue sous 7 jours max ; les cautions sont en attente.'
+        : partnerOuting
+          ? 'Note auto · absence du lieu signalée. Le lieu a 24 h pour contester ; les cautions sont en attente.'
+          : 'Note auto · absence de l’hôte signalée. L’hôte a 24 h pour contester ; les cautions sont en attente.';
       const targets =
         confirmedReqs.length > 0
           ? confirmedReqs
@@ -6305,7 +6579,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         };
         dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
       }
-      const toast: AppToast = declarerContests
+      const toast: AppToast = disagreement
+        ? {
+            id: uid('toast'),
+            title: 'Absence de l’hôte signalée',
+            body: 'Sa présence avait été confirmée : contestation ouverte, revue sous 7 jours max. Les cautions sont en attente.',
+            createdAt: reportedAt,
+          }
+        : declarerContests
         ? {
             // Invité « Pas venu » : sa propre caution passe en revue (pas de rendu d’office).
             id: uid('toast'),
@@ -6704,6 +6985,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           jokerExempted?: boolean;
           /** Caution en attente 24 h (contestation possible). */
           pending?: boolean;
+          /** 18/10 · Présence confirmée par l’invité : contestation ouverte. */
+          disagreement?: boolean;
         }
       | { ok: false; reason: string } => {
       const user = state.currentUser;
@@ -6723,7 +7006,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!canActorReportGuestNoShow(user.id, outing.hostId, guestId)) {
         return { ok: false, reason: 'not_participant' };
       }
-      if (req.attendance === 'present') {
+      // 18/10 : présent par sa propre confirmation, « Pas venu » de l’hôte = désaccord
+      // (contestation directe). Présence confirmée par l’hôte lui-même : refusé.
+      const disagreement =
+        req.attendance === 'present' && req.presenceBy === 'guest' && user.id !== guestId;
+      if (req.attendance === 'present' && !disagreement) {
         return { ok: false, reason: 'already_present' };
       }
       // Lot 6: same absence event — no double strike.
@@ -6767,10 +7054,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité) ;
       // l’absence n’est comptée qu’une fois définitive.
-      const pending = noShowOpensContest(outing, user.id);
+      // Désaccord (18/10) : contestation directe, rien n’est compté avant l’issue.
+      const pending = !disagreement && noShowOpensContest(outing, user.id);
       const prev = state.guestNoShowStrikes[guestId] ?? 0;
-      const strike = pending ? prev : prev + 1;
-      const { lowerPriority, banned } = pending
+      const strike = pending || disagreement ? prev : prev + 1;
+      const { lowerPriority, banned } = pending || disagreement
         ? { lowerPriority: false, banned: false }
         : guestSanctionFromStrike(strike);
       dispatch({
@@ -6787,9 +7075,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         },
       });
       const shareWho = isPartnerListing(outing) ? 'lieu' : 'hôte';
-      const lossText = pending
-        ? `caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € ${shareWho}).`
-        : `caution perdue (6,90 € Moment / 13,10 € ${shareWho}).`;
+      const lossText = disagreement
+        ? 'présence confirmée par l’invité : contestation ouverte, caution en attente de revue (7 jours max).'
+        : pending
+          ? `caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € ${shareWho}).`
+          : `caution perdue (6,90 € Moment / 13,10 € ${shareWho}).`;
       const note: ChatMessage = {
         id: uid('msg'),
         threadKey: chatThreadKey(outingId, requestId),
@@ -6810,20 +7100,20 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           ? 'Compte fermé'
           : lowerPriority
             ? 'Priorité baissée'
-            : pending
+            : pending || disagreement
               ? 'Absence signalée'
               : 'Caution perdue',
         body: banned
           ? `3e absence — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
           : lowerPriority
             ? '2e no-show invité — priorité baissée + mention sur le profil.'
-            : pending
+            : pending || disagreement
               ? `Absence après confirmation — ${lossText}`
               : 'Absence après confirmation — caution perdue : 6,90 € pour Moment, 13,10 € pour l’hôte.',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
-      return { ok: true, strike, lowerPriority, banned, pending };
+      return { ok: true, strike, lowerPriority, banned, pending, disagreement };
     },
     [
       state.currentUser,
@@ -7772,6 +8062,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOutingInMinutes,
       completeOuting,
       markGuestPresent,
+      guestSelfPresent,
+      confirmHostPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
       contestNoShow,
@@ -7885,6 +8177,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       simulateOutingInMinutes,
       completeOuting,
       markGuestPresent,
+      guestSelfPresent,
+      confirmHostPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
       contestNoShow,

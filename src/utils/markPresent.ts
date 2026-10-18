@@ -1,16 +1,17 @@
 /**
- * Profil « Marquer présent et noter » (17/10) — hôte seulement.
+ * Profil « Marquer présent et noter » (17/10) — côté hôte ici ; côté invité
+ * (18/10), le bouton déclenche « Je suis présent » (GUEST_SELF_PRESENT).
  * Marquage invité par invité (registre : pas de marquage en bloc) : l’hôte
  * voit les confirmés non partis et coche ceux qui étaient là, rien de
  * pré-coché. Seuls les cochés sont marqués présents, en une seule action
  * atomique (MARK_GUESTS_PRESENT) ; les autres restent sans présence, donc
- * toujours signalables en « Pas venu ». Contrôles existants : hôte, à partir
- * de H−15, jamais après « Pas venu ». Règles de caution inchangées (rendue à
+ * toujours signalables en « Pas venu ». Contrôles existants : hôte, de H−15
+ * à H+6 (18/10), jamais après « Pas venu ». Règles de caution inchangées (rendue à
  * H+30 ou à la clôture). L’avis ne s’ouvre que si une présence est
  * enregistrée (ou déjà marquée).
  */
 import type { Outing, Request } from '../data/types';
-import { isPresenceWindowOpen } from './outingActive';
+import { isPresenceWindowOpen, presenceWindowRefusal } from './outingActive';
 import { canActorMarkGuestPresent } from './participationRights';
 
 export type PresenceCandidate = {
@@ -27,6 +28,7 @@ export type MarkPresentReason =
   | 'no_guest'
   | 'already_absent'
   | 'too_early'
+  | 'too_late'
   | 'none_selected'
   | 'invalid_selection';
 
@@ -115,7 +117,9 @@ export function validatePresenceSelection(
     if (!p) return { ok: false, reason: 'none_selected' };
     return { ok: true, requestIds: [], rateTarget: { toUserId: p.userId, toUserName: p.userName } };
   }
-  if (!list.windowOpen) return { ok: false, reason: 'too_early' };
+  if (!list.windowOpen) {
+    return { ok: false, reason: presenceWindowRefusal(input.outing!, input.nowMs ?? Date.now()) ?? 'too_early' };
+  }
   const first = byId.get(ids[0])!;
   return {
     ok: true,
@@ -130,6 +134,8 @@ export function markPresentReasonLabel(reason: string): string {
       return 'Seul l’hôte peut marquer la présence.';
     case 'too_early':
       return 'La présence se marque à partir de 15 min avant le début.';
+    case 'too_late':
+      return 'La présence se marque jusqu’à 6 h après le début.';
     case 'already_absent':
       return '« Pas venu » a déjà été signalé : la présence ne peut plus être marquée.';
     case 'outing_cancelled':

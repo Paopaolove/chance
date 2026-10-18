@@ -46,6 +46,10 @@ const FLOW_LABELS: Record<RefusalFlow, Record<string, string>> = {
   },
   presence: {
     too_early: 'Présence possible à partir de 15 min avant l’heure du moment.',
+    too_late: 'La présence se confirme jusqu’à 6 h après le début.',
+    not_participant: 'Seuls l’hôte et les invités confirmés de la table peuvent confirmer une présence.',
+    not_declarable: 'Cette présence ne peut pas être confirmée.',
+    contest_closed: 'Ce « Pas venu » ne peut plus être contesté.',
   },
 };
 

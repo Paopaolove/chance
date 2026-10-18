@@ -32,7 +32,10 @@ export function NoShowContestCard({ request }: { request: Request }) {
   if (request.depositStatus === 'contested') {
     return (
       <View style={styles.card}>
-        <Text style={styles.title}>Contestation envoyée</Text>
+        <Text style={styles.title}>
+          {/* 18/10 : désaccord présent / « Pas venu », contestation ouverte d’office. */}
+          {request.noShowContest?.viaPresence ? 'Contestation ouverte' : 'Contestation envoyée'}
+        </Text>
         <Text style={styles.body}>
           Ta caution de {DEPOSIT_EUROS} € est en attente de revue. Ni perdue ni rendue tant que
           Moment n’a pas tranché ; sans décision sous 7 jours, elle t’est rendue.
