@@ -342,8 +342,9 @@ export function canPartnerFlagDispute(
 }
 
 /**
- * Lendemain (Paris) : silence des deux → caution rendue, sans absence.
- * On ne pénalise pas le silence du lieu.
+ * 25/10 soir · même horloge que la table : silence des deux à H+6 → caution
+ * rendue, sans absence (avant : « le lendemain »). On ne pénalise pas le silence
+ * du lieu. Le minuteur passe par `shouldReturnDepositH6` / RETURN_DEPOSITS_H6 (depositH6).
  */
 export function shouldAutoRefundPartnerSilence(
   outing: Outing,
@@ -357,10 +358,10 @@ export function shouldAutoRefundPartnerSilence(
   if (request.status !== 'confirmed') return false;
   if (request.attendance || request.partnerDispute) return false;
   if (request.depositStatus !== 'held') return false;
-  const outingDay = parisYmd(outing.startsAt);
-  const today = parisYmd(nowMs);
-  if (!outingDay || !today) return false;
-  return outingDay < today;
+  if (outing.status === 'cancelled') return false;
+  // Même borne que `isAtOrAfterH6` (depositH6) : à partir de H+6 inclus.
+  const startMs = new Date(outing.startsAt).getTime();
+  return Number.isFinite(startMs) && nowMs >= startMs + PARTNER_ABSENCE_DECLARATION_MS;
 }
 
 // ---------- Fil ----------

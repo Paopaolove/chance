@@ -1,10 +1,12 @@
 /**
- * Caution, tables normales (décision Paolo 17/10) — la caution sert à éviter
- * le no-show ; la note n’a aucun effet sur l’argent.
+ * Caution (décision Paolo 17/10) — la caution sert à éviter le no-show ; la
+ * note n’a aucun effet sur l’argent.
  * - Présent : inchangé (rendue à partir de H+30 ou de la clôture).
  * - Rien de renseigné et aucun « Pas venu » avant H+6 : rendue à H+6.
  * - « Pas venu » (place vide) : de H à H+6 inclus (25/10) ; refusé après H+6.
- * Annonces partenaires : inchangées (« le lendemain », « Je suis arrivé »).
+ * 25/10 soir : annonces partenaires sur la même horloge — silence = caution
+ * rendue à H+6 (avant : « le lendemain »). « Je suis arrivé » et « Pas venu »
+ * du lieu : fenêtres inchangées (H+6).
  */
 import type { Outing, Request } from '../data/types';
 import { isPartnerListing } from './partners';
@@ -18,9 +20,8 @@ function startMs(outing: Pick<Outing, 'startsAt'>): number {
   return new Date(outing.startsAt).getTime();
 }
 
-/** Table normale et heure ≥ H+6. Faux pour une annonce partenaire. */
+/** Heure ≥ H+6, table normale comme annonce partenaire (25/10 soir). */
 export function isAtOrAfterH6(outing: H6Outing, nowMs = Date.now()): boolean {
-  if (isPartnerListing(outing as Outing)) return false;
   const s = startMs(outing);
   return Number.isFinite(s) && nowMs >= s + DEPOSIT_SILENCE_RETURN_AFTER_MS;
 }
@@ -52,10 +53,15 @@ export function isAbsenceDeclarationWindowOpen(
   return nowMs > s && nowMs <= s + DEPOSIT_SILENCE_RETURN_AFTER_MS;
 }
 
-/** Caution à rendre à H+6 : confirmé, non « Pas venu », encore held, table normale non annulée. */
+/**
+ * Caution à rendre à H+6 : confirmé, non « Pas venu », encore held, moment non
+ * annulé. Tables normales et (25/10 soir) annonces partenaires : silence des deux
+ * = rendue à H+6, sans absence ni présence. Partenaire en litige : jamais d’office.
+ */
 export function shouldReturnDepositH6(
   outing: H6Outing & Pick<Outing, 'status'> & Partial<Pick<Outing, 'hostNoShowCase'>>,
-  request: Pick<Request, 'status' | 'attendance' | 'depositStatus'>,
+  request: Pick<Request, 'status' | 'attendance' | 'depositStatus'> &
+    Partial<Pick<Request, 'partnerDispute'>>,
   nowMs = Date.now(),
 ): boolean {
   if (outing.status === 'cancelled') return false;
@@ -65,6 +71,8 @@ export function shouldReturnDepositH6(
   if (!isAtOrAfterH6(outing, nowMs)) return false;
   if (request.status !== 'confirmed') return false;
   if (request.attendance === 'absent') return false;
+  // Partenaire : un litige (« Je suis arrivé » contre chaise vide) passe en revue.
+  if (isPartnerListing(outing as Outing) && request.partnerDispute) return false;
   // Même convention que le reste du reducer : statut absent = bloquée.
   return request.depositStatus === 'held' || !request.depositStatus;
 }
@@ -72,7 +80,8 @@ export function shouldReturnDepositH6(
 /** Moments ayant au moins une caution à rendre à H+6 (pour la minuterie locale). */
 export function outingsDueForH6(
   outings: (H6Outing & Pick<Outing, 'id' | 'status'> & Partial<Pick<Outing, 'hostNoShowCase'>>)[],
-  requests: (Pick<Request, 'outingId' | 'status' | 'attendance' | 'depositStatus'>)[],
+  requests: (Pick<Request, 'outingId' | 'status' | 'attendance' | 'depositStatus'> &
+    Partial<Pick<Request, 'partnerDispute'>>)[],
   nowMs = Date.now(),
 ): string[] {
   return outings
@@ -121,6 +130,8 @@ export function hostReturnedDepositLine(
   ) {
     return `${r.userName} · caution rendue`;
   }
+  // Partenaire : le lieu a sa propre ligne (écran du moment), pas celle-ci.
+  if (isPartnerListing(outing as Outing)) return null;
   if (isAtOrAfterH6(outing, nowMs)) return `${r.userName} · caution rendue 6 h après le début`;
   return null;
 }

@@ -112,7 +112,7 @@ Ensuite : `MainTabs` + écrans de pile ci-dessous. Onglets (`src/navigation/Main
 - Menu démo : « Simuler J−50 min (ouvrir le chat) », « Simuler H+6 », « Simuler sortie terminée »,
   « Signaler l’absence d’un invité », « Simuler mon absence (caution perdue) », « No-show hôte sur moi (1er/2e) »,
   « Lieu : mon annonce a commencé il y a 5 min (« Pas venu ») »,
-  « Invité : sortie lieu dans ~10 min (« Je suis arrivé ») », « Simuler lendemain (silence → caution rendue) ».
+  « Invité : sortie lieu dans ~10 min (« Je suis arrivé ») », « Lieu : simuler H+6 (silence → caution rendue) ».
 - Actions : demande, confirmation, présence, absence, départ, imprévu, chat, signalement.
 
 ## Confirmation de place

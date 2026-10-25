@@ -800,15 +800,15 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             style={styles.btn}
           />
           <Button
-            title="Simuler lendemain (silence → caution rendue)"
+            title="Lieu : simuler H+6 (silence → caution rendue)"
             variant="ghost"
             disabled={busy || !nextDayTarget}
             onPress={() =>
-              run('Lendemain', () => {
+              run('H+6 lieu', () => {
                 if (!nextDayTarget) return;
                 const res = simulatePartnerNextDay(nextDayTarget.id);
                 Alert.alert(
-                  'Lendemain (démo)',
+                  'H+6 (démo)',
                   res.ok
                     ? `${res.refunded} caution(s) rendue(s) — silence des deux, aucune pénalité.`
                     : res.reason,

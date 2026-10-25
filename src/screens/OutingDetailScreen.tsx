@@ -856,7 +856,7 @@ export function OutingDetailScreen() {
                             : r.noShowVoided
                               ? `${r.userName} · caution rendue`
                             : r.depositStatus === 'returned'
-                              ? `${r.userName} · caution rendue (silence le lendemain)`
+                              ? `${r.userName} · caution rendue 6 h après le début`
                               : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, jusqu’à 6 h après le début.'}
                     </Text>
                     {canPartnerMarkGuestAbsent(outing, r, state.currentUser?.id ?? '') ? (

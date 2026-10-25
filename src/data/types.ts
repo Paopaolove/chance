@@ -167,7 +167,7 @@ export interface User {
   /** Publishes often / never honors: 1 = warning, 2+ = ban (mock). */
   hostPublishStrikeCount?: number;
   /**
-   * Compte fermé (démo) : 2e publication jamais honorée, ou 3e absence invité (pas de barème hôte « Pas venu », L160).
+   * Compte fermé (démo) : 2e absence d’hôte « Pas venu » retenue (25/10 soir), 2e publication jamais honorée, ou 3e absence invité.
    * ≠ blockUser (blocage pair local).
    */
   banned?: boolean;
@@ -1111,7 +1111,7 @@ export type AppAction =
     }
   /** Lieu : « Pas venu » sans arrivée → trace (le lapin passe par REPORT_GUEST_NO_SHOW). */
   | { type: 'MARK_PARTNER_ABSENT_AT'; payload: { requestId: string; at: string } }
-  /** Silence des deux le lendemain → caution rendue (pas d’absence, pas de présence). */
+  /** Partenaire : silence des deux à H+6 (25/10 soir, avant : lendemain) → caution rendue (pas d’absence, pas de présence). */
   | { type: 'RETURN_DEPOSIT_SILENCE'; payload: { requestId: string } }
   /** Photo d’un moment terminé (auteur = participant présent). */
   | { type: 'ADD_MOMENT_PHOTO'; payload: MomentPhoto }

@@ -532,11 +532,17 @@ function retainHostNoShow(state: AppState, outingId: string, at: string): AppSta
       outingId,
     );
   }
-  // 25/10 · L160 : absence d’hôte retenue comptée (trace), sans barème ni fermeture.
+  // 25/10 soir : barème hôte « Pas venu » rétabli (1re retenue = avertissement, 2e = compte fermé).
   const strike = (state.hostNoShowStrikes[hostId] ?? 0) + 1;
+  const { banned } = hostNoShowSanctionFromStrike(strike);
   let currentUser = state.currentUser;
   if (currentUser && currentUser.id === hostId) {
-    currentUser = { ...currentUser, hostNoShowCount: strike };
+    currentUser = {
+      ...currentUser,
+      hostNoShowCount: strike,
+      banned: banned || currentUser.banned,
+      bannedReason: banned ? '2e no-show hôte — compte suspendu (démo)' : currentUser.bannedReason,
+    };
   }
   let next: AppState = {
     ...state,
@@ -3073,8 +3079,8 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'RETURN_DEPOSITS_H6': {
-      // Table normale : rien de renseigné et pas de « Pas venu » avant H+6 →
-      // caution rendue d’office. Refusé avant H+6 ; idempotent.
+      // Table normale et partenaire (25/10 soir) : rien de renseigné et pas de
+      // « Pas venu » avant H+6 → caution rendue d’office. Refusé avant H+6 ; idempotent.
       const { outingId, at } = action.payload;
       const outingH6 = state.outings.find((o) => o.id === outingId);
       const atMs = new Date(at).getTime();
@@ -3639,7 +3645,7 @@ interface ChanceContextValue {
   ) =>
     | { ok: true; confirmed: number; noSpot: number }
     | { ok: false; reason: string };
-  /** Démo QA : « lendemain » — silence des deux → cautions rendues. */
+  /** Démo QA : partenaire à H+6 (25/10 soir, ex-« lendemain ») — silence des deux → cautions rendues. */
   simulatePartnerNextDay: (
     outingId: string,
   ) => { ok: true; refunded: number } | { ok: false; reason: string };
@@ -5657,8 +5663,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   }, [state.outings]);
 
   /**
-   * Table normale — H+6 : caution encore bloquée d’un confirmé non « Pas venu »
-   * rendue d’office (minuterie locale, même modèle que le partenaire).
+   * H+6 : caution encore bloquée d’un confirmé non « Pas venu » rendue d’office
+   * (minuterie locale). Tables normales et, depuis le 25/10 soir, annonces
+   * partenaires (silence des deux, plus « le lendemain »).
    */
   useEffect(() => {
     const tick = () => {
@@ -5682,7 +5689,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   }, [state.outings, state.requests]);
 
   /**
-   * Partenaire — lendemain (Paris) : silence des deux → caution rendue.
+   * Partenaire — H+6 (25/10 soir, avant : lendemain) : silence des deux → caution
+   * rendue. Filet de sécurité : la minuterie H+6 ci-dessus couvre déjà le cas.
    * On ne pénalise pas le silence du lieu ; pas de présence auto non plus.
    */
   useEffect(() => {
@@ -7345,8 +7353,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'not_declarable' };
       }
       // 18/10 · Caution déjà rendue = acquise : sans désaccord, plus de « Pas venu »
-      // (rendue à H+6 / silence : fenêtre close). Partenaire : inchangé.
-      if (!disagreement && req.depositStatus === 'returned' && !isPartnerListing(outing)) {
+      // (rendue à H+6 / silence : fenêtre close). Partenaire : idem si rendue à H+6 (25/10 soir).
+      if (
+        !disagreement &&
+        req.depositStatus === 'returned' &&
+        (!isPartnerListing(outing) || req.depositReturnCause === 'h6')
+      ) {
         return { ok: false, reason: req.depositReturnCause === 'h6' ? 'too_late' : 'not_declarable' };
       }
       // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité) ;
@@ -7801,17 +7813,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!outing || !isPartnerListing(outing)) {
         return { ok: false, reason: 'not_partner_listing' };
       }
+      // 25/10 soir : même horloge que la table — rendu daté de H+6.
+      const at = h6AtIso(outing);
+      if (!at) return { ok: false, reason: 'invalid_start' };
+      const atMs = new Date(at).getTime();
       const targets = state.requests.filter(
-        (r) =>
-          r.outingId === outingId &&
-          r.status === 'confirmed' &&
-          !r.attendance &&
-          !r.partnerDispute &&
-          r.depositStatus === 'held',
+        (r) => r.outingId === outingId && shouldReturnDepositH6(outing, r, atMs),
       );
-      for (const r of targets) {
-        dispatch({ type: 'RETURN_DEPOSIT_SILENCE', payload: { requestId: r.id } });
-      }
+      dispatch({ type: 'RETURN_DEPOSITS_H6', payload: { outingId, at } });
       return { ok: true, refunded: targets.length };
     },
     [state.outings, state.requests],

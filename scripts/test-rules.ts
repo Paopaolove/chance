@@ -882,14 +882,30 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(same,'ratings 1–5 (guest and host): no effect on deposits, before or after H+6');
     ok(R6(c0,H6).requests.find((r:any)=>r.id==='r2').depositStatus==='returned','silent guest beside present one: returned at H+6');
   }
-  // partenaire : inchangé
+  // partenaire : même horloge que la table (25/10 soir) — silence rendu à H+6, plus le lendemain
   {
     const pst=st({},{isPartnerListing:true});
     ok(P.isPartnerListing(pst.outings[0]),'partner fixture');
-    ok(R6(pst,H6+H).requests[0].depositStatus==='held','partner: H+6 action has no effect');
-    ok(DH.outingsDueForH6(pst.outings,pst.requests,H6+H).length===0&&DH.isNoShowWindowOpen(pst.outings[0],H6+H),'partner: no H+6 timer, no H+6 no-show bound');
+    ok(R6(pst,H6).requests[0].depositStatus==='returned'&&R6(pst,H6).requests[0].depositReturnCause==='h6'&&!R6(pst,H6).requests[0].attendance,'25/10 soir · partner: silent guest returned at H+6 (no absence, no presence)');
+    ok(R6(pst,H6-MIN).requests[0].depositStatus==='held','25/10 soir · partner: not returned at H+6 − 1 min');
+    ok(JSON.stringify(DH.outingsDueForH6(pst.outings,pst.requests,H6))==='["o1"]'&&DH.outingsDueForH6(pst.outings,pst.requests,H6-MIN).length===0,'25/10 soir · partner: H+6 timer covers partner listings');
+    ok(DH.isAtOrAfterH6(pst.outings[0],H6)&&!DH.isAtOrAfterH6(pst.outings[0],H6-MIN),'25/10 soir · partner: isAtOrAfterH6 no longer excludes partners');
+    ok(P.shouldAutoRefundPartnerSilence(pst.outings[0],pst.requests[0],H6)&&!P.shouldAutoRefundPartnerSilence(pst.outings[0],pst.requests[0],H6-MIN),'25/10 soir · partner silence helper: H+6, not next day');
+    const disp=st({partnerDispute:{openedAt:iso(T+H),trigger:'arrival_after_absent',note:'x'}},{isPartnerListing:true});
+    ok(R6(disp,H6+H).requests[0].depositStatus==='held'&&!P.shouldAutoRefundPartnerSilence(disp.outings[0],disp.requests[0],H6+H),'25/10 soir · partner: dispute never returned at H+6');
+    ok(R6(st({attendance:'absent',depositStatus:'noshow_pending'},{isPartnerListing:true}),H6+H).requests[0].depositStatus==='noshow_pending','25/10 soir · partner: « Pas venu » guest not returned at H+6');
+    ok(DH.isNoShowWindowOpen(pst.outings[0],H6+H),'partner: isNoShowWindowOpen unchanged (bound enforced by gel 1)');
+    {
+      const fs=require('node:fs'), path=require('node:path');
+      const rdS=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+      const ctxS=rdS('data','ChanceContext.tsx'), dm=rdS('components','DemoMenuModal.tsx'), odS=rdS('screens','OutingDetailScreen.tsx');
+      ok(!/lendemain/i.test(dm)&&/simuler H\+6 \(silence → caution rendue\)/.test(dm),'25/10 soir · demo menu: partner silence simulated at H+6, no « lendemain »');
+      ok(!/silence le lendemain/.test(odS),'25/10 soir · partner host line: no « silence le lendemain »');
+      ok(/const simulatePartnerNextDay = useCallback\([\s\S]{0,900}h6AtIso\(outing\)[\s\S]{0,400}type: 'RETURN_DEPOSITS_H6'/.test(ctxS),'25/10 soir · demo: partner silence dated H+6 via RETURN_DEPOSITS_H6');
+      ok(/!isPartnerListing\(outing\) \|\| req\.depositReturnCause === 'h6'/.test(ctxS),'25/10 soir · partner: no « Pas venu » once the deposit was returned at H+6');
+    }
     ok(NS(pst,H6+MIN).requests[0].depositStatus==='held'&&NS(pst,H6-MIN).requests[0].depositStatus==='forfeited','gel 1: partner « Pas venu » bounded by H+6 too (accepted at H+6 − 1 min, refused after H+6)');
-    ok(D(pst,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='returned','partner: next-day silence return unchanged');
+    ok(D(pst,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='returned','partner: silence return action still works');
   }
   // imprévu refusé après H+6 : pas de perte ; avant H+6 : inchangé
   {
@@ -1484,7 +1500,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const lost=EXP(p,NSAT+D1);
   ok(lost.requests[0].depositStatus==='forfeited'&&lost.guestNoShowStrikes.u1===1&&lost.requests[0].noShowFinalNotice.text===NC.NOSHOW_FINAL_NOTICE_TEXT,'partner: lost at 24 h without contest, absence counted, final message');
   const c=C(p,CT);
-  ok(!PU.shouldAutoRefundPartnerSilence(c.outings[0],c.requests[0],T+48*H)&&!PU.shouldAutoRefundPartnerSilence(p.outings[0],p.requests[0],T+48*H)&&D(c,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='contested','« le lendemain » never settles a pending or contested partner deposit');
+  ok(!PU.shouldAutoRefundPartnerSilence(c.outings[0],c.requests[0],T+48*H)&&!PU.shouldAutoRefundPartnerSilence(p.outings[0],p.requests[0],T+48*H)&&D(c,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='contested','partner silence (H+6) never settles a pending or contested partner deposit');
   ok(ER(c,CT+D7-MIN).requests[0].depositStatus==='contested','partner review: 7 d − 1 min still pending');
   const tx=ER(c,CT+D7);
   ok(tx.requests[0].depositStatus==='returned'&&tx.requests[0].noShowNotRetained===true&&!tx.guestNoShowStrikes.u1,'partner review: 7 d without decision → returned, not counted');
@@ -1572,7 +1588,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const pm=()=>mk({},{isPartnerListing:true});
   const pp=HN(NS(pm()),NSAT+2*H);
   ok(pp.outings[0].hostNoShowCase.status==='pending'&&!pp.partnerWarningsByHost?.h1&&pp.requests[1].depositStatus==='held'&&pp.requests[0].noShowContestPausedAt,'decision 6: lieu absent → 24 h for the venue, no immediate warning, deposits pending, guest 24 h paused');
-  ok(!PU.shouldAutoRefundPartnerSilence(pp.outings[0],pp.requests[1],T+48*H)&&D(pp,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r2'}}).requests[1].depositStatus==='held','decision 6: « le lendemain » suspended while venue absence pending');
+  ok(!PU.shouldAutoRefundPartnerSilence(pp.outings[0],pp.requests[1],T+48*H)&&D(pp,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r2'}}).requests[1].depositStatus==='held','decision 6: partner silence (H+6) suspended while venue absence pending');
   ok(CH(pp,NSAT+2*H+D1-MIN).outings[0].hostNoShowCase.status==='contested'&&CH(pp,NSAT+2*H+D1).outings[0].hostNoShowCase.status==='pending','decision 6: venue contest 24 h − 1 min ok / 24 h refused');
   const pr=RETH(pp);
   ok(pr.outings[0].hostNoShowCase.status==='retained'&&pr.partnerWarningsByHost.h1===1&&!pr.hostNoShowStrikes.h1&&pr.requests[0].depositStatus==='returned'&&pr.requests[0].attendance===undefined&&pr.requests[1].depositStatus==='returned','decision 6: venue retained absent → partner warning, B, deposits returned');
@@ -2292,23 +2308,30 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     const iu=od.indexOf('title="L’hôte n’est pas venu"');
     ok(iu>0&&!/isDemoEnabled\(\)/.test(od.slice(iu-1500,iu)),'B3: not behind the demo guard');
   }
-  // B4 · pas de barème hôte « Pas venu » (L160)
+  // B4 → 25/10 soir · barème hôte « Pas venu » rétabli (1re retenue = avertissement, 2e = compte fermé)
   {
-    const two=(()=>{
+    const run=(ids:string[])=>{
       let st:any=S({currentUser:{...hostMe},outings:[out(),{...out(),id:'o2'}],requests:[g(),g({id:'r2',outingId:'o2'})]});
-      for(const id of ['o1','o2']){
+      for(const id of ids){
         st=D(st,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:id,hostId:'h1',strike:0,banned:false,reportedAt:iso(T+H),reportedByUserId:'u1'}});
         st=D(st,{type:'EXPIRE_HOST_NO_SHOW_CONTEST',payload:{outingId:id,at:iso(T+H+24*H)}});
       }
       return st;
-    })();
-    ok(two.outings.every((x:any)=>x.hostNoShowCase?.status==='retained')&&two.hostNoShowStrikes.h1===2,'B4: two host absences retained and counted');
-    ok(!two.currentUser.banned&&!two.currentUser.bannedReason&&two.currentUser.hostNoShowCount===2,'B4: 2nd retained host absence → no account closure');
-    ok(two.requests.every((r:any)=>r.depositStatus==='returned'),'B4: guests still get their deposits back');
-    ok(PRT.hostNoShowSanctionFromStrike(1).banned===false&&PRT.hostNoShowSanctionFromStrike(5).banned===false&&PRT.hostPublishSanctionFromStrike(2).banned===true&&!('hostSanctionFromStrike' in PRT),'B4: host no-show scale removed; never-honor unchanged');
+    };
+    const one=run(['o1']);
+    ok(one.hostNoShowStrikes.h1===1&&one.currentUser.hostNoShowCount===1&&!one.currentUser.banned,'25/10 soir: 1st retained host absence → warning only, account open');
+    const two=run(['o1','o2']);
+    ok(two.outings.every((x:any)=>x.hostNoShowCase?.status==='retained')&&two.hostNoShowStrikes.h1===2,'25/10 soir: two host absences retained and counted');
+    ok(two.currentUser.banned===true&&/2e no-show hôte/.test(two.currentUser.bannedReason??'')&&two.currentUser.hostNoShowCount===2,'25/10 soir: 2nd retained host absence → account closed');
+    ok(two.requests.every((r:any)=>r.depositStatus==='returned'),'25/10 soir: guests still get their deposits back');
+    // Absence en attente (24 h non écoulées) : aucune fermeture tant que ce n’est pas retenu (L63).
+    let pend:any=run(['o1']);
+    pend=D(pend,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o2',hostId:'h1',strike:1,banned:false,reportedAt:iso(T+H),reportedByUserId:'u1'}});
+    ok(!pend.currentUser.banned&&pend.hostNoShowStrikes.h1===1,'25/10 soir: 2nd host absence pending → no closure yet');
+    ok(PRT.hostNoShowSanctionFromStrike(1).banned===false&&PRT.hostNoShowSanctionFromStrike(2).banned===true&&PRT.hostNoShowSanctionFromStrike(5).banned===true&&PRT.hostPublishSanctionFromStrike(1).banned===false&&PRT.hostPublishSanctionFromStrike(2).banned===true&&!('hostSanctionFromStrike' in PRT),'25/10 soir: host no-show scale 1 = warning / 2 = closed; never-honor unchanged');
+    ok(PRT.guestSanctionFromStrike(1).banned===false&&PRT.guestSanctionFromStrike(1).lowerPriority===false&&PRT.guestSanctionFromStrike(2).lowerPriority===true&&PRT.guestSanctionFromStrike(2).banned===false&&PRT.guestSanctionFromStrike(3).banned===true,'25/10 soir: guest scale unchanged (2 = priority, 3 = closed)');
     const pf=rd('screens','ProfileScreen.tsx');
-    ok(!/no-show hôte|entraînera un ban|hostNoShowCount/.test(pf),'B4: profile no longer announces a host ban');
-    ok(!/2e no-show hôte/.test(rd('data','ChanceContext.tsx')),'B4: no « 2e no-show hôte — compte suspendu » reason');
+    ok(/hostNoShowCount \?\? 0\) === 1/.test(pf)&&/1er no-show hôte\. Un 2e entraînera un ban/.test(pf)&&/1er avertissement publication jamais honorée/.test(pf),'25/10 soir: profile warns 1st host no-show, distinct from never-honor');
   }
 }
 // ── 25/10 · Lot E : rafraîchissement à H / H+6 et Paywall hors __DEV__ ───────

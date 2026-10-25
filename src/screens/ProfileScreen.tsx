@@ -240,12 +240,17 @@ function ProfileScreenInner() {
               )}
             </Text>
           </View>
-        ) : (user.hostPublishStrikeCount ?? 0) === 1 ? (
-          // 25/10 · L160 : plus de barème hôte « Pas venu » ; seul l’avertissement publication jamais honorée reste.
+        ) : (user.hostNoShowCount ?? 0) === 1 ||
+          (user.hostPublishStrikeCount ?? 0) === 1 ? (
+          // 25/10 soir : barème hôte « Pas venu » rétabli (distinct de la publication jamais honorée).
           <View style={styles.warnBanner}>
             <Text style={styles.warnTitle}>Avertissement</Text>
             <Text style={styles.warnBody}>
-              {demoLabel('1er avertissement publication jamais honorée. Un 2e = ban (démo).')}
+              {demoLabel(
+                (user.hostNoShowCount ?? 0) === 1
+                  ? '1er no-show hôte. Un 2e entraînera un ban (démo).'
+                  : '1er avertissement publication jamais honorée. Un 2e = ban (démo).',
+              )}
             </Text>
           </View>
         ) : null}

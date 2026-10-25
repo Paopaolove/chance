@@ -67,12 +67,12 @@ export function guestSanctionAt(
 }
 
 /**
- * 25/10 · L160 : pas de barème « Pas venu » pour l’hôte (le barème 1 / 2 / 3 sur
- * 3 mois concerne les invités seulement). Une absence d’hôte retenue est comptée
- * (trace pour la revue), sans fermeture de compte ni avertissement « ban ».
+ * Hôte déclaré « Pas venu » (25/10 soir, rétabli après 78284a1) : barème figé,
+ * distinct du barème invité (pas de fenêtre 3 mois). Compte sur les absences
+ * d’hôte **retenues** : 1 = avertissement ; 2+ = compte fermé.
  */
-export function hostNoShowSanctionFromStrike(_strike: number): { banned: false } {
-  return { banned: false };
+export function hostNoShowSanctionFromStrike(strike: number): { banned: boolean } {
+  return { banned: strike >= 2 };
 }
 
 /** Publication jamais honorée (hors barème « Pas venu ») : 1 = avertissement ; 2 → compte suspendu. */
@@ -132,7 +132,7 @@ assert(guestSanctionFromStrike(2).lowerPriority === true, 'g2 prio');
 assert(guestSanctionFromStrike(2).banned === false, 'g2 ban');
 assert(guestSanctionFromStrike(3).banned === true, 'g3 ban');
 assert(hostNoShowSanctionFromStrike(1).banned === false, 'h1');
-assert(hostNoShowSanctionFromStrike(2).banned === false, 'h2 (L160 : pas de barème hôte)');
+assert(hostNoShowSanctionFromStrike(2).banned === true, 'h2 (25/10 soir : 2e absence hôte retenue = compte fermé)');
 assert(hostPublishSanctionFromStrike(2).banned === true, 'publish 2');
 assert(canActorConfirmSlot('a', 'a') && !canActorConfirmSlot('a', 'b'), 'confirm');
 assert(
