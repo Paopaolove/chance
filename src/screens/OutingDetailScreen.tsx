@@ -31,6 +31,7 @@ import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import {
   describeDepositForfeitMoment,
+  PARTNER_DEPOSIT_FORFEIT_LABEL,
 } from '../data/pricing';
 import { budgetChipLabel, categoryLabels, mockHosts } from '../data/mockOutings';
 import { formatOutingCategoryLabel } from '../utils/categoryLabel';
@@ -164,6 +165,43 @@ export function OutingDetailScreen() {
   const partner = isPartnerListing(outing);
   const partnerCulture = isPartnerCultureListing(outing);
   const partnerChips = partner ? partnerListingChips(outing) : [];
+  /**
+   * B3 · « Je ne suis pas venu » (auto-déclaration) : caution perdue tout de suite,
+   * sans contestation (L20, L65), fenêtre H → H+6. 25/10 soir · Trois points produit :
+   * aussi sur un moment lieu — 20 € entiers au lieu, barème partenaire (4 / 12 mois).
+   */
+  const renderSelfDeclareAbsence = (full: NonNullable<ReturnType<typeof getRequestById>>) => {
+    const me = state.currentUser?.id ?? '';
+    if (!canShowSelfDeclareAbsence(outing, full, me, nowMs)) return null;
+    return (
+      <Button
+        title="Je ne suis pas venu"
+        variant="ghost"
+        onPress={() => {
+          Alert.alert(
+            'Te déclarer absent ?',
+            partner
+              ? `Ta caution de 20 € est perdue tout de suite (${PARTNER_DEPOSIT_FORFEIT_LABEL}), sans contestation possible.`
+              : 'Ta caution de 20 € est perdue tout de suite (6,90 € Moment / 13,10 € hôte), sans contestation possible.',
+            [
+              { text: 'Retour', style: 'cancel' },
+              {
+                text: 'Je ne suis pas venu',
+                style: 'destructive',
+                onPress: () => {
+                  const res = reportGuestNoShow(full.id);
+                  if (!res.ok) {
+                    Alert.alert('Impossible', refusalLabel(res.reason));
+                  }
+                },
+              },
+            ],
+          );
+        }}
+        style={{ marginTop: spacing.sm }}
+      />
+    );
+  };
   const chatOpts = chatUnlockOptsFor(outing);
   const myNoSpot =
     partner && !myRequest
@@ -331,7 +369,7 @@ export function OutingDetailScreen() {
                 else
                   Alert.alert(
                     'Imprévu refusé',
-                    'Caution encore bloquée. Annule au moins 1 heure avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). L’invité peut utiliser son joker.',
+                    `Caution encore bloquée. Annule au moins 1 heure avant pour la récupérer ; trop tard ou absence → perdue (${partner ? PARTNER_DEPOSIT_FORFEIT_LABEL : '6,90 € Moment / 13,10 € hôte'}). L’invité peut utiliser son joker.`,
                   );
               }}
               style={{ marginTop: spacing.sm }}
@@ -668,6 +706,8 @@ export function OutingDetailScreen() {
                         : r.status === 'confirmed'
                           ? r.partnerVenueAbsent
                             ? 'Confirmé · marqué absent par le lieu'
+                            : r.partnerSelfAbsent
+                              ? 'Confirmé · s’est déclaré absent'
                             : r.guestArrivedAt
                               ? 'Confirmé · arrivée signalée'
                               : 'Confirmé'
@@ -1152,6 +1192,14 @@ export function OutingDetailScreen() {
                         </Text>
                       );
                     }
+                    // 25/10 soir · Auto-déclaration sur un lieu : perte immédiate, 20 € au lieu.
+                    if (full.partnerSelfAbsent) {
+                      return (
+                        <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                          Tu t’es déclaré absent.
+                        </Text>
+                      );
+                    }
                     if (full.attendance === 'present') {
                       return (
                         <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
@@ -1161,10 +1209,13 @@ export function OutingDetailScreen() {
                     }
                     if (full.guestArrivedAt) {
                       return (
-                        <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                          Arrivée signalée au lieu. Le lieu pointe la table 30 min
-                          après l’heure ; rien coché à 6 h, caution rendue.
-                        </Text>
+                        <>
+                          <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                            Arrivée signalée au lieu. Le lieu pointe la table 30 min
+                            après l’heure ; rien coché à 6 h, caution rendue.
+                          </Text>
+                          {renderSelfDeclareAbsence(full)}
+                        </>
                       );
                     }
                     const canArrive = canGuestSelfArrivePartner(
@@ -1186,7 +1237,10 @@ export function OutingDetailScreen() {
                         'Le lieu est prévenu. Ta caution suit la liste du lieu (30 min après l’heure) ; rien coché à 6 h, elle est rendue.',
                       );
                     };
+                    // 25/10 soir · Trois points produit : « Je ne suis pas venu » aussi sur un lieu.
+                    const selfAbsent = renderSelfDeclareAbsence(full);
                     return canArrive ? (
+                      <>
                       <Button
                         title="Je suis arrivé"
                         onPress={() =>
@@ -1205,7 +1259,9 @@ export function OutingDetailScreen() {
                         }
                         style={{ marginTop: spacing.md }}
                       />
-                    ) : (
+                      {selfAbsent}
+                      </>
+                    ) : selfAbsent ?? (
                       <Text style={[styles.hint, { marginTop: spacing.sm }]}>
                         Sur place : bouton « Je suis arrivé » de 15 min avant
                         l’heure à 6 h après le début. Pas de scan obligatoire.
@@ -1315,33 +1371,7 @@ export function OutingDetailScreen() {
                             style={{ marginTop: spacing.sm }}
                           />
                         ) : null}
-                        {canShowSelfDeclareAbsence(outing, full, me, nowMs) ? (
-                          // 25/10 · B3 : auto-déclaration, caution perdue tout de suite, sans contestation (L20, L65).
-                          <Button
-                            title="Je ne suis pas venu"
-                            variant="ghost"
-                            onPress={() => {
-                              Alert.alert(
-                                'Te déclarer absent ?',
-                                'Ta caution de 20 € est perdue tout de suite (6,90 € Moment / 13,10 € hôte), sans contestation possible.',
-                                [
-                                  { text: 'Retour', style: 'cancel' },
-                                  {
-                                    text: 'Je ne suis pas venu',
-                                    style: 'destructive',
-                                    onPress: () => {
-                                      const res = reportGuestNoShow(full.id);
-                                      if (!res.ok) {
-                                        Alert.alert('Impossible', refusalLabel(res.reason));
-                                      }
-                                    },
-                                  },
-                                ],
-                              );
-                            }}
-                            style={{ marginTop: spacing.sm }}
-                          />
-                        ) : null}
+                        {renderSelfDeclareAbsence(full)}
                       </>
                     );
                   })()
@@ -1398,13 +1428,18 @@ export function OutingDetailScreen() {
                   {getRequestById(myRequest.id)?.noShowFinalNotice
                     ? `${getRequestById(myRequest.id)!.noShowFinalNotice!.text} `
                     : ''}
-                  {describeDepositForfeitMoment()}
+                  {/* 25/10 soir · Moment lieu : 20 € entiers au lieu (pas 6,90 / 13,10). */}
+                  {partner && getRequestById(myRequest.id)?.noShowFinalNotice
+                    ? null
+                    : describeDepositForfeitMoment({ partner })}
                 </Text>
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'held' ? (
                 <Text style={styles.hint}>
                   {demoLabel(
-                    'Caution 20 € bloquée (mock). Rendue si tu annules au moins 1 heure avant, si l’hôte annule / imprévu accepté / joker ; perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).',
+                    partner
+                      ? `Caution 20 € bloquée (mock). Rendue si tu annules au moins 1 heure avant, si le lieu annule / imprévu accepté / joker ; perdue si trop tard ou absence (${PARTNER_DEPOSIT_FORFEIT_LABEL}).`
+                      : 'Caution 20 € bloquée (mock). Rendue si tu annules au moins 1 heure avant, si l’hôte annule / imprévu accepté / joker ; perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).',
                   )}
                 </Text>
               ) : null}

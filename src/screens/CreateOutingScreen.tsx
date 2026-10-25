@@ -497,7 +497,7 @@ function CreateOutingScreenInner() {
       const messages: Record<string, string> = {
         already_active:
           'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
-        banned: demoLabel('Compte suspendu après 2 no-shows hôte (démo).'),
+        banned: demoLabel('Compte fermé (démo).'),
         no_user: 'Profil manquant.',
         starts_in_past: 'Impossible de publier (créneau).',
       };
@@ -635,7 +635,7 @@ function CreateOutingScreenInner() {
       const messages: Record<string, string> = {
         already_active:
           'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
-        banned: demoLabel('Compte suspendu après 2 no-shows hôte (démo).'),
+        banned: demoLabel('Compte fermé (démo).'),
         no_user: 'Profil manquant.',
         starts_in_past:
           'Ce créneau est déjà passé. Choisis une date et une heure dans le futur.',
@@ -1425,7 +1425,7 @@ function PartnerCreateForm() {
         partner_closed: 'Compte partenaire fermé — publication bloquée.',
         partner_offer_required: 'Choisis au moins un geste ou une remise.',
         partner_offer_invalid: 'Offre invalide (texte « Autre » ou % à vérifier).',
-        banned: demoLabel('Compte suspendu (démo).'),
+        banned: demoLabel('Compte fermé (démo).'),
         starts_in_past: 'Ce créneau est déjà passé.',
         no_user: 'Profil manquant.',
       };
@@ -1649,7 +1649,7 @@ function PartnerCreateForm() {
         </CheckNote>
         <Text style={styles.publishFreeHint}>
           Caution 20 € par invité confirmé (rendue s’il vient). Lapin ou
-          annulation tardive : 6,90 € Moment / 13,10 € pour le lieu. Si tu
+          annulation tardive : les 20 € entiers pour le lieu. Si tu
           annules avec des confirmés : cautions rendues + 1 avertissement (2e =
           compte partenaire fermé).
         </Text>

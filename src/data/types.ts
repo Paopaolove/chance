@@ -480,6 +480,13 @@ export interface Request {
    * (4 absences retenues en 12 mois → compte fermé), pas le barème invité.
    */
   partnerVenueAbsent?: boolean;
+  /**
+   * 25/10 soir · Trois points produit : l’invité s’est déclaré absent (« Je ne
+   * suis pas venu ») sur un moment lieu. Perte immédiate = 20 € entiers au lieu ;
+   * compte dans le barème partenaire (4 absences retenues / 12 mois → compte
+   * fermé), pas dans le barème invité table normale.
+   */
+  partnerSelfAbsent?: boolean;
   /** Ancien litige partenaire (avant 25/10 soir) — plus créé, gardé pour lecture. */
   partnerDispute?: PartnerDispute;
 }

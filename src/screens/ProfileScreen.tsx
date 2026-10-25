@@ -232,7 +232,7 @@ function ProfileScreenInner() {
         <Text style={styles.brand}>Moment</Text>
         {user.banned ? (
           <View style={styles.banBanner}>
-            <Text style={styles.banTitle}>{demoLabel('Compte suspendu (démo)')}</Text>
+            <Text style={styles.banTitle}>{demoLabel('Compte fermé (démo)')}</Text>
             <Text style={styles.banBody}>
               {demoLabel(
                 user.bannedReason ?? 'Tu ne peux plus publier de moment.',
@@ -247,8 +247,8 @@ function ProfileScreenInner() {
             <Text style={styles.warnBody}>
               {demoLabel(
                 (user.hostNoShowCount ?? 0) === 1
-                  ? '1er no-show hôte. Un 2e entraînera un ban (démo).'
-                  : '1er avertissement publication jamais honorée. Un 2e = ban (démo).',
+                  ? '1er no-show hôte. Un 2e = compte fermé (démo).'
+                  : '1er avertissement publication jamais honorée. Un 2e = compte fermé (démo).',
               )}
             </Text>
           </View>

@@ -502,9 +502,9 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 if (!r.ok) Alert.alert('Impossible', r.reason);
                 else
                   Alert.alert(
-                    r.banned ? 'Compte suspendu' : 'Avertissement',
+                    r.banned ? 'Compte fermé' : 'Avertissement',
                     r.banned
-                      ? '2e publication jamais honorée — ban.'
+                      ? '2e publication jamais honorée — compte fermé.'
                       : '1er avertissement — cautions remboursées.',
                   );
               })

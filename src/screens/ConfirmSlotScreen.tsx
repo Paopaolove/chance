@@ -7,6 +7,7 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { useFirstMomentGate } from '../components/FirstMomentSheet';
 import { DEPOSIT_EUROS, useChance } from '../data/ChanceContext';
+import { PARTNER_DEPOSIT_FORFEIT_LABEL } from '../data/pricing';
 import { mockHosts } from '../data/mockOutings';
 import { RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
@@ -335,7 +336,9 @@ export function ConfirmSlotScreen() {
         <Text style={styles.depositSub}>
           Caution {DEPOSIT_EUROS} € (ce n’est pas l’invitation). Rendue si tu
           viens, si tu annules au moins 1 heure avant, ou si {partner ? 'le lieu' : 'l’hôte'} annule.
-          Perdue si trop tard ou absence : 6,90 € Moment / 13,10 € {partner ? 'lieu' : 'hôte'}.
+          {partner
+            ? `Perdue si trop tard ou absence : ${PARTNER_DEPOSIT_FORFEIT_LABEL}.`
+            : 'Perdue si trop tard ou absence : 6,90 € Moment / 13,10 € hôte.'}
         </Text>
       </View>
       <Button title={partner ? 'Je confirme ma venue' : 'Je confirme'} onPress={onConfirm} />

@@ -53,6 +53,7 @@ import {
   DEPOSIT_EUROS as DEPOSIT_FROM_PRICING,
   describeDepositForfeitMoment,
   isCancelFreeWindow,
+  PARTNER_DEPOSIT_FORFEIT_LABEL,
 } from './pricing';
 import {
   isParisSameDay,
@@ -70,6 +71,8 @@ import {
   partnerVenueCheckNotifBody,
   partnerVenueCheckRefusal,
   partnerVenueCheckRequests,
+  PARTNER_NOSHOW_BAN_AT,
+  PARTNER_NOSHOW_WINDOW_MONTHS,
   PARTNER_VENUE_ABSENT_TEXT,
   isPartnerClosed,
   isPartnerCultureHost,
@@ -626,7 +629,7 @@ function retainHostNoShow(state: AppState, outingId: string, at: string): AppSta
       ...currentUser,
       hostNoShowCount: strike,
       banned: banned || currentUser.banned,
-      bannedReason: banned ? '2e no-show hôte — compte suspendu (démo)' : currentUser.bannedReason,
+      bannedReason: banned ? '2e no-show hôte — compte fermé (démo)' : currentUser.bannedReason,
     };
   }
   let next: AppState = {
@@ -2623,6 +2626,29 @@ function reducer(state: AppState, action: AppAction): AppState {
           ),
         };
       }
+      // 25/10 soir · Trois points produit : auto-déclaration sur un moment lieu.
+      // Perte immédiate, 20 € entiers au lieu ; barème partenaire (4 absences
+      // retenues / 12 mois → compte fermé), pas le barème invité table normale.
+      if (isPartnerListing(outingNoShow) && reportedByUserId === guestId) {
+        if ((existing.depositStatus ?? 'held') !== 'held') return state;
+        const selfAbsent: AppState = {
+          ...state,
+          requests: state.requests.map((r) =>
+            r.id === requestId
+              ? {
+                  ...r,
+                  attendance: 'absent' as const,
+                  depositStatus: 'forfeited' as const,
+                  partnerSelfAbsent: true,
+                }
+              : r,
+          ),
+          outings: state.outings.map((o) =>
+            o.id === outingId ? { ...o, status: closedKeepingCompleted(o.status) } : o,
+          ),
+        };
+        return withPartnerNoShowStrike(selfAbsent, requestId, reportedAt);
+      }
       // Après le joker et les autres gardes (ordre de fbe3f51).
       // Hôte d’une table normale : 24 h pour contester, rien n’est compté avant que ce soit définitif.
       if (noShowOpensContest(outingNoShow, reportedByUserId)) {
@@ -2706,7 +2732,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           hostPublishStrikeCount: strike,
           banned: banned || currentUser.banned,
           bannedReason: banned
-            ? '2e publication jamais honorée — compte suspendu (démo)'
+            ? '2e publication jamais honorée — compte fermé (démo)'
             : currentUser.bannedReason,
         };
       }
@@ -5279,7 +5305,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Imprévu refusé',
-        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heure avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). Tu peux utiliser ton joker si tu en as un.`,
+        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heure avant pour la récupérer ; trop tard ou absence → perdue (${isPartnerListing(outing) ? PARTNER_DEPOSIT_FORFEIT_LABEL : '6,90 € Moment / 13,10 € hôte'}). Tu peux utiliser ton joker si tu en as un.`,
         createdAt: nowIso,
         type: 'imprevu',
         outingId: report.outingId,
@@ -7438,10 +7464,26 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // l’absence n’est comptée qu’une fois définitive.
       // Désaccord (18/10) : contestation directe, rien n’est compté avant l’issue.
       const pending = !disagreement && noShowOpensContest(outing, user.id);
+      // 25/10 soir · Trois points produit : auto-déclaration sur un moment lieu →
+      // barème partenaire (4 absences retenues / 12 mois), pas le barème invité.
+      const partnerSelf = isPartnerListing(outing) && user.id === guestId && !disagreement;
+      if (partnerSelf && (req.depositStatus ?? 'held') !== 'held') {
+        return { ok: false, reason: 'not_declarable' };
+      }
       const prev = state.guestNoShowStrikes[guestId] ?? 0;
-      const strike = pending || disagreement ? prev : prev + 1;
+      const strike = pending || disagreement || partnerSelf ? prev : prev + 1;
       // 25/10 : barème sur 3 mois glissants (absences retenues seulement).
-      const { lowerPriority, banned } = pending || disagreement
+      const { lowerPriority, banned } = partnerSelf
+        ? {
+            lowerPriority: false,
+            banned: partnerNoShowSanction(
+              partnerNoShowsInWindow(
+                [...(state.partnerNoShowLog?.[guestId] ?? []), { requestId, at: reportedAt }],
+                new Date(reportedAt).getTime(),
+              ),
+            ).banned,
+          }
+        : pending || disagreement
         ? { lowerPriority: false, banned: false }
         : guestSanctionFromStrike(
             guestStrikesInWindow(
@@ -7470,6 +7512,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         ? 'présence confirmée par l’invité : contestation ouverte, revue sous 7 jours max. La caution déjà rendue reste acquise.'
         : disagreement
         ? 'présence confirmée par l’invité : contestation ouverte, caution en attente de revue (7 jours max).'
+        : partnerSelf
+          ? `caution perdue (${PARTNER_DEPOSIT_FORFEIT_LABEL}).`
         : pending
           ? `caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € ${shareWho}).`
           : `caution perdue (6,90 € Moment / 13,10 € ${shareWho}).`;
@@ -7479,7 +7523,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         outingId,
         requestId,
         kind: 'system',
-        text: banned
+        text: partnerSelf
+          ? banned
+            ? `Note auto · ${PARTNER_NOSHOW_BAN_AT}e absence en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
+            : `Note auto · absence déclarée par l’invité — ${lossText}`
+          : banned
           ? `Note auto · 3e absence invité — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
           : lowerPriority
             ? `Note auto · 2e absence invité — priorité baissée + mention profil. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
@@ -7496,7 +7544,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             : pending || disagreement
               ? 'Absence signalée'
               : 'Caution perdue',
-        body: banned
+        body: partnerSelf
+          ? banned
+            ? `${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
+            : `Absence déclarée — caution perdue : ${PARTNER_DEPOSIT_FORFEIT_LABEL}.`
+          : banned
           ? `3e absence — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
           : lowerPriority
             ? '2e no-show invité — priorité baissée + mention sur le profil.'
@@ -7514,6 +7566,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       state.outings,
       state.guestNoShowStrikes,
       state.guestNoShowLog,
+      state.partnerNoShowLog,
       state.imprevuReports,
     ],
   );
@@ -7553,16 +7606,16 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         outingId,
         kind: 'system',
         text: banned
-          ? 'Note auto · 2e publication jamais honorée — compte suspendu. Cautions remboursées.'
+          ? 'Note auto · 2e publication jamais honorée — compte fermé. Cautions remboursées.'
           : 'Note auto · publication jamais honorée — avertissement. Cautions remboursées.',
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
       const toast: AppToast = {
         id: uid('toast'),
-        title: banned ? 'Compte suspendu' : 'Avertissement publication',
+        title: banned ? 'Compte fermé' : 'Avertissement publication',
         body: banned
-          ? '2e fois — ban. Cautions des invités remboursées.'
+          ? '2e fois — compte fermé. Cautions des invités remboursées.'
           : '1er avertissement (publie sans honorer). Cautions remboursées.',
         createdAt: new Date().toISOString(),
       };

@@ -134,9 +134,17 @@ export function describeDepositForfeitSplit(): string {
   return `${formatPriceEuros(DEPOSIT_FORFEIT_CHANCE_EUROS)} pour Moment, ${formatPriceEuros(DEPOSIT_FORFEIT_HOST_EUROS)} pour l’hôte`;
 }
 
-/** Phrase UI au moment de la perte (Alert / bannière). */
-export function describeDepositForfeitMoment(): string {
-  return `Caution ${DEPOSIT_EUROS} € perdue : ${describeDepositForfeitSplit()}.`;
+/**
+ * 25/10 soir · Trois points produit : sur un moment lieu (partenaire), trop
+ * tard ou absent = les 20 € entiers au lieu (pas le partage 6,90 / 13,10).
+ */
+export const PARTNER_DEPOSIT_FORFEIT_LABEL = `${DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS} € entiers au lieu`;
+
+/** Phrase UI au moment de la perte (Alert / bannière). Partenaire : 20 € au lieu. */
+export function describeDepositForfeitMoment(opts?: { partner?: boolean }): string {
+  return opts?.partner
+    ? `Caution ${DEPOSIT_EUROS} € perdue : ${PARTNER_DEPOSIT_FORFEIT_LABEL}.`
+    : `Caution ${DEPOSIT_EUROS} € perdue : ${describeDepositForfeitSplit()}.`;
 }
 
 /** Libellés FR courts pour depositStatus (UI). */

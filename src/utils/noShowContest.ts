@@ -208,10 +208,11 @@ export function hostNoShowShareEuros(
   r: Pick<Request, 'attendance' | 'depositStatus'> & {
     noShowNotRetained?: boolean;
     partnerVenueAbsent?: boolean;
+    partnerSelfAbsent?: boolean;
   },
 ): number {
-  // Partenaire (liste du lieu) : 20 € entiers, voir partnerVenueNoShowShareEuros.
-  if (r.partnerVenueAbsent) return 0;
+  // Partenaire (liste du lieu ou auto-déclaration) : 20 € entiers, voir partnerVenueNoShowShareEuros.
+  if (r.partnerVenueAbsent || r.partnerSelfAbsent) return 0;
   return r.attendance === 'absent' && r.depositStatus === 'forfeited' && !r.noShowNotRetained
     ? DEPOSIT_FORFEIT_HOST_EUROS
     : 0;
@@ -226,9 +227,11 @@ export function partnerVenueNoShowShareEuros(
   r: Pick<Request, 'attendance' | 'depositStatus'> & {
     noShowNotRetained?: boolean;
     partnerVenueAbsent?: boolean;
+    partnerSelfAbsent?: boolean;
   },
 ): number {
-  return r.partnerVenueAbsent &&
+  // 25/10 soir · Trois points produit : l’auto-déclaration sur un lieu suit la même règle.
+  return (r.partnerVenueAbsent || r.partnerSelfAbsent) &&
     r.attendance === 'absent' &&
     r.depositStatus === 'forfeited' &&
     !r.noShowNotRetained

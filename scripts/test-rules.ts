@@ -1166,7 +1166,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(card.includes('contestRefusalLabel(res.reason)')&&!/Alert\.alert\([^)]*,\s*res\.reason\)/.test(card)&&!/:\s*res\.reason,/.test(card),'static: no raw code in contest alert');
   ok(!/perdue sans suite/.test(ctx)&&!/perdue sans suite/.test(od)&&/puis perdue sans contestation \(6,90/.test(ctx)&&od.includes('puis perdue sans contestation : 6,90'),'host alert / toast / chat note: « puis perdue sans contestation »');
   const lossIdx=ctx.indexOf('const lossText');
-  ok(lossIdx>0&&/text: banned[\s\S]{0,400}lossText/.test(ctx)&&/body: banned[\s\S]{0,600}lossText/.test(ctx),'static: chat note and toast share the same wording');
+  ok(lossIdx>0&&/text: (?:partnerSelf[\s\S]{0,500}?: )?banned[\s\S]{0,400}lossText/.test(ctx)&&/body: (?:partnerSelf[\s\S]{0,500}?: )?banned[\s\S]{0,600}lossText/.test(ctx),'static: chat note and toast share the same wording');
 }
 
 // B1 / B2 (go Paolo 17/10) : absence comptée seulement quand définitive ; contestation acceptée = absence effacée
@@ -1243,7 +1243,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const od=rd('screens/OutingDetailScreen.tsx'), ctx=rd('data/ChanceContext.tsx');
   const bi=od.indexOf('title={`Signaler absence de ${r.userName}`}');
   ok(od.slice(bi-500,bi).includes('!r.noShowNotRetained'),'static: « Signaler absence » hidden after « absence non retenue »');
-  ok(/const strike = pending \|\| disagreement \? prev : prev \+ 1;/.test(ctx),'static: callback does not count at a pending declaration');
+  ok(/const strike = pending \|\| disagreement(?: \|\| partnerSelf)? \? prev : prev \+ 1;/.test(ctx),'static: callback does not count at a pending declaration');
 }
 
 // ligne hôte « X · caution rendue » : à partir de H+6 ou si l’hôte est déclaré « Pas venu » ; rien avant H+6 (joker invisible)
@@ -1534,6 +1534,19 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   // auto-déclaration : perte immédiate (inchangé)
   const self=D(st(),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
   ok(self.requests[0].depositStatus==='forfeited','partner: self-declared absence still immediate');
+  // 25/10 soir · Trois points produit (1) : auto-déclaration sur un lieu → barème partenaire, 20 € au lieu
+  ok(self.requests[0].attendance==='absent'&&self.requests[0].partnerSelfAbsent===true&&!self.requests[0].noShowReportedAt&&!self.guestNoShowStrikes.u1&&!(self.guestNoShowLog?.u1?.length)&&self.partnerNoShowLog.u1.length===1&&self.currentUser.partnerNoShowCount===1&&!self.currentUser.lowerPriority&&!self.currentUser.banned,'lot 35: partner self absence → partner counter (not the guest barème)');
+  ok(NC.partnerVenueNoShowShareEuros(self.requests[0])===20&&NC.hostNoShowShareEuros(self.requests[0])===0,'lot 35: partner self absence → 20 € entire to the venue (no 6,90 / 13,10)');
+  const old3=[1,2,3].map((i)=>({requestId:'old'+i,at:iso(NSAT-i*30*24*H)}));
+  const self4=D(st({partnerNoShowLog:{u1:old3}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
+  ok(self4.currentUser.banned===true&&/compte fermé/.test(self4.currentUser.bannedReason)&&self4.partnerNoShowLog.u1.length===4&&!self4.guestNoShowStrikes.u1,'lot 35: 4th partner absence in 12 months (self-declared) → compte fermé');
+  const oldOut=[1,2,3].map((i)=>({requestId:'older'+i,at:iso(NSAT-(400+i)*24*H)}));
+  const selfOld=D(st({partnerNoShowLog:{u1:oldOut}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
+  ok(!selfOld.currentUser.banned&&selfOld.currentUser.partnerNoShowCount===1,'lot 35: absences older than 12 months do not count');
+  const self2=D(st({guestNoShowStrikes:{u1:2},guestNoShowLog:{u1:[{requestId:'g1',at:iso(NSAT-10*24*H)},{requestId:'g2',at:iso(NSAT-5*24*H)}]}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:3,lowerPriority:true,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
+  ok(!self2.currentUser.banned&&self2.guestNoShowStrikes.u1===2&&self2.guestNoShowLog.u1.length===2,'lot 35: partner self absence never triggers the guest barème (3rd absence ≠ fermeture here)');
+  const selfRet=D(st({requests:[rq({status:'confirmed',depositStatus:'returned'})]}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
+  ok(selfRet.requests[0].depositStatus==='returned'&&!selfRet.requests[0].attendance&&!(selfRet.partnerNoShowLog?.u1?.length),'lot 35: partner self absence needs a held deposit');
   // le lieu ne peut plus déclarer « Pas venu » à l’unité
   const hostNS=D({...st(),currentUser:host},{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
   ok(hostNS.requests[0].depositStatus==='held'&&!hostNS.requests[0].attendance,'25/10 soir: venue « Pas venu » à l’unité refused (list only)');
@@ -2351,7 +2364,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     const ns=g({attendance:'absent',depositStatus:'noshow_pending',noShowReportedAt:iso(T+H)});
     ok(MA.canShowDeclareHostAbsent(oo(),ns,'u1',T+2*H)&&MA.canShowDeclareHostAbsent(oo(),g({attendance:'present',presenceBy:'guest'}),'u1',T+H),'B3: host absent — « Pas venu » guest within his 24 h (L83) and present guest');
     ok(!MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T)&&MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T+1)&&MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T+6*H)&&!MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T+6*H+1),'B3: self absence — window H → H+6 inclusive');
-    ok(!MA.canShowSelfDeclareAbsence(oo(),g({attendance:'present'}),'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo(),ns,'u1',T+2*H)&&!MA.canShowSelfDeclareAbsence(oo(),g({depositStatus:'returned'}),'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo(),mine,'h1',T+H)&&!MA.canShowSelfDeclareAbsence(oo({hostNoShowReported:true}),mine,'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo({isPartnerListing:true}),mine,'u1',T+H),'B3: self absence — only if nothing indicated, deposit held, host not declared absent, normal table');
+    ok(!MA.canShowSelfDeclareAbsence(oo(),g({attendance:'present'}),'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo(),ns,'u1',T+2*H)&&!MA.canShowSelfDeclareAbsence(oo(),g({depositStatus:'returned'}),'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo(),mine,'h1',T+H)&&!MA.canShowSelfDeclareAbsence(oo({hostNoShowReported:true}),mine,'u1',T+H),'B3: self absence — only if nothing indicated, deposit held, host not declared absent');
+    ok(MA.canShowSelfDeclareAbsence(oo({isPartnerListing:true}),mine,'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo({isPartnerListing:true}),mine,'u1',T+6*H+1)&&!MA.canShowSelfDeclareAbsence(oo({isPartnerListing:true}),g({attendance:'absent',partnerVenueAbsent:true,depositStatus:'noshow_pending'}),'u1',T+H),'lot 35: self absence also on a partner moment (same window H → H+6)');
     const sd=D(S({currentUser:{...me},outings:[oo()],requests:[mine]}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,reportedAt:iso(T+H),reportedByUserId:'u1'}});
     ok(sd.requests[0].depositStatus==='forfeited'&&sd.requests[0].attendance==='absent'&&sd.guestNoShowStrikes.u1===1&&!sd.requests[0].noShowReportedAt,'B3: self declaration → loss immediate, no contest window (L65)');
     const od=rd('screens','OutingDetailScreen.tsx');
@@ -2383,7 +2397,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(PRT.hostNoShowSanctionFromStrike(1).banned===false&&PRT.hostNoShowSanctionFromStrike(2).banned===true&&PRT.hostNoShowSanctionFromStrike(5).banned===true&&PRT.hostPublishSanctionFromStrike(1).banned===false&&PRT.hostPublishSanctionFromStrike(2).banned===true&&!('hostSanctionFromStrike' in PRT),'25/10 soir: host no-show scale 1 = warning / 2 = closed; never-honor unchanged');
     ok(PRT.guestSanctionFromStrike(1).banned===false&&PRT.guestSanctionFromStrike(1).lowerPriority===false&&PRT.guestSanctionFromStrike(2).lowerPriority===true&&PRT.guestSanctionFromStrike(2).banned===false&&PRT.guestSanctionFromStrike(3).banned===true,'25/10 soir: guest scale unchanged (2 = priority, 3 = closed)');
     const pf=rd('screens','ProfileScreen.tsx');
-    ok(/hostNoShowCount \?\? 0\) === 1/.test(pf)&&/1er no-show hôte\. Un 2e entraînera un ban/.test(pf)&&/1er avertissement publication jamais honorée/.test(pf),'25/10 soir: profile warns 1st host no-show, distinct from never-honor');
+    ok(/hostNoShowCount \?\? 0\) === 1/.test(pf)&&/1er no-show hôte\. Un 2e = compte fermé/.test(pf)&&/1er avertissement publication jamais honorée/.test(pf),'25/10 soir: profile warns 1st host no-show, distinct from never-honor');
   }
 }
 // ── 25/10 · Lot E : rafraîchissement à H / H+6 et Paywall hors __DEV__ ───────
@@ -2425,6 +2439,28 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   (globalThis as any).__DEV__=false;
   ok(DV.demoText('x — aucun paiement réel. Stripe arrivera plus tard.','x est active.')==='x est active.'&&DV.demoLabel('Formule activée (démo)')==='Formule activée','Lot E: prod texts (__DEV__ = false)');
   (globalThis as any).__DEV__=prev;
+}
+// 25/10 soir · Lot 35 · Trois points produit (ConfirmSlot partenaire 20 € au lieu, « compte fermé »)
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const PRc=require('../src/data/pricing');
+  ok(PRc.describeDepositForfeitMoment({partner:true})==='Caution 20 € perdue : 20 € entiers au lieu.'&&PRc.describeDepositForfeitMoment()==='Caution 20 € perdue : 6,90 € pour Moment, 13,10 € pour l’hôte.','lot 35: forfeit sentence — partner 20 € au lieu, normal table unchanged');
+  const cs=rdf('screens','ConfirmSlotScreen.tsx');
+  ok(/partner\s*\?\s*`Perdue si trop tard ou absence : \$\{PARTNER_DEPOSIT_FORFEIT_LABEL\}\.`\s*:\s*'Perdue si trop tard ou absence : 6,90 € Moment \/ 13,10 € hôte\.'/.test(cs)&&!/13,10 € \{partner/.test(cs),'lot 35: ConfirmSlot partner = 20 € entiers au lieu, normal table unchanged');
+  const od=rdf('screens','OutingDetailScreen.tsx'), co=rdf('screens','CreateOutingScreen.tsx');
+  ok(!/13,10 € pour le lieu/.test(co)&&/les 20 € entiers pour le lieu/.test(co),'lot 35: venue publish text = 20 € entiers pour le lieu');
+  ok(/partner\s*\?\s*`Ta caution de 20 € est perdue tout de suite \(\$\{PARTNER_DEPOSIT_FORFEIT_LABEL\}\)/.test(od)&&/describeDepositForfeitMoment\(\{ partner \}\)/.test(od),'lot 35: self-declaration + forfeit hint on a partner moment = 20 € au lieu');
+  const ip=od.indexOf('if (full.partnerVenueAbsent) {'), ie=od.indexOf("{!partner && 'id' in myRequest && outing.status !== 'cancelled'");
+  ok(ip>0&&ie>ip&&/renderSelfDeclareAbsence\(full\)/.test(od.slice(ip,ie)),'lot 35: « Je ne suis pas venu » rendered in the partner block');
+  // Libellés : « compte fermé » partout, plus de « suspendu » / « ban » visibles
+  const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):/\.tsx?$/.test(e.name)?[path.join(d,e.name)]:[]);
+  const strs=(src:string)=>{const out:string[]=[];const code=src.replace(/\/\*[^]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'').replace(/^\s*assert\(.*$/gm,'');const re=/'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`|>[^<>{}\n]+</g;let m;while((m=re.exec(code)))out.push(m[0]);return out;};
+  const bad:string[]=[];
+  for(const file of walk(path.join(__dirname,'..','src'))){for(const t of strs(fs.readFileSync(file,'utf8'))){if(/suspendu|\bban\b/i.test(t))bad.push(path.basename(file)+': '+t);}}
+  ok(bad.length===0,'lot 35: no « suspendu » / « ban » in user-facing strings'+(bad.length?' — '+bad.join(' | '):''));
+  const pf=rdf('screens','ProfileScreen.tsx');
+  ok(/demoLabel\('Compte fermé \(démo\)'\)/.test(pf)&&/Un 2e = compte fermé \(démo\)/.test(pf),'lot 35: profile « Compte fermé (démo) », « Un 2e = compte fermé »');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

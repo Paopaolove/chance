@@ -78,6 +78,8 @@ export function canShowDeclareHostAbsent(
  * B3 · Auto-déclaration d’absence (« Je ne suis pas venu ») : caution perdue
  * immédiatement, sans contestation (L20, L65), même fenêtre H → H+6 (L77, L130).
  * Rien d’indiqué (ni présent, ni « Pas venu »), caution encore bloquée, pas parti.
+ * 25/10 soir · Trois points produit : aussi sur un moment lieu (partenaire) —
+ * 20 € entiers au lieu, barème partenaire (4 absences retenues / 12 mois).
  */
 export function canShowSelfDeclareAbsence(
   outing: AbsenceOuting,
@@ -85,7 +87,6 @@ export function canShowSelfDeclareAbsence(
   meId: string,
   nowMs = Date.now(),
 ): boolean {
-  if (isPartnerListing(outing as Outing)) return false;
   if (outing.status === 'cancelled') return false;
   if (!isMyConfirmedSeat(outing, request, meId)) return false;
   if (request.leftTableAt || request.attendance) return false;

@@ -55,7 +55,7 @@ export function NoShowContestCard({ request }: { request: Request }) {
       <Text style={styles.title}>{partner ? PARTNER_VENUE_ABSENT_TEXT : 'L’hôte t’a signalé « Pas venu »'}</Text>
       <Text style={styles.body}>
         {request.noShowContestPausedAt
-          ? `Délai suspendu tant que l’absence ${partner ? 'du lieu' : 'de l’hôte'} est en attente. Tu peux déjà contester, avec une phrase.`
+          ? `Délai en pause tant que l’absence ${partner ? 'du lieu' : 'de l’hôte'} est en attente. Tu peux déjà contester, avec une phrase.`
           : open
           ? partner
             ? `Tu étais là ? Il te reste ${contestTimeLeftLabel(request, nowMs)} pour dire « je suis venu », avec une phrase. Sans réponse, ${lossLabel}.`
