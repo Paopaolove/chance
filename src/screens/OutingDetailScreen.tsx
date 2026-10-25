@@ -1436,8 +1436,8 @@ export function OutingDetailScreen() {
                 if (!hasJokerAvailable()) {
                   return (
                     <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                      Joker déjà utilisé ce mois — caution selon la règle des 3
-                      heures.
+                      Joker déjà utilisé ce mois — caution rendue seulement si tu annules
+                      au moins 1 heure avant.
                     </Text>
                   );
                 }

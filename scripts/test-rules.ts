@@ -209,7 +209,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(lc.requests[0].depositStatus==='returned','H−1: cancel within the hour after joker → stays returned');
     const fs=require('node:fs'), path=require('node:path');
     const txt=['screens/OnboardingScreen.tsx','screens/ConfirmSlotScreen.tsx','screens/OutingDetailScreen.tsx','screens/ImprevuScreen.tsx','data/ChanceContext.tsx','data/pricing.ts'].map((f)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8')).join('\n');
-    ok(!/3 heures|règle des 3 h/.test(txt)&&/au moins 1 heure avant/.test(txt),'H−1: no « 3 heures » left in cancellation texts');
+    ok(!/3\s+heures|règle des 3\s+h/.test(txt)&&/au moins 1 heure avant/.test(txt),'H−1: no « 3 heures » left in cancellation texts');
   }
   ok(jk(0).requests[0].depositStatus==='held','joker at H refused');
   ok(jk(60*60e3,{attendance:'present'}).requests[0].depositStatus==='held','joker refused when present');

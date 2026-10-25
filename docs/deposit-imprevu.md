@@ -2,7 +2,7 @@
 
 > Mock local uniquement — **pas de Stripe live**.  
 > Caution **20 €** (`DEPOSIT_EUROS`). Split forfeit : **6,90 € Chance** + **13,10 € hôte** (`DEPOSIT_FORFEIT_*`).  
-> Source runtime : `ChanceContext` + `src/data/pricing.ts` (`CANCEL_FREE_BEFORE_HOURS = 3`).  
+> Source runtime : `ChanceContext` + `src/data/pricing.ts` (`CANCEL_FREE_BEFORE_HOURS = 1`).  
 > Joker : **1× / mois calendaire Europe/Paris** (`parisMonthKey` / `jokerUsedMonthKey`).
 
 ## Ce que la caution n’est pas
