@@ -51,7 +51,7 @@ import { useFirstMomentGate } from '../components/FirstMomentSheet';
 import { GenderPills } from '../components/GenderPills';
 import { PillsWithOther } from '../components/PillsWithOther';
 import { useOpenUserProfile } from '../utils/openUserProfile';
-import { isDemoEnabled } from '../utils/devMode';
+import { demoLabel, isDemoEnabled } from '../utils/devMode';
 import {
   formatYmdShort,
   freeDateHint,
@@ -497,7 +497,7 @@ function CreateOutingScreenInner() {
       const messages: Record<string, string> = {
         already_active:
           'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
-        banned: 'Compte suspendu après 2 no-shows hôte (démo).',
+        banned: demoLabel('Compte suspendu après 2 no-shows hôte (démo).'),
         no_user: 'Profil manquant.',
         starts_in_past: 'Impossible de publier (créneau).',
       };
@@ -635,7 +635,7 @@ function CreateOutingScreenInner() {
       const messages: Record<string, string> = {
         already_active:
           'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
-        banned: 'Compte suspendu après 2 no-shows hôte (démo).',
+        banned: demoLabel('Compte suspendu après 2 no-shows hôte (démo).'),
         no_user: 'Profil manquant.',
         starts_in_past:
           'Ce créneau est déjà passé. Choisis une date et une heure dans le futur.',
@@ -647,7 +647,7 @@ function CreateOutingScreenInner() {
     Alert.alert(
       inviteeName ? 'Proposition envoyée' : 'Annonce publiée',
       inviteeName
-        ? `Proposition pour ${inviteeName} — visible dans ses Demandes (démo : quand currentUser = destinataire). Pas publiée sur Annonces.`
+        ? demoLabel(`Proposition pour ${inviteeName} — visible dans ses Demandes (démo : quand currentUser = destinataire). Pas publiée sur Annonces.`)
         : `Publication gratuite. L’adresse exacte reste cachée jusqu’à confirmation.${isDemoEnabled() ? ' (Démo : 5 taps sur Moment → Simuler demande Juliette.)' : ''}`,
     );
     setVenueName('');
@@ -1425,7 +1425,7 @@ function PartnerCreateForm() {
         partner_closed: 'Compte partenaire fermé — publication bloquée.',
         partner_offer_required: 'Choisis au moins un geste ou une remise.',
         partner_offer_invalid: 'Offre invalide (texte « Autre » ou % à vérifier).',
-        banned: 'Compte suspendu (démo).',
+        banned: demoLabel('Compte suspendu (démo).'),
         starts_in_past: 'Ce créneau est déjà passé.',
         no_user: 'Profil manquant.',
       };

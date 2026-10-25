@@ -1,3 +1,4 @@
+import { demoLabel } from '../utils/devMode';
 import { hostReturnedDepositLine, isNoShowWindowOpen } from '../utils/depositH6';
 import { refusalLabel } from '../utils/refusalLabels';
 import {
@@ -706,7 +707,7 @@ export function OutingDetailScreen() {
                     partner && hasConfirmed
                       ? 'Toutes les cautions seront rendues. Ton lieu reçoit 1 avertissement — au 2e, le compte partenaire est fermé.'
                       : hasConfirmed
-                        ? 'Les places confirmées seront annulées et les cautions rendues (mock).'
+                        ? demoLabel('Les places confirmées seront annulées et les cautions rendues (mock).')
                         : 'Le moment sera fermé et les demandes en cours annulées.',
                     [
                       { text: 'Retour', style: 'cancel' },
@@ -716,7 +717,7 @@ export function OutingDetailScreen() {
                         onPress: () => {
                           const res = cancelOuting(outing.id);
                           if (res.ok) {
-                            Alert.alert('Moment annulé', 'Cautions rendues si besoin (mock).');
+                            Alert.alert('Moment annulé', demoLabel('Cautions rendues si besoin (mock).'));
                             navigation.goBack();
                           }
                         },
@@ -837,7 +838,7 @@ export function OutingDetailScreen() {
                               ? `${r.userName} · caution rendue`
                             : r.depositStatus === 'returned'
                               ? `${r.userName} · caution rendue (silence le lendemain)`
-                              : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, avant 6 h après le début.'}
+                              : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, jusqu’à 6 h après le début.'}
                     </Text>
                     {canPartnerMarkGuestAbsent(outing, r, state.currentUser?.id ?? '') ? (
                       <Button
@@ -894,7 +895,7 @@ export function OutingDetailScreen() {
                       if (res.ok) {
                         Alert.alert(
                           'Présent',
-                          `Caution de ${r.userName} rendue après 30 min (mock). Confirmé ≠ présent.`,
+                          demoLabel(`Caution de ${r.userName} rendue après 30 min (mock). Confirmé ≠ présent.`),
                         );
                       } else {
                         Alert.alert('Impossible', refusalLabel(res.reason, 'presence'));
@@ -1134,7 +1135,7 @@ export function OutingDetailScreen() {
                         onPress={() =>
                           Alert.alert(
                             'Je suis arrivé',
-                            'Photo de la façade facultative (démo : stub) — elle ne bloque rien et n’est pas une preuve à elle seule.',
+                            demoLabel('Photo de la façade facultative (démo : stub) — elle ne bloque rien et n’est pas une preuve à elle seule.'),
                             [
                               { text: 'Retour', style: 'cancel' },
                               {
@@ -1271,7 +1272,7 @@ export function OutingDetailScreen() {
               ) ||
                 isMyLeaveDepositRefunded(myRequest.id)) ? (
                 <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
-                  Caution remboursée (mock).
+                  {demoLabel('Caution remboursée (mock).')}
                 </CheckNote>
               ) : 'id' in myRequest &&
                 (getRequestById(myRequest.id)?.depositStatus === 'noshow_pending' ||
@@ -1289,9 +1290,9 @@ export function OutingDetailScreen() {
               ) : 'id' in myRequest &&
                 getRequestById(myRequest.id)?.depositStatus === 'held' ? (
                 <Text style={styles.hint}>
-                  Caution 20 € bloquée (mock). Rendue si tu annules au moins 3
-                  heures avant, si l’hôte annule / imprévu accepté / joker ;
-                  perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).
+                  {demoLabel(
+                    'Caution 20 € bloquée (mock). Rendue si tu annules au moins 3 heures avant, si l’hôte annule / imprévu accepté / joker ; perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).',
+                  )}
                 </Text>
               ) : null}
 
@@ -1478,7 +1479,7 @@ export function OutingDetailScreen() {
                     Alert.alert(
                       'Désistement',
                       res.depositReturned
-                        ? 'Place libérée — caution rendue (au moins 3 heures avant, mock). Les autres confirmés restent.'
+                        ? demoLabel('Place libérée — caution rendue (au moins 3 heures avant, mock). Les autres confirmés restent.')
                         : res.depositForfeited
                           ? `Place libérée — ${describeDepositForfeitMoment()} Les autres confirmés restent.`
                           : 'Place libérée. Les autres confirmés restent.',
@@ -1529,17 +1530,16 @@ export function OutingDetailScreen() {
       ) : partner ? (
         <View style={styles.actions}>
           <Text style={styles.joinNote}>
-            Pas d’acceptation à attendre : rejoins, puis confirme ta venue en 10
-            min (caution 20 €, Stripe mock). La place est prise à la
-            confirmation s’il en reste ; sinon caution non bloquée.
+            {demoLabel(
+              'Pas d’acceptation à attendre : rejoins, puis confirme ta venue en 10 min (caution 20 €, Stripe mock). La place est prise à la confirmation s’il en reste ; sinon caution non bloquée.',
+            )}
           </Text>
           <Button title="Rejoindre" onPress={onJoin} />
         </View>
       ) : (
         <View style={styles.actions}>
           <Text style={styles.joinNote}>
-            Après acceptation : confirmation en 10 min. Caution 20 € bloquée à
-            la confirmation (Stripe mock).
+            {demoLabel('Après acceptation : confirmation en 10 min. Caution 20 € bloquée à la confirmation (Stripe mock).')}
           </Text>
           <Text style={styles.section}>Message d’intro recommandé</Text>
           <TextInput

@@ -314,10 +314,10 @@ export function canPartnerMarkGuestAbsent(
   // Gel 17/10 (point 2) : une seule déclaration d’absence par personne et par moment.
   if (request.noShowNotRetained || request.noShowVoided) return false;
   if (request.guestArrivedAt) return false;
-  // Gel 17/10 (point 1) : de H à H+6, comme toute déclaration d’absence.
+  // Gel 17/10 (point 1) : de H à H+6, comme toute déclaration d’absence (25/10 : H+6 inclus).
   const startMs = new Date(outing.startsAt).getTime();
   if (!Number.isFinite(startMs)) return false;
-  return nowMs > startMs && nowMs < startMs + PARTNER_ABSENCE_DECLARATION_MS;
+  return nowMs > startMs && nowMs <= startMs + PARTNER_ABSENCE_DECLARATION_MS;
 }
 
 /**
@@ -337,7 +337,8 @@ export function canPartnerFlagDispute(
   if (!request.guestArrivedAt || request.partnerDispute) return false;
   if (request.noShowNotRetained || request.noShowVoided) return false;
   const startMs = new Date(outing.startsAt).getTime();
-  return Number.isFinite(startMs) && nowMs > startMs && nowMs < startMs + PARTNER_ABSENCE_DECLARATION_MS;
+  // 25/10 : H+6 inclus, comme toute déclaration d’absence.
+  return Number.isFinite(startMs) && nowMs > startMs && nowMs <= startMs + PARTNER_ABSENCE_DECLARATION_MS;
 }
 
 /**

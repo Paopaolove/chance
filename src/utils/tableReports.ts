@@ -27,6 +27,7 @@
  */
 import type { Outing, Request } from '../data/types';
 import { isOutingChatOpen } from './chat';
+import { OUTING_AUTO_COMPLETE_AFTER_MS } from './outingActive';
 import { parisYmd } from './parisTime';
 import {
   DISCOMFORT_REVIEW_THRESHOLD,
@@ -197,7 +198,32 @@ type ReportOuting = Pick<
   | 'urgentOnSite'
   | 'isPartnerListing'
   | 'hostNoShowReported'
->;
+> &
+  Partial<Pick<Outing, 'completedAt'>>;
+
+/** 25/10 · Signalement possible jusqu’à 7 jours après la fin du moment. */
+export const TABLE_REPORT_AFTER_END_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Fin du moment : clôture (« terminée ») si elle a eu lieu avant H+30,
+ * sinon H+30 (clôture auto). NaN si début invalide.
+ */
+export function momentEndMs(outing: Pick<Outing, 'startsAt'> & Partial<Pick<Outing, 'completedAt'>>): number {
+  const s = new Date(outing.startsAt).getTime();
+  if (!Number.isFinite(s)) return NaN;
+  const auto = s + OUTING_AUTO_COMPLETE_AFTER_MS;
+  const c = outing.completedAt ? new Date(outing.completedAt).getTime() : NaN;
+  return Number.isFinite(c) ? Math.min(c, auto) : auto;
+}
+
+/** Fenêtre de signalement encore ouverte côté temps (fin + 7 jours inclus). */
+export function isTableReportWindowOpen(
+  outing: Pick<Outing, 'startsAt'> & Partial<Pick<Outing, 'completedAt'>>,
+  nowMs = Date.now(),
+): boolean {
+  const end = momentEndMs(outing);
+  return Number.isFinite(end) && nowMs <= end + TABLE_REPORT_AFTER_END_MS;
+}
 
 /**
  * Peut ouvrir l’écran « Signaler » : membre, moment non annulé, la table
@@ -220,6 +246,8 @@ export function canOpenTableReport(
   if (!members.includes(reporterId)) return false;
   if (isMarkedNoShow(outing, requests, reporterId)) return false;
   if (isHostMarkedNoShow(outing, reporterId)) return false;
+  // 25/10 : jusqu’à 7 jours après la fin du moment ; au-delà, fermé.
+  if (!isTableReportWindowOpen(outing, nowMs)) return false;
   return isOutingChatOpen(outing, nowMs);
 }
 

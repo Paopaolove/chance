@@ -53,6 +53,9 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     reportGuestNoShow,
     reportHostNeverHonor,
     reportHostNoShow,
+    demoPendingReviews,
+    demoResolveGuestReview,
+    demoResolveHostReview,
     simulateConfirmRace,
     resetDemo,
     demoBecomePartner,
@@ -101,6 +104,8 @@ export function DemoMenuModal({ visible, onClose }: Props) {
   const nextDayTarget = myPartnerOuting ?? myPartnerGuestOuting;
 
   const active = getActiveOutingForUser();
+  /** 25/10 · Contestations en revue (outil de revue démo). */
+  const reviews = demoPendingReviews();
   const confirmed = [
     ...outgoingRequests.filter((r) => r.status === 'confirmed'),
     ...incomingRequests.filter((r) => r.status === 'confirmed'),
@@ -534,6 +539,66 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             }
             style={styles.btn}
           />
+
+          <Text style={styles.section}>Revue des contestations</Text>
+          <Text style={styles.sectionHint}>
+            Décision Moment (démo) : absence retenue ou non retenue. Sans décision sous 7 jours, la caution est rendue.
+          </Text>
+          {reviews.length === 0 ? (
+            <Text style={styles.sectionHint}>Aucune contestation en revue.</Text>
+          ) : (
+            reviews.map((item) => (
+              <View key={item.kind + (item.kind === 'guest' ? item.requestId : item.outingId)}>
+                <Text style={styles.sectionHint}>
+                  {item.kind === 'guest'
+                    ? `${item.personName} · ${item.outingTitle}${item.depositKept ? ' · caution déjà rendue' : ''}`
+                    : `Hôte ${item.personName} · ${item.outingTitle}${item.depositsKept ? ' · cautions déjà rendues' : ''}`}
+                </Text>
+                <Button
+                  title={
+                    item.kind === 'guest'
+                      ? item.depositKept
+                        ? 'Absence retenue (caution acquise)'
+                        : 'Absence retenue (caution perdue)'
+                      : 'Absence de l’hôte retenue (cautions rendues)'
+                  }
+                  variant="ghost"
+                  disabled={busy}
+                  onPress={() =>
+                    run('Revue', () => {
+                      const r =
+                        item.kind === 'guest'
+                          ? demoResolveGuestReview(item.requestId, true)
+                          : demoResolveHostReview(item.outingId, true);
+                      if (!r.ok) Alert.alert('Impossible', refusalLabel(r.reason));
+                      else Alert.alert('Revue', 'Absence retenue.');
+                    })
+                  }
+                  style={styles.btn}
+                />
+                <Button
+                  title={
+                    item.kind === 'guest'
+                      ? 'Absence non retenue (caution rendue)'
+                      : 'Absence de l’hôte non retenue'
+                  }
+                  variant="ghost"
+                  disabled={busy}
+                  onPress={() =>
+                    run('Revue', () => {
+                      const r =
+                        item.kind === 'guest'
+                          ? demoResolveGuestReview(item.requestId, false)
+                          : demoResolveHostReview(item.outingId, false);
+                      if (!r.ok) Alert.alert('Impossible', refusalLabel(r.reason));
+                      else Alert.alert('Revue', 'Absence non retenue.');
+                    })
+                  }
+                  style={styles.btn}
+                />
+              </View>
+            ))
+          )}
 
           <Text style={styles.section}>Notifs prioritaires</Text>
           <Button

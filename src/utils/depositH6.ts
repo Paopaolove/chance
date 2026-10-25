@@ -3,7 +3,7 @@
  * le no-show ; la note n’a aucun effet sur l’argent.
  * - Présent : inchangé (rendue à partir de H+30 ou de la clôture).
  * - Rien de renseigné et aucun « Pas venu » avant H+6 : rendue à H+6.
- * - « Pas venu » (place vide) : strictement avant H+6 ; refusé à partir de H+6.
+ * - « Pas venu » (place vide) : de H à H+6 inclus (25/10) ; refusé après H+6.
  * Annonces partenaires : inchangées (« le lendemain », « Je suis arrivé »).
  */
 import type { Outing, Request } from '../data/types';
@@ -27,17 +27,20 @@ export function isAtOrAfterH6(outing: H6Outing, nowMs = Date.now()): boolean {
 
 /**
  * « Pas venu » encore possible côté temps (borne haute seulement ; la borne
- * basse « à partir de H » reste dans le reducer). Table normale : strictement
- * avant H+6. Partenaire : pas de borne ici (règle « soir même » inchangée).
+ * basse « à partir de H » reste dans le reducer). Table normale : jusqu’à H+6
+ * inclus (25/10). Partenaire : pas de borne ici (règle « soir même » inchangée).
  */
 export function isNoShowWindowOpen(outing: H6Outing, nowMs = Date.now()): boolean {
-  return !isAtOrAfterH6(outing, nowMs);
+  if (isPartnerListing(outing as Outing)) return true;
+  const s = startMs(outing);
+  return !(Number.isFinite(s) && nowMs > s + DEPOSIT_SILENCE_RETURN_AFTER_MS);
 }
 
 /**
  * Gel de la contestation (17/10, point 1) : toute déclaration d’absence
- * (invité, hôte, lieu partenaire) seulement de H à H+6 (H+6 exclu),
- * pour toutes les annonces, partenaires compris.
+ * (invité, hôte, lieu partenaire) seulement de H à H+6, pour toutes les
+ * annonces, partenaires compris. 25/10 : H+6 inclus ; après H+6, plus rien.
+ * Fenêtre comptée depuis H en millisecondes : pas de coupure à minuit.
  */
 export function isAbsenceDeclarationWindowOpen(
   outing: Pick<Outing, 'startsAt'>,
@@ -46,7 +49,7 @@ export function isAbsenceDeclarationWindowOpen(
   const s = startMs(outing);
   if (!Number.isFinite(s)) return false;
   // Borne basse alignée sur isStartsAtPast (« Pas venu » existant) : après H.
-  return nowMs > s && nowMs < s + DEPOSIT_SILENCE_RETURN_AFTER_MS;
+  return nowMs > s && nowMs <= s + DEPOSIT_SILENCE_RETURN_AFTER_MS;
 }
 
 /** Caution à rendre à H+6 : confirmé, non « Pas venu », encore held, table normale non annulée. */

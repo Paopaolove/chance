@@ -15,9 +15,9 @@ const LABELS: Record<string, string> = {
   not_participant: 'Seuls l’hôte de la table ou la personne concernée peuvent signaler cette absence.',
   already_present: 'Cette personne est marquée présente.',
   too_early: 'Possible seulement à partir de l’heure du moment.',
-  too_late: '« Pas venu » n’est plus possible 6 h après le début. La caution est rendue d’office.',
+  too_late: '« Pas venu » n’est plus possible au-delà de 6 h après le début. La caution est rendue d’office.',
   host_no_show: 'Tu as été déclaré « Pas venu » sur cette table : tu ne peux plus signaler d’absence.',
-  not_allowed_now: '« Pas venu » n’est possible qu’à partir de l’heure du moment et avant 6 h après le début.',
+  not_allowed_now: '« Pas venu » n’est possible qu’à partir de l’heure du moment et jusqu’à 6 h après le début.',
   not_retained: 'Absence non retenue après contestation : elle ne peut pas être déclarée à nouveau.',
   not_declarable: 'Cette absence ne peut pas être déclarée.',
   noshow_window_closed: 'Ton délai de 24 h est écoulé : tu ne peux plus déclarer l’hôte absent.',
@@ -28,6 +28,9 @@ const LABELS: Record<string, string> = {
   demo_disabled: 'Menu démo indisponible.',
   outing_not_found: 'Ce moment n’existe plus.',
   invalid_start: 'Heure de début invalide.',
+  // Démo « Revue des contestations » (25/10)
+  review_expired: 'Revue terminée : 7 jours sans décision, la caution a été rendue.',
+  host_pending: 'L’absence de l’hôte n’est pas encore tranchée : la caution ne peut pas être perdue maintenant.',
 };
 
 const FLOW_LABELS: Record<RefusalFlow, Record<string, string>> = {
@@ -36,11 +39,11 @@ const FLOW_LABELS: Record<RefusalFlow, Record<string, string>> = {
   partner_noshow: {
     not_participant: 'Seul le lieu qui publie l’annonce peut signaler cette absence.',
     not_allowed_now:
-      '« Pas venu » n’est possible qu’à partir de l’heure prévue et avant 6 h après le début, si la personne n’a pas signalé son arrivée.',
+      '« Pas venu » n’est possible qu’à partir de l’heure prévue et jusqu’à 6 h après le début, si la personne n’a pas signalé son arrivée.',
   },
   // Hôte déclaré absent par un invité.
   host_noshow: {
-    too_late: 'L’absence de l’hôte ne peut plus être déclarée 6 h après le début.',
+    too_late: 'L’absence de l’hôte ne peut plus être déclarée au-delà de 6 h après le début.',
     too_early: 'L’absence de l’hôte ne peut être déclarée qu’à partir de l’heure du moment.',
     not_participant: 'Seul un invité confirmé de la table peut déclarer l’hôte absent.',
   },

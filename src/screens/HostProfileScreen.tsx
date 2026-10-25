@@ -1,3 +1,4 @@
+import { demoLabel } from '../utils/devMode';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useLayoutEffect, useMemo, useState } from 'react';
@@ -197,7 +198,7 @@ export function HostProfileScreen() {
                       onPress: () => {
                         const r = blockUser(userId);
                         if (r.ok) {
-                          Alert.alert('Bloqué', `${firstName} est bloqué (démo).`);
+                          Alert.alert('Bloqué', demoLabel(`${firstName} est bloqué (démo).`));
                         }
                       },
                     },
@@ -238,7 +239,7 @@ export function HostProfileScreen() {
                   setReportReason('');
                   Alert.alert(
                     'Signalement enregistré',
-                    'Privé — n’apparaît pas comme une note. Un seul enregistrement (démo).',
+                    demoLabel('Privé — n’apparaît pas comme une note. Un seul enregistrement (démo).'),
                   );
                 }}
               />

@@ -15,6 +15,42 @@ export function guestSanctionFromStrike(strike: number): {
   };
 }
 
+/**
+ * 25/10 · Barème invité sur 3 mois glissants, absences retenues seulement :
+ * 1re rien d’autre que la caution, 2e priorité baissée, 3e fermeture.
+ * Une absence encore contestée n’est pas retenue (pas comptée) : aucune
+ * fermeture tant qu’une contestation est en attente.
+ */
+export const GUEST_STRIKE_WINDOW_MONTHS = 3;
+
+export type GuestNoShowLogEntry = { requestId: string; at: string };
+
+/** Début (exclu) de la fenêtre de 3 mois glissants qui finit à atMs. */
+export function guestStrikeWindowStartMs(atMs: number): number {
+  const d = new Date(atMs);
+  d.setUTCMonth(d.getUTCMonth() - GUEST_STRIKE_WINDOW_MONTHS);
+  return d.getTime();
+}
+
+/**
+ * Absences retenues dans les 3 mois glissants avant atMs (inclus).
+ * Compteur ancien sans date (état antérieur au 25/10) : compté comme récent.
+ */
+export function guestStrikesInWindow(
+  total: number,
+  log: GuestNoShowLogEntry[] | undefined,
+  atMs: number,
+): number {
+  const entries = log ?? [];
+  const from = guestStrikeWindowStartMs(atMs);
+  const dated = entries.filter((e) => {
+    const t = new Date(e.at).getTime();
+    return Number.isFinite(t) && t > from && t <= atMs;
+  }).length;
+  const undated = Math.max(0, total - entries.length);
+  return dated + undated;
+}
+
 /** Host no-shows: 1 = avertissement ; 2 → compte fermé. */
 export function hostSanctionFromStrike(strike: number): { banned: boolean } {
   return { banned: strike >= 2 };

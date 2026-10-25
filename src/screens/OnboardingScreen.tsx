@@ -1,3 +1,4 @@
+import { demoLabel } from '../utils/devMode';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import {
@@ -290,22 +291,23 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
             Pour proposer ou rejoindre un moment.
           </Text>
           <Text style={styles.hint}>
-            Connexion simulée (démo) — Apple / Google / e-mail. Ce n’est pas une
-            vraie authentification : aucune donnée n’est envoyée.
+            {demoLabel(
+              'Connexion simulée (démo) — Apple / Google / e-mail. Ce n’est pas une vraie authentification : aucune donnée n’est envoyée.',
+            )}
           </Text>
           <Button
-            title="Continuer avec Apple (démo)"
+            title={demoLabel('Continuer avec Apple (démo)')}
             onPress={() => chooseAuth('apple')}
             style={styles.cta}
           />
           <Button
-            title="Continuer avec Google (démo)"
+            title={demoLabel('Continuer avec Google (démo)')}
             variant="secondary"
             onPress={() => chooseAuth('google')}
             style={styles.secondary}
           />
           <Button
-            title="Continuer avec e-mail (démo)"
+            title={demoLabel('Continuer avec e-mail (démo)')}
             variant="ghost"
             onPress={() => chooseAuth('email')}
             style={styles.secondary}

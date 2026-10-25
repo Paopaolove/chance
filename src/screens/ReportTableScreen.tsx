@@ -1,3 +1,4 @@
+import { demoLabel } from '../utils/devMode';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useMemo, useState } from 'react';
@@ -144,7 +145,7 @@ export function ReportTableScreen() {
           }
           Alert.alert(
             'Merci',
-            'Signalement reçu. L’équipe Moment te recontacte (démo).',
+            demoLabel('Signalement reçu. L’équipe Moment te recontacte (démo).'),
           );
           navigation.goBack();
         }}

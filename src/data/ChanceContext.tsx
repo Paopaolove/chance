@@ -155,13 +155,13 @@ import {
 import {
   h6AtIso,
   isAbsenceDeclarationWindowOpen,
-  isNoShowWindowOpen,
+  isAtOrAfterH6,
   outingsDueForH6,
   shouldReturnDepositH6,
 } from '../utils/depositH6';
 import { presenceChecklist, validatePresenceSelection } from '../utils/markPresent';
 import { listOutingsToRate, reviewEligibility } from '../utils/reviewEligibility';
-import { isDemoEnabled } from '../utils/devMode';
+import { DEMO_DISABLED, isDemoEnabled } from '../utils/devMode';
 import {
   advanceTableReport,
   canSubmitTableReport,
@@ -179,9 +179,16 @@ import {
   canActorReportGuestNoShow,
   canActorReportHostNoShow,
   guestSanctionFromStrike,
+  guestStrikesInWindow,
   hostSanctionFromStrike,
 } from '../utils/participationRights';
 import { makeVenueKey } from '../utils/venue';
+import {
+  demoGuestReviewRefusal,
+  demoHostReviewRefusal,
+  pendingDemoReviews,
+  type DemoReviewItem,
+} from '../utils/demoReview';
 import {
   momentParticipants,
   isMomentParticipant,
@@ -248,6 +255,7 @@ const initialState: AppState = {
   hostNoShowStrikes: {},
   hostNoShowContestNotes: {},
   guestNoShowStrikes: {},
+  guestNoShowLog: {},
   hostPublishStrikes: {},
   toast: null,
   blockedUserIds: [],
@@ -340,10 +348,17 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
   // 18/10 : caution déjà rendue, elle reste acquise (seul le compteur bouge).
   const noticeText = req.noShowDepositKept ? NOSHOW_FINAL_NOTICE_KEPT_TEXT : NOSHOW_FINAL_NOTICE_TEXT;
   const guestId = req.userId;
-  const strike = (state.guestNoShowStrikes[guestId] ?? 0) + 1;
-  const { lowerPriority, banned } = guestSanctionFromStrike(strike);
+  const prevTotal = state.guestNoShowStrikes[guestId] ?? 0;
+  const strike = prevTotal + 1;
+  // 25/10 : barème sur 3 mois glissants (absences retenues seulement).
+  const atMs = Number.isFinite(new Date(at).getTime()) ? new Date(at).getTime() : Date.now();
+  const prevLog = state.guestNoShowLog?.[guestId] ?? [];
+  const log = [...prevLog, { requestId, at }];
+  const inWindow = guestStrikesInWindow(strike, log, atMs);
+  const { lowerPriority, banned } = guestSanctionFromStrike(inWindow);
   // Fermeture causée par cette absence (franchissement du seuil).
-  const causedBan = banned && !guestSanctionFromStrike(strike - 1).banned;
+  const causedBan =
+    banned && !guestSanctionFromStrike(guestStrikesInWindow(prevTotal, prevLog, atMs)).banned;
   let currentUser = state.currentUser;
   let toast = state.toast;
   if (currentUser && currentUser.id === guestId) {
@@ -376,6 +391,7 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
     currentUser,
     toast,
     guestNoShowStrikes: { ...state.guestNoShowStrikes, [guestId]: strike },
+    guestNoShowLog: { ...state.guestNoShowLog, [guestId]: log },
     requests: state.requests.map((r) =>
       r.id === requestId
         ? {
@@ -397,15 +413,23 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
 function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
   const req = state.requests.find((r) => r.id === requestId);
   if (!req || !isHostDeclaredNoShow(req)) return state;
-  let { guestNoShowStrikes, currentUser } = state;
+  let { guestNoShowStrikes, currentUser, guestNoShowLog } = state;
   // Absence comptée (caution perdue, ou déjà rendue et acquise — 18/10) : décomptée.
   if ((req.depositStatus === 'forfeited' || req.noShowDepositKept) && req.noShowStrikeApplied) {
     const next = Math.max(0, (guestNoShowStrikes[req.userId] ?? 0) - 1);
     guestNoShowStrikes = { ...guestNoShowStrikes, [req.userId]: next };
+    const prevLog = guestNoShowLog?.[req.userId] ?? [];
+    const removed = prevLog.find((e) => e.requestId === requestId);
+    const logLeft = prevLog.filter((e) => e.requestId !== requestId);
+    guestNoShowLog = { ...guestNoShowLog, [req.userId]: logLeft };
+    const refMs = removed && Number.isFinite(new Date(removed.at).getTime())
+      ? new Date(removed.at).getTime()
+      : Date.now();
     if (currentUser && currentUser.id === req.userId) {
       // Gel 17/10 (point 4, L69.1) : priorité baissée et mention profil
       // recalculées sur le nombre d’absences restantes (elles ne viennent que des absences).
-      const left = guestSanctionFromStrike(next);
+      // 25/10 : sur les 3 mois glissants.
+      const left = guestSanctionFromStrike(guestStrikesInWindow(next, logLeft, refMs));
       const stillBanned = req.noShowCausedBan ? false : !!currentUser.banned;
       currentUser = {
         ...currentUser,
@@ -423,6 +447,7 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
   return {
     ...state,
     guestNoShowStrikes,
+    guestNoShowLog,
     currentUser,
     requests: state.requests.map((r) => {
       if (r.id !== requestId) return r;
@@ -1191,6 +1216,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         hostNoShowStrikes: {},
         hostNoShowContestNotes: {},
         guestNoShowStrikes: {},
+        guestNoShowLog: {},
         hostPublishStrikes: {},
         toast: null,
         blockedUserIds: [],
@@ -1328,7 +1354,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         const forfeitAllowed =
           forfeitReporterDeposit &&
           (!imprevuOuting ||
-            isNoShowWindowOpen(imprevuOuting, new Date(respondedAt).getTime()));
+            !isAtOrAfterH6(imprevuOuting, new Date(respondedAt).getTime()));
         requests = state.requests.map((r) => {
           if (r.outingId !== report.outingId) return r;
           if (
@@ -1763,7 +1789,12 @@ function reducer(state: AppState, action: AppAction): AppState {
           for (let i = 0; i < acceptedCount; i++) {
             spotsLeft = Math.min(o.capacity, spotsLeft + 1);
           }
-          return { ...o, status: 'completed' as const, spotsLeft };
+          return {
+            ...o,
+            status: 'completed' as const,
+            spotsLeft,
+            completedAt: action.payload.at ?? new Date().toISOString(),
+          };
         }),
         requests: state.requests.map((r) => {
           if (
@@ -1990,6 +2021,22 @@ function reducer(state: AppState, action: AppAction): AppState {
       const reportedAtMs = reportedAt ? new Date(reportedAt).getTime() : Date.now();
       // Gel 17/10 (point 1) : de H à H+6, table normale comme lieu partenaire.
       if (!isAbsenceDeclarationWindowOpen(outing, reportedAtMs)) return state;
+      // 25/10 : seul un invité confirmé de ce moment déclare l’hôte absent ; personne d’autre.
+      if (
+        !reportedByUserId ||
+        !canActorReportHostNoShow(
+          reportedByUserId,
+          outing.hostId,
+          state.requests.some(
+            (r) =>
+              r.outingId === outingId &&
+              r.userId === reportedByUserId &&
+              r.status === 'confirmed',
+          ),
+        )
+      ) {
+        return state;
+      }
       // Invité lui-même « Pas venu » : seulement pendant ses 24 h ; cela vaut contestation.
       const declarer = reportedByUserId
         ? state.requests.find(
@@ -2353,8 +2400,6 @@ function reducer(state: AppState, action: AppAction): AppState {
         requestId,
         guestId,
         strike,
-        lowerPriority,
-        banned,
         reportedAt,
         reportedByUserId,
       } = action.payload;
@@ -2466,6 +2511,14 @@ function reducer(state: AppState, action: AppAction): AppState {
           ),
         };
       }
+      // 25/10 : barème sur 3 mois glissants (absences retenues seulement).
+      const immLog = [
+        ...(state.guestNoShowLog?.[guestId] ?? []),
+        { requestId, at: reportedAt },
+      ];
+      const { lowerPriority, banned } = guestSanctionFromStrike(
+        guestStrikesInWindow(strike, immLog, new Date(reportedAt).getTime()),
+      );
       let currentUser = state.currentUser;
       if (currentUser && currentUser.id === guestId) {
         currentUser = {
@@ -2490,6 +2543,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           ...state.guestNoShowStrikes,
           [guestId]: strike,
         },
+        guestNoShowLog: { ...state.guestNoShowLog, [guestId]: immLog },
         requests: state.requests.map((r) =>
           r.id === requestId
             ? {
@@ -3348,6 +3402,21 @@ interface ChanceContextValue {
   demoSimulateDepositH6: (
     outingId: string,
   ) => { ok: true; returned: number } | { ok: false; reason: string };
+  /** 25/10 · Démo (__DEV__) : contestations en revue (invités et hôtes). Vide hors démo. */
+  demoPendingReviews: () => DemoReviewItem[];
+  /**
+   * 25/10 · Démo (__DEV__) : trancher une contestation invité.
+   * retained = absence retenue (caution perdue, ou acquise si déjà rendue) ; sinon rendue.
+   */
+  demoResolveGuestReview: (
+    requestId: string,
+    retained: boolean,
+  ) => { ok: true } | { ok: false; reason: string };
+  /** 25/10 · Démo (__DEV__) : trancher la contestation d’un hôte déclaré absent. */
+  demoResolveHostReview: (
+    outingId: string,
+    retained: boolean,
+  ) => { ok: true } | { ok: false; reason: string };
   demoMarkConfirmedPresent: (outingId: string) =>
     | {
         ok: true;
@@ -6095,6 +6164,44 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state.outings, state.requests],
   );
 
+  const demoPendingReviews = useCallback((): DemoReviewItem[] => {
+    // Démo seulement (__DEV__) : inerte en production.
+    if (!isDemoEnabled()) return [];
+    return pendingDemoReviews(state);
+  }, [state]);
+
+  const demoResolveGuestReview = useCallback(
+    (requestId: string, retained: boolean): { ok: true } | { ok: false; reason: string } => {
+      // Démo seulement (__DEV__) : inerte en production.
+      if (!isDemoEnabled()) return DEMO_DISABLED;
+      const at = new Date().toISOString();
+      const refusal = demoGuestReviewRefusal(state, requestId, retained, new Date(at).getTime());
+      if (refusal) return { ok: false, reason: refusal };
+      dispatch({
+        type: retained ? 'CONFIRM_NO_SHOW_AFTER_REVIEW' : 'ACCEPT_NO_SHOW_CONTEST',
+        payload: { requestId, at },
+      });
+      return { ok: true };
+    },
+    [state],
+  );
+
+  const demoResolveHostReview = useCallback(
+    (outingId: string, retained: boolean): { ok: true } | { ok: false; reason: string } => {
+      // Démo seulement (__DEV__) : inerte en production.
+      if (!isDemoEnabled()) return DEMO_DISABLED;
+      const at = new Date().toISOString();
+      const refusal = demoHostReviewRefusal(state, outingId, new Date(at).getTime());
+      if (refusal) return { ok: false, reason: refusal };
+      dispatch({
+        type: retained ? 'CONFIRM_HOST_NO_SHOW_AFTER_REVIEW' : 'ACCEPT_HOST_NO_SHOW_CONTEST',
+        payload: { outingId, at },
+      });
+      return { ok: true };
+    },
+    [state],
+  );
+
   const demoMarkConfirmedPresent = useCallback(
     (outingId: string) => {
     // Démo seulement (__DEV__) : inerte en production.
@@ -7123,7 +7230,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // Lot 6: same absence event — no double strike.
       if (req.attendance === 'absent') {
         const prev = state.guestNoShowStrikes[guestId] ?? 0;
-        const s = guestSanctionFromStrike(prev);
+        const s = guestSanctionFromStrike(
+          guestStrikesInWindow(prev, state.guestNoShowLog?.[guestId], Date.now()),
+        );
         return {
           ok: true,
           strike: prev,
@@ -7170,9 +7279,16 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const pending = !disagreement && noShowOpensContest(outing, user.id);
       const prev = state.guestNoShowStrikes[guestId] ?? 0;
       const strike = pending || disagreement ? prev : prev + 1;
+      // 25/10 : barème sur 3 mois glissants (absences retenues seulement).
       const { lowerPriority, banned } = pending || disagreement
         ? { lowerPriority: false, banned: false }
-        : guestSanctionFromStrike(strike);
+        : guestSanctionFromStrike(
+            guestStrikesInWindow(
+              strike,
+              [...(state.guestNoShowLog?.[guestId] ?? []), { requestId, at: reportedAt }],
+              new Date(reportedAt).getTime(),
+            ),
+          );
       dispatch({
         type: 'REPORT_GUEST_NO_SHOW',
         payload: {
@@ -7236,6 +7352,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       state.requests,
       state.outings,
       state.guestNoShowStrikes,
+      state.guestNoShowLog,
       state.imprevuReports,
     ],
   );
@@ -8182,6 +8299,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       confirmHostPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
+      demoPendingReviews,
+      demoResolveGuestReview,
+      demoResolveHostReview,
       contestNoShow,
       contestHostNoShow,
       demoMarkConfirmedPresent,
@@ -8297,6 +8417,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       confirmHostPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
+      demoPendingReviews,
+      demoResolveGuestReview,
+      demoResolveHostReview,
       contestNoShow,
       contestHostNoShow,
       demoMarkConfirmedPresent,

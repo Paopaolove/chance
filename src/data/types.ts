@@ -253,6 +253,8 @@ export interface Outing {
   /** Stored for host; never shown until request is confirmed. */
   exactAddress: string;
   startsAt: string;
+  /** 25/10 · Heure de la clôture « terminée » (hôte ou auto H+30), si enregistrée. */
+  completedAt?: string;
   /** Guest seats only 1 | 2 | 3 (no 4). */
   capacity: 1 | 2 | 3;
   spotsLeft: number;
@@ -719,6 +721,11 @@ export interface AppState {
   hostNoShowStrikes: Record<string, number>;
   /** Guest id → ghost-after-confirm count (1=forfeit, 2+=lower priority). */
   guestNoShowStrikes: Record<string, number>;
+  /**
+   * 25/10 · Guest id → absences retenues datées (barème sur 3 mois glissants).
+   * Facultatif : un état plus ancien n’a que le compteur.
+   */
+  guestNoShowLog?: Record<string, { requestId: string; at: string }[]>;
   /** Host id → publish-never-honor count (1=warning, 2+=ban). */
   hostPublishStrikes: Record<string, number>;
   /** In-app mock notification banner (e.g. late alert). */

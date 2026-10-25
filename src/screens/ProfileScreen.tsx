@@ -43,7 +43,7 @@ import {
   PARTNER_KIND_LABELS,
   PARTNER_WARNINGS_BEFORE_CLOSE,
 } from '../utils/partners';
-import { isDemoEnabled } from '../utils/devMode';
+import { demoLabel, isDemoEnabled } from '../utils/devMode';
 import { markPresentReasonLabel } from '../utils/markPresent';
 import { refusalLabel } from '../utils/refusalLabels';
 
@@ -225,10 +225,11 @@ function ProfileScreenInner() {
         <Text style={styles.brand}>Moment</Text>
         {user.banned ? (
           <View style={styles.banBanner}>
-            <Text style={styles.banTitle}>Compte suspendu (démo)</Text>
+            <Text style={styles.banTitle}>{demoLabel('Compte suspendu (démo)')}</Text>
             <Text style={styles.banBody}>
-              {user.bannedReason ??
-                '2e no-show en tant qu’hôte — tu ne peux plus publier.'}
+              {demoLabel(
+                user.bannedReason ?? '2e no-show en tant qu’hôte — tu ne peux plus publier.',
+              )}
             </Text>
           </View>
         ) : (user.hostNoShowCount ?? 0) === 1 ||
@@ -236,9 +237,11 @@ function ProfileScreenInner() {
           <View style={styles.warnBanner}>
             <Text style={styles.warnTitle}>Avertissement</Text>
             <Text style={styles.warnBody}>
-              {(user.hostNoShowCount ?? 0) === 1
-                ? '1er no-show hôte. Un 2e entraînera un ban (démo).'
-                : '1er avertissement publication jamais honorée. Un 2e = ban (démo).'}
+              {demoLabel(
+                (user.hostNoShowCount ?? 0) === 1
+                  ? '1er no-show hôte. Un 2e entraînera un ban (démo).'
+                  : '1er avertissement publication jamais honorée. Un 2e = ban (démo).',
+              )}
             </Text>
           </View>
         ) : null}
@@ -246,8 +249,10 @@ function ProfileScreenInner() {
           <View style={styles.warnBanner}>
             <Text style={styles.warnTitle}>Priorité baissée</Text>
             <Text style={styles.warnBody}>
-              {user.profileMention ??
-                'Absence après confirmation — priorité réduite dans les files hôte.'}
+              {demoLabel(
+                user.profileMention ??
+                  'Absence après confirmation — priorité réduite dans les files hôte.',
+              )}
             </Text>
           </View>
         ) : (user.guestNoShowCount ?? 0) === 1 ? (
@@ -534,7 +539,7 @@ function ProfileScreenInner() {
                   </Text>
                   {user.partnerPinned ? (
                     <Text style={styles.cardHint}>
-                      Remontée en tête active (démo).
+                      {demoLabel('Remontée en tête active (démo).')}
                     </Text>
                   ) : null}
                 </>
@@ -584,11 +589,13 @@ function ProfileScreenInner() {
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Compte</Text>
           <Text style={styles.cardValue}>
-            {user.authProvider === 'apple'
-              ? 'Apple (démo)'
-              : user.authProvider === 'google'
-                ? 'Google (démo)'
-                : 'E-mail (démo)'}
+            {demoLabel(
+              user.authProvider === 'apple'
+                ? 'Apple (démo)'
+                : user.authProvider === 'google'
+                  ? 'Google (démo)'
+                  : 'E-mail (démo)',
+            )}
           </Text>
           <Text style={styles.cardHint}>
             Pas de vraie authentification — connexion simulée locale.

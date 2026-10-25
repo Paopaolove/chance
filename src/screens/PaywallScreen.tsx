@@ -1,3 +1,4 @@
+import { demoLabel } from '../utils/devMode';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
@@ -38,7 +39,7 @@ export function PaywallScreen() {
 
   const afterSubscribe = (planTitle: string) => {
     Alert.alert(
-      'Formule activée (démo)',
+      demoLabel('Formule activée (démo)'),
       `${planTitle} — aucun paiement réel. Stripe arrivera plus tard.`,
       [
         {
@@ -84,7 +85,7 @@ export function PaywallScreen() {
       <Text style={styles.sub}>
         Après l’essai, confirme une place avec À l’unité, Essentiel ou
         Illimité. Publier une annonce reste gratuit. Caution{' '}
-        {PRICING.deposit.euros} € à la confirmation (mock).
+        {PRICING.deposit.euros} € à la confirmation{demoLabel(' (mock)')}.
       </Text>
 
       {trialActive ? (
