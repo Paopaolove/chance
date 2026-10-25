@@ -334,6 +334,8 @@ export interface Outing {
     reportedBy?: string;
     /** 18/10 : présence de l’hôte confirmée d’un côté, absence déclarée de l’autre → revue directe. */
     viaPresence?: boolean;
+    /** 18/10 : désaccord après le rendu des cautions (table normale) — revue pour la sanction seulement. */
+    depositsKept?: boolean;
   };
   /**
    * 18/10 · Confirmation croisée : présence de l’hôte établie, par lui-même
@@ -402,6 +404,11 @@ export interface Request {
   noShowReportedAt?: string;
   /** Contestation acceptée : absence non retenue (visible par l’hôte, sans détail). */
   noShowNotRetained?: boolean;
+  /**
+   * 18/10 · Caution déjà rendue = acquise : « Pas venu » contre une présence déjà
+   * remboursée (table normale). Revue pour la sanction seulement, l’argent ne bouge plus.
+   */
+  noShowDepositKept?: boolean;
   /** Contestation de l’invité (interne, jamais projetée vers l’hôte). */
   noShowContest?: {
     note: string;

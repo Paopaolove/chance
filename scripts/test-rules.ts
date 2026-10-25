@@ -1827,5 +1827,53 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(OA.presenceWindowRefusal(o({startsAt:iso(T)}),T-16*MIN)==='too_early'&&OA.presenceWindowRefusal(o({startsAt:iso(T)}),T+6*H)==='too_late','edge: refusal codes');
   ok(RL.refusalLabel('too_late','presence')==='La présence se confirme jusqu’à 6 h après le début.','edge: too_late label (presence)');
 }
+
+// 18/10 · Caution déjà rendue = acquise (désaccord ultérieur : revue pour la sanction seulement)
+{
+  const NC=require('../src/utils/noShowContest');
+  const MIN=60e3, D1=24*H, T=now-2*H;
+  const g2=(x:any={})=>rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'returned',attendance:'present',presenceBy:'host',...x});
+  // invité présent (par lui-même), moment clos : caution déjà rendue
+  const base=(more:any={})=>S({currentUser:me,outings:[o({startsAt:iso(T),status:'completed'})],requests:[rq({status:'confirmed',depositStatus:'returned',attendance:'present',presenceBy:'guest'})],...more});
+  const NSAT=T+H;
+  const NS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const kept=NS(base()), k=kept.requests[0];
+  ok(k.depositStatus==='returned'&&k.noShowDepositKept===true,'caution acquise: refunded guest then « Pas venu » → deposit stays returned');
+  ok(k.depositStatus!=='contested'&&k.depositStatus!=='noshow_pending','caution acquise: deposit never goes back to pending');
+  ok(NC.hostNoShowShareEuros(k)===0,'caution acquise: nothing paid to the host (no 13,10 €)');
+  ok(NC.isDepositKeptReviewOpen(k)&&k.noShowContest?.viaPresence&&!k.noShowContest.outcome,'caution acquise: review opened (sanction only)');
+  ok((kept.guestNoShowStrikes?.u1??0)===0,'caution acquise: nothing counted before the review');
+  ok(JSON.stringify(NC.requestsDueForReviewTimeout(kept.requests,NSAT+7*D1))==='["r1"]'&&NC.requestsDueForReviewTimeout(kept.requests,NSAT+7*D1-MIN).length===0,'caution acquise: review timer runs (7 days)');
+  // issue « absence retenue »
+  const ret=D(kept,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(NSAT+2*D1)}}), rr=ret.requests[0];
+  ok(ret.guestNoShowStrikes.u1===1&&ret.currentUser.guestNoShowCount===1,'caution acquise: absence retained → counter incremented');
+  ok(rr.depositStatus==='returned'&&NC.hostNoShowShareEuros(rr)===0,'caution acquise: absence retained → money unchanged, host gets nothing');
+  ok(rr.noShowFinalNotice?.text==='Ton absence est retenue. La caution déjà rendue reste acquise.'&&ret.toast?.body==='Ton absence est retenue. La caution déjà rendue reste acquise.','caution acquise: retained notice text');
+  ok(NC.NOSHOW_FINAL_NOTICE_TEXT==='Ton absence est retenue. La caution est perdue.','caution acquise: forfeited notice text unchanged');
+  ok(NC.requestsDueForReviewTimeout(ret.requests,NSAT+8*D1).length===0,'caution acquise: decided review no longer times out');
+  // issue « non retenue »
+  const nr=D(kept,{type:'ACCEPT_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(NSAT+2*D1)}}), nq=nr.requests[0];
+  ok((nr.guestNoShowStrikes?.u1??0)===0&&nq.depositStatus==='returned'&&nq.noShowNotRetained&&nq.attendance===undefined&&NC.hostNoShowShareEuros(nq)===0,'caution acquise: not retained → nothing counted, money unchanged');
+  // revue sans décision
+  const ex=D(kept,{type:'EXPIRE_NO_SHOW_REVIEW',payload:{requestId:'r1',at:iso(NSAT+7*D1)}}), xq=ex.requests[0];
+  ok((ex.guestNoShowStrikes?.u1??0)===0&&xq.depositStatus==='returned'&&xq.noShowContest.outcome==='review_expired'&&NC.hostNoShowShareEuros(xq)===0,'caution acquise: undecided review → nothing counted, money unchanged');
+  ok(D(kept,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(NSAT+7*D1)}}).guestNoShowStrikes?.u1===undefined,'caution acquise: no decision after 7 days');
+  // caution encore bloquée (avant clôture) : procédure inchangée
+  const held=NS(S({outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held',attendance:'present',presenceBy:'guest'})]}));
+  ok(held.requests[0].depositStatus==='contested'&&!held.requests[0].noShowDepositKept,'caution acquise: deposit still held → contested as before');
+  // côté hôte : déclaré absent après le rendu des cautions
+  const hb=S({currentUser:me,outings:[o({startsAt:iso(T),status:'completed',hostPresence:{at:iso(T),byUserId:'h1'}})],requests:[rq({status:'confirmed',depositStatus:'returned',attendance:'present',presenceBy:'guest'}),g2()]});
+  const hk=D(hb,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:0,banned:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
+  const deps=(x:any)=>x.requests.map((r:any)=>r.depositStatus).join(',');
+  ok(hk.outings[0].hostNoShowCase?.status==='contested'&&hk.outings[0].hostNoShowCase?.depositsKept===true&&deps(hk)==='returned,returned','caution acquise (hôte): host declared absent after refund → review opened, deposits stay returned');
+  const hr=D(hk,{type:'CONFIRM_HOST_NO_SHOW_AFTER_REVIEW',payload:{outingId:'o1',at:iso(NSAT+2*D1)}});
+  ok(hr.outings[0].hostNoShowCase.status==='retained'&&hr.hostNoShowStrikes.h1===1&&deps(hr)==='returned,returned','caution acquise (hôte): retained → host counter +1, money unchanged');
+  const ha=D(hk,{type:'ACCEPT_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(NSAT+2*D1)}});
+  ok(ha.outings[0].hostNoShowCase.status==='not_retained'&&(ha.hostNoShowStrikes?.h1??0)===0&&deps(ha)==='returned,returned','caution acquise (hôte): not retained → nothing counted, money unchanged');
+  const he=D(hk,{type:'EXPIRE_HOST_NO_SHOW_REVIEW',payload:{outingId:'o1',at:iso(NSAT+7*D1)}});
+  ok(he.outings[0].hostNoShowCase.status==='review_expired'&&(he.hostNoShowStrikes?.h1??0)===0&&deps(he)==='returned,returned','caution acquise (hôte): undecided review → nothing counted, money unchanged');
+  const od=require('node:fs').readFileSync(require('node:path').join(__dirname,'../src/screens/OutingDetailScreen.tsx'),'utf8');
+  ok(od.includes('noShowDepositKept &&')&&od.includes('noShowFinalNotice!.text'),'caution acquise: guest sees the retained notice on the moment');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

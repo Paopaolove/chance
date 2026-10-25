@@ -1256,6 +1256,13 @@ export function OutingDetailScreen() {
                 />
               )}
               {'id' in myRequest &&
+              getRequestById(myRequest.id)?.noShowDepositKept &&
+              getRequestById(myRequest.id)?.noShowFinalNotice ? (
+                <Text style={styles.hint}>
+                  {/* 18/10 : absence retenue après le rendu, la caution reste acquise. */}
+                  {getRequestById(myRequest.id)!.noShowFinalNotice!.text}
+                </Text>
+              ) : 'id' in myRequest &&
               (isDepositReturnedForGuest(
                 getRequestById(myRequest.id)?.depositStatus,
               ) ||

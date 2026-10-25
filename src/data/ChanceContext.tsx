@@ -127,10 +127,12 @@ import {
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
 import {
+  NOSHOW_FINAL_NOTICE_KEPT_TEXT,
   NOSHOW_FINAL_NOTICE_TEXT,
   canNoShowGuestDeclareHostAbsent,
   contestRefusal,
   isContestWindowOpen,
+  isDepositKeptReviewOpen,
   isHostDeclaredNoShow,
   normalizeContestNote,
   noShowOpensContest,
@@ -334,6 +336,8 @@ const PRESENCE_CONTEST_NOTE = '« Je suis présent »';
 function withGuestNoShowStrike(state: AppState, requestId: string, at: string): AppState {
   const req = state.requests.find((r) => r.id === requestId);
   if (!req) return state;
+  // 18/10 : caution déjà rendue, elle reste acquise (seul le compteur bouge).
+  const noticeText = req.noShowDepositKept ? NOSHOW_FINAL_NOTICE_KEPT_TEXT : NOSHOW_FINAL_NOTICE_TEXT;
   const guestId = req.userId;
   const strike = (state.guestNoShowStrikes[guestId] ?? 0) + 1;
   const { lowerPriority, banned } = guestSanctionFromStrike(strike);
@@ -361,7 +365,7 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
       toast = {
         id: `noshow-final-${requestId}`,
         title: 'Absence retenue',
-        body: NOSHOW_FINAL_NOTICE_TEXT,
+        body: noticeText,
         createdAt: at,
       };
     }
@@ -377,7 +381,7 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
             ...r,
             noShowStrikeApplied: strike,
             ...(causedBan ? { noShowCausedBan: true } : {}),
-            noShowFinalNotice: r.noShowFinalNotice ?? { text: NOSHOW_FINAL_NOTICE_TEXT, at },
+            noShowFinalNotice: r.noShowFinalNotice ?? { text: noticeText, at },
           }
         : r,
     ),
@@ -393,7 +397,8 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
   const req = state.requests.find((r) => r.id === requestId);
   if (!req || !isHostDeclaredNoShow(req)) return state;
   let { guestNoShowStrikes, currentUser } = state;
-  if (req.depositStatus === 'forfeited' && req.noShowStrikeApplied) {
+  // Absence comptée (caution perdue, ou déjà rendue et acquise — 18/10) : décomptée.
+  if ((req.depositStatus === 'forfeited' || req.noShowDepositKept) && req.noShowStrikeApplied) {
     const next = Math.max(0, (guestNoShowStrikes[req.userId] ?? 0) - 1);
     guestNoShowStrikes = { ...guestNoShowStrikes, [req.userId]: next };
     if (currentUser && currentUser.id === req.userId) {
@@ -501,6 +506,17 @@ function settleGuestsAfterHostAbsence(state: AppState, outingId: string): AppSta
         : r,
     ),
   };
+}
+
+/**
+ * 18/10 · Désaccord sur la présence de l’hôte après le rendu des cautions
+ * (table normale) : toutes les cautions confirmées sont déjà rendues, elles
+ * restent acquises ; la revue ne porte que sur la sanction de l’hôte.
+ */
+function hostCaseDepositsKept(state: AppState, outing: Outing): boolean {
+  if (isPartnerListing(outing)) return false;
+  const confirmed = state.requests.filter((r) => r.outingId === outing.id && r.status === 'confirmed');
+  return confirmed.length > 0 && confirmed.every((r) => r.depositStatus === 'returned');
 }
 
 function reducer(state: AppState, action: AppAction): AppState {
@@ -1873,7 +1889,13 @@ function reducer(state: AppState, action: AppAction): AppState {
             x.id === outingId && x.hostNoShowCase
               ? {
                   ...x,
-                  hostNoShowCase: { ...x.hostNoShowCase, status: 'contested' as const, contestedAt: at, viaPresence: true },
+                  hostNoShowCase: {
+                    ...x.hostNoShowCase,
+                    status: 'contested' as const,
+                    contestedAt: at,
+                    viaPresence: true,
+                    ...(hostCaseDepositsKept(state, o) ? { depositsKept: true } : {}),
+                  },
                 }
               : x,
           ),
@@ -1988,6 +2010,7 @@ function reducer(state: AppState, action: AppAction): AppState {
                       status: 'contested' as const,
                       contestedAt: reportedAtIso,
                       viaPresence: true,
+                      ...(hostCaseDepositsKept(state, outing) ? { depositsKept: true } : {}),
                       ...(reportedByUserId ? { reportedBy: reportedByUserId } : {}),
                     }
                   : {
@@ -2354,6 +2377,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       // 18/10 · Désaccord : contestation existante ouverte directement
       // (caution en attente de revue, 7 jours max ; rien n’est compté avant l’issue).
       if (presenceDisagreement) {
+        // Caution déjà rendue (table normale) : acquise. Revue pour la sanction
+        // seulement, la caution ne repasse pas en attente, rien n’est versé à l’hôte.
+        const depositKept = existing.depositStatus === 'returned' && !isPartnerListing(outingNoShow);
         return {
           ...state,
           requests: state.requests.map((r) =>
@@ -2361,7 +2387,7 @@ function reducer(state: AppState, action: AppAction): AppState {
               ? {
                   ...r,
                   attendance: 'absent' as const,
-                  depositStatus: 'contested' as const,
+                  ...(depositKept ? { noShowDepositKept: true } : { depositStatus: 'contested' as const }),
                   noShowReportedAt: reportedAt,
                   noShowContest: { note: PRESENCE_CONTEST_NOTE, contestedAt: reportedAt, viaPresence: true },
                 }
@@ -2858,7 +2884,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Revue Moment d’une contestation : seulement sur une caution contestée.
       const { requestId, at } = action.payload;
       const req = state.requests.find((r) => r.id === requestId);
-      if (!req || req.depositStatus !== 'contested' || !req.noShowContest) return state;
+      if (!req || !req.noShowContest) return state;
+      // Caution déjà rendue (18/10) : revue pour la sanction seulement.
+      const depositKept = isDepositKeptReviewOpen(req);
+      if (req.depositStatus !== 'contested' && !depositKept) return state;
       // Contestation par « hôte absent » : tranchée par la décision sur l’hôte.
       if (req.noShowContest.viaHostNoShow) return state;
       // Pas de perte pendant que l’absence de l’hôte est en attente.
@@ -2879,7 +2908,10 @@ function reducer(state: AppState, action: AppAction): AppState {
             resolvedAt: at,
           };
           if (!accepted) {
-            return { ...r, depositStatus: 'forfeited' as const, noShowContest: contest };
+            // Caution déjà rendue : acquise, seule l’absence est comptée.
+            return depositKept
+              ? { ...r, noShowContest: contest }
+              : { ...r, depositStatus: 'forfeited' as const, noShowContest: contest };
           }
           // Absence effacée : traité comme non marqué, caution rendue, rien compté.
           const { attendance: _absent, ...rest } = r;
@@ -3537,6 +3569,7 @@ interface ChanceContextValue {
         jokerExempted?: boolean;
         pending?: boolean;
         disagreement?: boolean;
+        depositKept?: boolean;
       }
     | { ok: false; reason: string };
   /** Host publishes often and never honors: 1 warning, 2nd ban. */
@@ -6527,6 +6560,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       }
       // Présence de l’hôte déjà confirmée par l’autre côté : désaccord, contestation directe.
       const disagreement = !!outing.hostPresence;
+      // 18/10 : cautions déjà rendues (table normale) — acquises, revue pour la sanction seulement.
+      const confirmedNow = state.requests.filter((r) => r.outingId === outingId && r.status === 'confirmed');
+      const depositsKept =
+        disagreement &&
+        !isPartnerListing(outing) &&
+        confirmedNow.length > 0 &&
+        confirmedNow.every((r) => r.depositStatus === 'returned');
       const reportedAt = new Date().toISOString();
       const reportedAtMs = new Date(reportedAt).getTime();
       // Gel 17/10 (point 1) : de H à H+6, table normale comme lieu partenaire.
@@ -6558,7 +6598,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const confirmedReqs = state.requests.filter(
         (r) => r.outingId === outingId && r.status === 'confirmed',
       );
-      const noteBody = disagreement
+      const noteBody = depositsKept
+        ? 'Note auto · absence de l’hôte signalée alors que sa présence a été confirmée : contestation ouverte, revue sous 7 jours max. La caution déjà rendue reste acquise.'
+        : disagreement
         ? 'Note auto · absence de l’hôte signalée alors que sa présence a été confirmée : contestation ouverte, revue sous 7 jours max ; les cautions sont en attente.'
         : partnerOuting
           ? 'Note auto · absence du lieu signalée. Le lieu a 24 h pour contester ; les cautions sont en attente.'
@@ -6579,7 +6621,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         };
         dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
       }
-      const toast: AppToast = disagreement
+      const toast: AppToast = depositsKept
+        ? {
+            id: uid('toast'),
+            title: 'Absence de l’hôte signalée',
+            body: 'Sa présence avait été confirmée : contestation ouverte, revue sous 7 jours max. La caution déjà rendue reste acquise.',
+            createdAt: reportedAt,
+          }
+        : disagreement
         ? {
             id: uid('toast'),
             title: 'Absence de l’hôte signalée',
@@ -6987,6 +7036,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           pending?: boolean;
           /** 18/10 · Présence confirmée par l’invité : contestation ouverte. */
           disagreement?: boolean;
+          /** 18/10 · Caution déjà rendue : acquise, revue pour la sanction seulement. */
+          depositKept?: boolean;
         }
       | { ok: false; reason: string } => {
       const user = state.currentUser;
@@ -7075,7 +7126,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         },
       });
       const shareWho = isPartnerListing(outing) ? 'lieu' : 'hôte';
-      const lossText = disagreement
+      // 18/10 : caution déjà rendue (table normale), elle reste acquise.
+      const depositKept = disagreement && req.depositStatus === 'returned' && !isPartnerListing(outing);
+      const lossText = depositKept
+        ? 'présence confirmée par l’invité : contestation ouverte, revue sous 7 jours max. La caution déjà rendue reste acquise.'
+        : disagreement
         ? 'présence confirmée par l’invité : contestation ouverte, caution en attente de revue (7 jours max).'
         : pending
           ? `caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € ${shareWho}).`
@@ -7113,7 +7168,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
-      return { ok: true, strike, lowerPriority, banned, pending, disagreement };
+      return { ok: true, strike, lowerPriority, banned, pending, disagreement, depositKept };
     },
     [
       state.currentUser,

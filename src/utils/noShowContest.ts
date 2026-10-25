@@ -110,10 +110,14 @@ export function reviewDeadlineMs(r: Pick<Request, 'noShowContest'>): number {
 
 /** Revue sans décision à 7 jours : caution rendue (absence non retenue). */
 export function shouldReturnAfterReviewTimeout(
-  r: Pick<Request, 'depositStatus' | 'noShowContest'>,
+  r: Pick<Request, 'depositStatus' | 'noShowContest'> &
+    Partial<Pick<Request, 'noShowDepositKept' | 'attendance'>>,
   nowMs = Date.now(),
 ): boolean {
-  if (r.depositStatus !== 'contested' || !r.noShowContest || r.noShowContest.outcome) return false;
+  // Caution déjà rendue (18/10) : la revue court aussi, pour la sanction seulement
+  // (tant que l’absence n’a pas été effacée par ailleurs).
+  if (r.depositStatus !== 'contested' && !(r.noShowDepositKept && r.attendance === 'absent')) return false;
+  if (!r.noShowContest || r.noShowContest.outcome) return false;
   // Contestation par « hôte absent » : tranchée par la décision sur l’hôte, pas de revue propre.
   if (r.noShowContest.viaHostNoShow) return false;
   const d = reviewDeadlineMs(r);
@@ -121,7 +125,8 @@ export function shouldReturnAfterReviewTimeout(
 }
 
 export function requestsDueForReviewTimeout(
-  requests: (Pick<Request, 'id' | 'depositStatus' | 'noShowContest'>)[],
+  requests: (Pick<Request, 'id' | 'depositStatus' | 'noShowContest'> &
+    Partial<Pick<Request, 'noShowDepositKept' | 'attendance'>>)[],
   nowMs = Date.now(),
 ): string[] {
   return requests.filter((r) => shouldReturnAfterReviewTimeout(r, nowMs)).map((r) => r.id);
@@ -129,6 +134,16 @@ export function requestsDueForReviewTimeout(
 
 /** Message à l’invité quand l’absence devient définitive. */
 export const NOSHOW_FINAL_NOTICE_TEXT = 'Ton absence est retenue. La caution est perdue.';
+
+/** 18/10 · Même message quand la caution avait déjà été rendue (elle reste acquise). */
+export const NOSHOW_FINAL_NOTICE_KEPT_TEXT = 'Ton absence est retenue. La caution déjà rendue reste acquise.';
+
+/** 18/10 · Revue « sanction seulement » en cours (caution déjà rendue, table normale). */
+export function isDepositKeptReviewOpen(
+  r: Pick<Request, 'attendance' | 'noShowContest'> & Partial<Pick<Request, 'noShowDepositKept'>>,
+): boolean {
+  return !!r.noShowDepositKept && r.attendance === 'absent' && !!r.noShowContest && !r.noShowContest.outcome;
+}
 
 /** « Pas venu » déclaré par l’hôte (table normale, délai de contestation). */
 export function isHostDeclaredNoShow(
