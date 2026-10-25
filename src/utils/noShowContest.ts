@@ -155,13 +155,18 @@ export function isHostDeclaredNoShow(
 /**
  * Invité « Pas venu » qui déclare l’hôte absent : seulement pendant ses 24 h,
  * caution encore en attente ou en revue (jamais si définitive).
+ * 18/10 · Caution déjà rendue (acquise) et revue « sanction seulement » ouverte :
+ * déclaration possible aussi, la caution reste rendue.
  */
 export function canNoShowGuestDeclareHostAbsent(
-  r: ContestRequest & Pick<Request, 'attendance'>,
+  r: ContestRequest &
+    Pick<Request, 'attendance'> &
+    Partial<Pick<Request, 'noShowContest' | 'noShowDepositKept'>>,
   nowMs = Date.now(),
 ): boolean {
   if (!isHostDeclaredNoShow(r)) return false;
-  if (r.depositStatus !== 'noshow_pending' && r.depositStatus !== 'contested') return false;
+  const kept = r.depositStatus === 'returned' && isDepositKeptReviewOpen(r);
+  if (r.depositStatus !== 'noshow_pending' && r.depositStatus !== 'contested' && !kept) return false;
   const d = contestDeadlineMs(r, nowMs);
   return Number.isFinite(d) && nowMs < d;
 }

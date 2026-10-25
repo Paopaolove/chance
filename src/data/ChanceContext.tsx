@@ -124,6 +124,7 @@ import {
   hostLeaveShareEuros,
   DEPOSIT_EUROS_LEAVE,
   presenceReturnsDepositNow,
+  canGuestWithdrawConfirmedSeat,
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
 import {
@@ -667,6 +668,19 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Parti de la table : plus d’annulation (pas de nouvelle perte / remboursement).
       if (req.leftTableAt) return state;
       const outing = state.outings.find((o) => o.id === req.outingId);
+      // Invité confirmé : pas de désistement dès H (table normale).
+      if (
+        by === 'guest' &&
+        req.status === 'confirmed' &&
+        outing &&
+        !canGuestWithdrawConfirmedSeat({
+          startsAt: outing.startsAt,
+          partner: isPartnerListing(outing),
+          nowMs: new Date(cancelledAt).getTime(),
+        })
+      ) {
+        return state;
+      }
       // Partner auto-seat: accepted ne tient pas de chaise (prise à la confirm).
       const heldSeat = requestHoldsSeat(req);
       let depositStatus = req.depositStatus;
@@ -2024,14 +2038,17 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
       // L’invité « Pas venu » qui déclare l’hôte absent : sa caution passe en revue
       // (pas de rendu d’office, rien compté avant la revue).
+      // 18/10 · Caution déjà rendue (acquise) : revue pour la sanction seulement,
+      // la caution reste rendue (jamais contested ni forfeited).
       if (declarerContests && declarer) {
+        const declarerKept = declarer.depositStatus === 'returned' && !!declarer.noShowDepositKept;
         next = {
           ...next,
           requests: next.requests.map((r) =>
             r.id === declarer.id
               ? {
                   ...r,
-                  depositStatus: 'contested' as const,
+                  ...(declarerKept ? {} : { depositStatus: 'contested' as const }),
                   noShowContest: {
                     ...(r.noShowContest ?? { note: '', contestedAt: reportedAtIso }),
                     viaHostNoShow: true,
@@ -2145,7 +2162,10 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Invité « Pas venu » qui avait déclaré l’hôte absent : l’hôte était là,
       // caution perdue (L73), même s’il avait aussi contesté avec une phrase.
       for (const r of next.requests) {
-        if (r.outingId !== outingId || r.depositStatus !== 'contested' || !r.noShowContest?.viaHostNoShow) continue;
+        if (r.outingId !== outingId || !r.noShowContest?.viaHostNoShow) continue;
+        // 18/10 · Caution déjà rendue (acquise) : seule l’absence est comptée.
+        const kept = r.depositStatus === 'returned' && isDepositKeptReviewOpen(r);
+        if (r.depositStatus !== 'contested' && !kept) continue;
         next = withGuestNoShowStrike(
           {
             ...next,
@@ -2153,7 +2173,7 @@ function reducer(state: AppState, action: AppAction): AppState {
               x.id === r.id
                 ? {
                     ...x,
-                    depositStatus: 'forfeited' as const,
+                    ...(kept ? {} : { depositStatus: 'forfeited' as const }),
                     noShowContest: { ...x.noShowContest!, outcome: 'noshow_confirmed' as const, resolvedAt: at },
                   }
                 : x,
@@ -2394,6 +2414,12 @@ function reducer(state: AppState, action: AppAction): AppState {
               : r,
           ),
         };
+      }
+      // 18/10 · Caution déjà rendue = acquise : sans désaccord de présence, un « Pas venu »
+      // ne la fait jamais quitter « rendue ». Rendue sans présence = H+6 / silence :
+      // la fenêtre est close, plus de « Pas venu » (25/10). Partenaire : inchangé.
+      if (existing.depositStatus === 'returned' && !isPartnerListing(outingNoShow)) {
+        return state;
       }
       // Lot 2: joker exemption — no re-forfeit, no absence strike on this case.
       const jokerExempted = isJokerExempted(state.imprevuReports, {
@@ -4099,6 +4125,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'invalid_status' };
       }
       const cancelledAt = new Date().toISOString();
+      if (
+        by === 'guest' &&
+        req.status === 'confirmed' &&
+        !canGuestWithdrawConfirmedSeat({
+          startsAt: outing.startsAt,
+          partner: isPartnerListing(outing),
+          nowMs: new Date(cancelledAt).getTime(),
+        })
+      ) {
+        return { ok: false, reason: 'outing_started' };
+      }
       let depositReturned: boolean | undefined;
       let depositForfeited: boolean | undefined;
       if (req.status === 'confirmed') {
@@ -6587,8 +6624,16 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, reason: 'noshow_window_closed' };
       }
       const declarerContests = !!declarerReq && isHostDeclaredNoShow(declarerReq);
+      // 18/10 · Invité « Pas venu » dont la caution est déjà rendue : revue sanction seulement.
+      const declarerKept =
+        declarerContests && declarerReq?.depositStatus === 'returned' && !!declarerReq.noShowDepositKept;
       // Table normale et lieu partenaire : 24 h pour contester ; sanction et cautions en attente.
       const partnerOuting = isPartnerListing(outing);
+      // Table normale, toutes les cautions déjà rendues : acquises (rien « en attente »).
+      const allReturned =
+        !partnerOuting &&
+        confirmedNow.length > 0 &&
+        confirmedNow.every((r) => r.depositStatus === 'returned');
       const prev = state.hostNoShowStrikes[hostId] ?? 0;
       dispatch({
         type: 'REPORT_HOST_NO_SHOW',
@@ -6604,7 +6649,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         ? 'Note auto · absence de l’hôte signalée alors que sa présence a été confirmée : contestation ouverte, revue sous 7 jours max ; les cautions sont en attente.'
         : partnerOuting
           ? 'Note auto · absence du lieu signalée. Le lieu a 24 h pour contester ; les cautions sont en attente.'
-          : 'Note auto · absence de l’hôte signalée. L’hôte a 24 h pour contester ; les cautions sont en attente.';
+          : allReturned
+            ? 'Note auto · absence de l’hôte signalée. L’hôte a 24 h pour contester ; les cautions déjà rendues restent acquises.'
+            : 'Note auto · absence de l’hôte signalée. L’hôte a 24 h pour contester ; les cautions sont en attente.';
       const targets =
         confirmedReqs.length > 0
           ? confirmedReqs
@@ -6635,6 +6682,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             body: 'Sa présence avait été confirmée : contestation ouverte, revue sous 7 jours max. Les cautions sont en attente.',
             createdAt: reportedAt,
           }
+        : declarerKept
+        ? {
+            id: uid('toast'),
+            title: 'Absence de l’hôte signalée',
+            body: 'Ton absence passe en revue avec celle de l’hôte. La caution déjà rendue reste acquise.',
+            createdAt: reportedAt,
+          }
         : declarerContests
         ? {
             // Invité « Pas venu » : sa propre caution passe en revue (pas de rendu d’office).
@@ -6648,7 +6702,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             title: partnerOuting ? 'Absence du lieu signalée' : 'Absence de l’hôte signalée',
             body: partnerOuting
               ? 'Le lieu a 24 h pour contester. Les cautions sont en attente jusqu’à la décision.'
-              : 'L’hôte a 24 h pour contester. Les cautions sont en attente jusqu’à la décision.',
+              : allReturned
+                ? 'L’hôte a 24 h pour contester. La caution déjà rendue reste acquise.'
+                : 'L’hôte a 24 h pour contester. Les cautions sont en attente jusqu’à la décision.',
             createdAt: reportedAt,
           };
       dispatch({ type: 'SET_TOAST', payload: toast });
@@ -7102,6 +7158,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // Gel 17/10 (point 2) : absence déjà déclarée puis effacée, pas de nouvelle.
       if (req.noShowVoided) {
         return { ok: false, reason: 'not_declarable' };
+      }
+      // 18/10 · Caution déjà rendue = acquise : sans désaccord, plus de « Pas venu »
+      // (rendue à H+6 / silence : fenêtre close). Partenaire : inchangé.
+      if (!disagreement && req.depositStatus === 'returned' && !isPartnerListing(outing)) {
+        return { ok: false, reason: req.depositReturnCause === 'h6' ? 'too_late' : 'not_declarable' };
       }
       // Hôte d’une table normale : caution en attente 24 h (contestation possible côté invité) ;
       // l’absence n’est comptée qu’une fois définitive.

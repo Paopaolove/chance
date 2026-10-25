@@ -60,8 +60,10 @@ export function resolveGuestCancelDeposit(opts: {
   currentDeposit?: DepositStatusLite;
 }): DepositStatusLite {
   // Départ malaise : caution déjà rendue, jamais de nouvelle perte.
+  // 18/10 · Caution déjà rendue = acquise : un désistement ne la reprend jamais.
   // « Pas venu » en délai de 24 h ou contesté : réglé par la contestation seulement.
   if (
+    opts.currentDeposit === 'returned' ||
     opts.currentDeposit === 'returned_discomfort_leave' ||
     opts.currentDeposit === 'noshow_pending' ||
     opts.currentDeposit === 'contested'

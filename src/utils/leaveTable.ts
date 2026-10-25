@@ -37,6 +37,20 @@ export function hasMomentStarted(startsAt: string, nowMs = Date.now()): boolean 
   return Number.isFinite(s) && nowMs >= s;
 }
 
+/**
+ * Désistement d’une place confirmée (table normale) : seulement avant H.
+ * Dès H, partir passe par « Je quitte la table » (règles de départ) ; la
+ * présence et l’absence suivent la fenêtre H→H+6. Lieu partenaire : inchangé.
+ */
+export function canGuestWithdrawConfirmedSeat(opts: {
+  startsAt: string;
+  partner: boolean;
+  nowMs?: number;
+}): boolean {
+  if (opts.partner) return true;
+  return !hasMomentStarted(opts.startsAt, opts.nowMs);
+}
+
 /** Joker : refusé dès H, ou si l’invité est déjà marqué présent / arrivé. */
 export function isJokerAllowedNow(opts: {
   startsAt: string;

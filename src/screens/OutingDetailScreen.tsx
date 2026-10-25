@@ -59,6 +59,7 @@ import {
   projectRequestForHost,
   isDepositReturnedForGuest,
   isJokerAllowedNow,
+  canGuestWithdrawConfirmedSeat,
 } from '../utils/leaveTable';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
@@ -950,7 +951,9 @@ export function OutingDetailScreen() {
                       if (res.ok && res.disagreement) {
                         Alert.alert(
                           'Contestation ouverte',
-                          `${r.userName} s’est dit présent : contestation ouverte, caution en attente de revue (7 jours max).`,
+                          res.depositKept
+                            ? `${r.userName} s’est dit présent : contestation ouverte, revue sous 7 jours max. La caution déjà rendue reste acquise.`
+                            : `${r.userName} s’est dit présent : contestation ouverte, caution en attente de revue (7 jours max).`,
                         );
                       } else if (res.ok) {
                         Alert.alert(
@@ -1464,7 +1467,8 @@ export function OutingDetailScreen() {
                 }
                 style={{ marginTop: spacing.md }}
               />
-              {'id' in myRequest ? (
+              {'id' in myRequest &&
+              canGuestWithdrawConfirmedSeat({ startsAt: outing.startsAt, partner }) ? (
                 <Button
                   title="Me désister"
                   variant="ghost"

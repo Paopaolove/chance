@@ -1875,5 +1875,58 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const od=require('node:fs').readFileSync(require('node:path').join(__dirname,'../src/screens/OutingDetailScreen.tsx'),'utf8');
   ok(od.includes('noShowDepositKept &&')&&od.includes('noShowFinalNotice!.text'),'caution acquise: guest sees the retained notice on the moment');
 }
+
+// 25/10 · Bloquants QA sur 8e43227 (caution acquise)
+{
+  const NC=require('../src/utils/noShowContest');
+  const JE=require('../src/utils/jokerExemption');
+  const LT=require('../src/utils/leaveTable');
+  const D1=24*H, T=now-2*H, NSAT=T+H;
+  // B1 · « Me désister » ne reprend jamais une caution rendue
+  ok(JE.resolveGuestCancelDeposit({by:'guest',freeWindow:false,jokerExempted:false,currentDeposit:'returned'})==='returned','B1: late guest cancel keeps returned (no forfeit)');
+  ok(JE.resolveGuestCancelDeposit({by:'host',freeWindow:false,jokerExempted:false,currentDeposit:'returned'})==='returned','B1: host cancel keeps returned');
+  ok(JE.resolveGuestCancelDeposit({by:'guest',freeWindow:false,jokerExempted:false,currentDeposit:'held'})==='forfeited','B1: late cancel on held deposit still forfeits (unchanged)');
+  const pres=S({currentUser:me,outings:[o({startsAt:iso(T),status:'closed',spotsLeft:1})],requests:[rq({status:'confirmed',depositStatus:'returned',attendance:'present',presenceBy:'guest'})]});
+  const c1=D(pres,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}}), c1r=c1.requests[0];
+  ok(c1r.depositStatus==='returned'&&c1r.status==='confirmed'&&NC.hostNoShowShareEuros(c1r)===0,'B1: present → refunded → withdraw after H refused, deposit stays returned, host share 0');
+  const heldAfterH=S({currentUser:me,outings:[o({startsAt:iso(T),status:'closed',spotsLeft:1})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  ok(D(heldAfterH,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}}).requests[0].status==='confirmed','B1: no guest withdrawal from H (table normale)');
+  ok(D(heldAfterH,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'host'}}).requests[0].depositStatus==='returned','B1: host cancellation after H unchanged (returns)');
+  const beforeH=S({currentUser:me,outings:[o({startsAt:iso(now+2*H),spotsLeft:1})],requests:[rq({status:'confirmed',depositStatus:'returned'})]});
+  const c2=D(beforeH,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}}).requests[0];
+  ok(c2.status==='cancelled'&&c2.depositStatus==='returned','B1: withdrawal before H with deposit already returned → stays returned');
+  ok(LT.canGuestWithdrawConfirmedSeat({startsAt:iso(T),partner:false,nowMs:now})===false&&LT.canGuestWithdrawConfirmedSeat({startsAt:iso(now+H),partner:false,nowMs:now})===true&&LT.canGuestWithdrawConfirmedSeat({startsAt:iso(T),partner:true,nowMs:now})===true,'B1: withdraw allowed before H only (partner unchanged)');
+  const odB=require('node:fs').readFileSync(require('node:path').join(__dirname,'../src/screens/OutingDetailScreen.tsx'),'utf8');
+  ok(odB.includes("canGuestWithdrawConfirmedSeat({ startsAt: outing.startsAt, partner })"),'B1: « Me désister » hidden from H');
+  // B2 · Invité caution acquise : peut déclarer l’hôte absent (sanction seulement)
+  const keptBase=(more:any={})=>S({currentUser:me,outings:[o({startsAt:iso(T),status:'completed',...more})],requests:[rq({status:'confirmed',depositStatus:'returned',attendance:'present',presenceBy:'guest'})]});
+  const GNS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const HNS=(s0:any)=>D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:0,banned:false,reportedAt:iso(NSAT+10*60e3),reportedByUserId:'u1'}});
+  const k1=GNS(keptBase());
+  ok(NC.canNoShowGuestDeclareHostAbsent(k1.requests[0],NSAT+10*60e3),'B2: guest with kept deposit may declare host absent');
+  const k2=HNS(k1), k2r=k2.requests[0];
+  ok(k2.outings[0].hostNoShowReported&&k2.outings[0].hostNoShowCase?.status==='pending'&&k2r.depositStatus==='returned'&&k2r.noShowContest?.viaHostNoShow===true,'B2: returned → declare host absent → review opened, deposit stays returned');
+  // désaccord sur la présence de l’hôte (confirmée par lui) : revue directe
+  const k3=HNS(GNS(keptBase({hostPresence:{at:iso(T),byUserId:'h1'}})));
+  ok(k3.outings[0].hostNoShowCase?.status==='contested'&&k3.requests[0].depositStatus==='returned','B2: host presence disputed → contested, deposit stays returned');
+  const k4=D(k3,{type:'ACCEPT_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(NSAT+D1)}}), k4r=k4.requests[0];
+  ok(k4r.depositStatus==='returned'&&k4r.noShowContest.outcome==='noshow_confirmed'&&k4.guestNoShowStrikes?.u1===1&&NC.hostNoShowShareEuros(k4r)===0,'B2: host was there → guest absence counted, deposit stays returned, host share 0');
+  ok(k4r.noShowFinalNotice?.text==='Ton absence est retenue. La caution déjà rendue reste acquise.','B2: kept notice on retained absence');
+  const k5=D(k3,{type:'CONFIRM_HOST_NO_SHOW_AFTER_REVIEW',payload:{outingId:'o1',at:iso(NSAT+D1)}}), k5r=k5.requests[0];
+  ok(k5.hostNoShowStrikes?.h1===1&&k5r.depositStatus==='returned'&&k5r.noShowVoided&&(k5.guestNoShowStrikes?.u1??0)===0,'B2: host absence retained → guest « Pas venu » voided, deposit returned');
+  ok(D(k2,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(NSAT+D1)}}).requests[0].noShowContest.outcome===undefined,'B2: guest review decided by host decision only');
+  // B3 · « Pas venu » ne fait jamais quitter « rendue »
+  const h6base=S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed',spotsLeft:1})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
+  const h6=D(h6base,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(T+6*H)}});
+  ok(h6.requests[0].depositStatus==='returned','B3: simulated H+6 returns deposit');
+  const b3=GNS(h6), b3r=b3.requests[0];
+  ok(b3r.depositStatus==='returned'&&b3r.attendance===undefined&&!b3r.noShowReportedAt&&(b3.guestNoShowStrikes?.u1??0)===0,'B3: returned (H+6) + « Pas venu » → stays returned, nothing counted');
+  const sil=D(h6base,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}});
+  const b3s=GNS(sil).requests[0];
+  ok(sil.requests[0].depositStatus==='returned'&&b3s.depositStatus==='returned'&&b3s.attendance===undefined,'B3: returned (silence) + « Pas venu » → stays returned');
+  ok(D(b3,{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(NSAT+2*D1)}}).requests[0].depositStatus==='returned','B3: no later forfeit');
+  // désaccord de présence : revue sanction seulement (déjà couvert), caution rendue
+  ok(GNS(keptBase()).requests[0].depositStatus==='returned','B3: presence disagreement keeps returned (sanction-only review)');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
