@@ -443,7 +443,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(/const missingPresent = getCompletedOutingsMissingPresent\(\);/.test(pf)&&!/isDemoEnabled\(\)\s*\?\s*getCompletedOutingsMissingPresent/.test(pf)&&!/demoMarkConfirmedPresent/.test(pf)&&/markGuestsPresentAndRate\(\s*item\.outing\.id,\s*presenceChecked,?\s*\)/.test(pf),'static: ProfileScreen « Marquer présent et noter » hôte et invité (18/10), visible hors dev, cochés seulement');
   ok(/setPresenceChecked\(\[\]\); \/\/ rien de pré-coché/.test(pf),'static: nothing pre-checked');
   ok(/if \(!marked\.ok\) \{\s*Alert\.alert\([\s\S]{0,240}markPresentReasonLabel\(marked\.reason\)[\s\S]{0,120}return;/.test(pf),'static: ProfileScreen — alerte avec motif, pas d’avis si présence refusée');
-  ok(/isDemoEnabled\(\) \? ' Outils QA : 5 taps sur le logo Moment\.' : ''/.test(pf)&&!/Outils QA :\s*\n\s*5 taps/.test(pf),'static: QA note hidden outside dev');
+  // Lot D 25/10 : toute la note démo (QA comprise) est dans un bloc isDemoEnabled().
+  ok(/isDemoEnabled\(\) \? \(\s*<Text style=\{styles\.demoNote\}>[^<]*Outils QA : 5 taps sur le logo Moment\./.test(pf)&&(pf.match(/Outils QA/g)||[]).length===1,'static: QA note hidden outside dev');
 }
 
 // « Marquer présent et noter » (Profil) — hôte, invité par invité, atomique, aussi hors dev (17/10)
@@ -2142,7 +2143,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   {
     const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
     const bad:string[]=[];
-    const re=/Connexion simulée|connexion simulée|Démo locale|Mot de passe démo|sur cette démo|Pas de vraie authentification/g;
+    const re=/Connexion simulée|connexion simulée|Démo locale|Mot de passe démo|sur cette démo|Pas de vraie authentification|Mode démo|[Pp]as de Stripe|Supabase/g;
     for(const f of [...walk(path.join(__dirname,'..','src','screens')),...walk(path.join(__dirname,'..','src','components'))]){
       if(!/\.tsx?$/.test(f)||/DemoMenuModal/.test(f)) continue;
       const src=fs.readFileSync(f,'utf8'); let m:any;
@@ -2154,6 +2155,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     }
     ok(bad.length===0,'Lot C p1: no raw demo sentence outside __DEV__ — '+bad.join(','));
   }
+  ok(/isDemoEnabled\(\) \? \(\s*<Text style=\{styles\.demoNote\}>\s*Mode démo local — pas de Stripe ni Supabase/.test(pf),'Lot D: profile « Mode démo local » note shown in __DEV__ only');
   // 2 bis) Données affichées hors __DEV__ (litige lieu, message système) : plus de « (démo) » / « (stub) »
   {
     const od=rd('screens','OutingDetailScreen.tsx');

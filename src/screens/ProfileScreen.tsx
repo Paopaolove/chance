@@ -1004,10 +1004,12 @@ function ProfileScreenInner() {
           })()}
         </View>
 
-        <Text style={styles.demoNote}>
-          Mode démo local — pas de Stripe ni Supabase pour l’instant.
-          {isDemoEnabled() ? ' Outils QA : 5 taps sur le logo Moment.' : ''}
-        </Text>
+        {/* Lot D 25/10 : note démo, développement seulement (masquée hors __DEV__). */}
+        {isDemoEnabled() ? (
+          <Text style={styles.demoNote}>
+            Mode démo local — pas de Stripe ni Supabase pour l’instant. Outils QA : 5 taps sur le logo Moment.
+          </Text>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
