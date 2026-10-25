@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '../components/Button';
 import { useChance } from '../data/ChanceContext';
 import { RootStackParamList } from '../navigation/types';
+import { demoText } from '../utils/devMode';
 import { colors, radius, spacing, typography } from '../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Register'>;
@@ -23,7 +24,7 @@ export function RegisterScreen() {
   const subtitle =
     reason === 'after_request'
       ? 'Ta demande est envoyée. Crée ton compte pour qu’on puisse te prévenir et sécuriser la caution.'
-      : 'Sans compte, tu restes en mode invité sur cette démo.';
+      : demoText('Sans compte, tu restes en mode invité sur cette démo.', 'Sans compte, tu restes en mode invité.');
 
   const onSubmit = () => {
     const cleaned = email.trim().toLowerCase();
@@ -32,7 +33,7 @@ export function RegisterScreen() {
       return;
     }
     if (password.trim().length < 4) {
-      setError('Mot de passe démo : au moins 4 caractères.');
+      setError(demoText('Mot de passe démo : au moins 4 caractères.', 'Mot de passe : au moins 4 caractères.'));
       return;
     }
     registerAccount(cleaned);

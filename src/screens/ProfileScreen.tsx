@@ -65,6 +65,7 @@ function ProfileScreenInner() {
   const {
     state,
     getActiveOutingForUser,
+    refreshGuestSanctions,
     setPermissions,
     updateProfile,
     getOutingsToRate,
@@ -83,6 +84,13 @@ function ProfileScreenInner() {
     respondMomentPhoto,
   } = useChance();
   const user = state.currentUser;
+  // 25/10 · Lot C : à l’accès au profil, priorité baissée / mention
+  // recalculées sur les 3 mois glissants (levée automatique).
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', refreshGuestSanctions);
+    refreshGuestSanctions();
+    return unsub;
+  }, [navigation, refreshGuestSanctions]);
   const active = getActiveOutingForUser();
   const [busy, setBusy] = useState(false);
   // « Marquer présent et noter » : liste à cocher (hôte), rien de pré-coché.
@@ -597,9 +605,12 @@ function ProfileScreenInner() {
                   : 'E-mail (démo)',
             )}
           </Text>
-          <Text style={styles.cardHint}>
-            Pas de vraie authentification — connexion simulée locale.
-          </Text>
+          {/* 25/10 · Lot C : mention démo, développement seulement. */}
+          {isDemoEnabled() ? (
+            <Text style={styles.cardHint}>
+              Pas de vraie authentification — connexion simulée locale.
+            </Text>
+          ) : null}
           {user.email ? (
             <Text style={styles.cardHint}>{user.email}</Text>
           ) : null}

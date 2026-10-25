@@ -161,7 +161,7 @@ import {
 } from '../utils/depositH6';
 import { presenceChecklist, validatePresenceSelection } from '../utils/markPresent';
 import { listOutingsToRate, reviewEligibility } from '../utils/reviewEligibility';
-import { DEMO_DISABLED, isDemoEnabled } from '../utils/devMode';
+import { DEMO_DISABLED, demoLabel, isDemoEnabled } from '../utils/devMode';
 import {
   advanceTableReport,
   canSubmitTableReport,
@@ -178,6 +178,7 @@ import {
   canActorMarkGuestPresent,
   canActorReportGuestNoShow,
   canActorReportHostNoShow,
+  guestSanctionAt,
   guestSanctionFromStrike,
   guestStrikesInWindow,
   hostSanctionFromStrike,
@@ -334,6 +335,35 @@ function applyPresence(
   };
 }
 
+/** Mention profil après la 2e absence retenue (3 mois glissants). */
+const GUEST_LOWER_PRIORITY_MENTION = 'Absence après confirmation (démo)';
+
+/**
+ * 25/10 · Lot C : levée automatique de la priorité baissée et de la mention
+ * quand il ne reste plus assez d’absences retenues dans les 3 mois glissants.
+ * Recalcul à la lecture (ouverture de l’app, retour au premier plan, accès au
+ * profil, nouvelle absence) — pas de minuterie serveur.
+ * Compte fermé : rien n’est levé par le temps (la fermeture ne se rouvre
+ * qu’à l’issue d’une contestation, règle existante).
+ * Lève seulement : ne pose jamais une sanction que l’absence n’a pas posée.
+ */
+export function guestSanctionsNeedRefresh(state: AppState, nowMs: number): boolean {
+  const u = state.currentUser;
+  if (!u || u.banned) return false;
+  if (!u.lowerPriority && !u.profileMention) return false;
+  const total = state.guestNoShowStrikes[u.id] ?? 0;
+  return !guestSanctionAt(total, state.guestNoShowLog?.[u.id], nowMs).lowerPriority;
+}
+
+function withGuestSanctionsRefreshed(state: AppState, nowMs: number): AppState {
+  if (!guestSanctionsNeedRefresh(state, nowMs)) return state;
+  const u = state.currentUser!;
+  return {
+    ...state,
+    currentUser: { ...u, lowerPriority: false, profileMention: undefined },
+  };
+}
+
 /** 18/10 · Phrase automatique d’une contestation ouverte par un désaccord de présence. */
 const PRESENCE_CONTEST_NOTE = '« Je suis présent »';
 
@@ -365,12 +395,16 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
     currentUser = {
       ...currentUser,
       guestNoShowCount: strike,
-      lowerPriority: lowerPriority || currentUser.lowerPriority,
+      // 25/10 · Lot C : recalculé sur les 3 mois glissants (une priorité
+      // baissée échue ne revient pas) ; compte déjà fermé : inchangé.
+      lowerPriority: lowerPriority || (!!currentUser.banned && !!currentUser.lowerPriority),
       profileMention: lowerPriority
         ? banned
           ? '3e absence — compte fermé (démo)'
-          : 'Absence après confirmation (démo)'
-        : currentUser.profileMention,
+          : GUEST_LOWER_PRIORITY_MENTION
+        : currentUser.banned
+          ? currentUser.profileMention
+          : undefined,
       banned: banned || currentUser.banned,
       bannedReason: banned
         ? '3e absence après confirmation — compte fermé (démo)'
@@ -419,12 +453,11 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
     const next = Math.max(0, (guestNoShowStrikes[req.userId] ?? 0) - 1);
     guestNoShowStrikes = { ...guestNoShowStrikes, [req.userId]: next };
     const prevLog = guestNoShowLog?.[req.userId] ?? [];
-    const removed = prevLog.find((e) => e.requestId === requestId);
     const logLeft = prevLog.filter((e) => e.requestId !== requestId);
     guestNoShowLog = { ...guestNoShowLog, [req.userId]: logLeft };
-    const refMs = removed && Number.isFinite(new Date(removed.at).getTime())
-      ? new Date(removed.at).getTime()
-      : Date.now();
+    // 25/10 · Lot C : fenêtre de 3 mois évaluée maintenant (absences restantes,
+    // y compris celles d’après l’absence effacée ; les échues ne comptent plus).
+    const refMs = Date.now();
     if (currentUser && currentUser.id === req.userId) {
       // Gel 17/10 (point 4, L69.1) : priorité baissée et mention profil
       // recalculées sur le nombre d’absences restantes (elles ne viennent que des absences).
@@ -439,7 +472,7 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
         profileMention: left.lowerPriority
           ? stillBanned && left.banned
             ? currentUser.profileMention
-            : 'Absence après confirmation (démo)'
+            : GUEST_LOWER_PRIORITY_MENTION
           : undefined,
       };
     }
@@ -694,6 +727,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (req.leftTableAt) return state;
       const outing = state.outings.find((o) => o.id === req.outingId);
       // Invité confirmé : pas de désistement dès H (table normale).
+      // Comportement voulu (782d36c, QA 8e43227) : dès H, partir passe par
+      // « Je quitte la table » ; la caution suit la fenêtre H→H+6.
       if (
         by === 'guest' &&
         req.status === 'confirmed' &&
@@ -2394,6 +2429,11 @@ function reducer(state: AppState, action: AppAction): AppState {
       };
     }
 
+    case 'REFRESH_GUEST_SANCTIONS': {
+      const atMs = new Date(action.payload.at).getTime();
+      return withGuestSanctionsRefreshed(state, Number.isFinite(atMs) ? atMs : Date.now());
+    }
+
     case 'REPORT_GUEST_NO_SHOW': {
       const {
         outingId,
@@ -2524,12 +2564,15 @@ function reducer(state: AppState, action: AppAction): AppState {
         currentUser = {
           ...currentUser,
           guestNoShowCount: strike,
-          lowerPriority: lowerPriority || currentUser.lowerPriority,
+          // 25/10 · Lot C : recalculé sur les 3 mois glissants.
+          lowerPriority: lowerPriority || (!!currentUser.banned && !!currentUser.lowerPriority),
           profileMention: lowerPriority
             ? banned
               ? '3e absence — compte fermé (démo)'
-              : 'Absence après confirmation (démo)'
-            : currentUser.profileMention,
+              : GUEST_LOWER_PRIORITY_MENTION
+            : currentUser.banned
+              ? currentUser.profileMention
+              : undefined,
           banned: banned || currentUser.banned,
           bannedReason: banned
             ? '3e absence après confirmation — compte fermé (démo)'
@@ -2820,7 +2863,8 @@ function reducer(state: AppState, action: AppAction): AppState {
               partnerDispute: r.partnerDispute ?? {
                 openedAt: arrivedAt,
                 trigger: 'arrival_after_absent' as const,
-                note: 'Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard (stub).',
+                // Lot C : mention démo affichée via demoLabel (masquée hors __DEV__).
+                note: 'Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard (démo).',
               },
             };
           }
@@ -2876,7 +2920,8 @@ function reducer(state: AppState, action: AppAction): AppState {
             partnerDispute: {
               openedAt: at,
               trigger: 'absent_after_arrival' as const,
-              note: 'Litige : l’invité dit être arrivé, le lieu signale « Pas venu ». Photo demandée plus tard (stub).',
+              // Lot C : mention démo affichée via demoLabel (masquée hors __DEV__).
+              note: 'Litige : l’invité dit être arrivé, le lieu signale « Pas venu ». Photo demandée plus tard (démo).',
             },
           };
         }),
@@ -3402,6 +3447,11 @@ interface ChanceContextValue {
   demoSimulateDepositH6: (
     outingId: string,
   ) => { ok: true; returned: number } | { ok: false; reason: string };
+  /**
+   * 25/10 · Lot C : lève la priorité baissée / la mention si les absences
+   * retenues sont sorties des 3 mois glissants (appelé à l’accès au profil).
+   */
+  refreshGuestSanctions: () => void;
   /** 25/10 · Démo (__DEV__) : contestations en revue (invités et hôtes). Vide hors démo. */
   demoPendingReviews: () => DemoReviewItem[];
   /**
@@ -6186,6 +6236,24 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     [state],
   );
 
+  const refreshGuestSanctions = useCallback(() => {
+    const now = Date.now();
+    if (!guestSanctionsNeedRefresh(state, now)) return;
+    dispatch({ type: 'REFRESH_GUEST_SANCTIONS', payload: { at: new Date(now).toISOString() } });
+  }, [state]);
+
+  /**
+   * 25/10 · Lot C : recalcul des sanctions à l’ouverture de l’app, au retour
+   * au premier plan et à chaque changement des absences (pas de minuterie).
+   */
+  useEffect(() => {
+    refreshGuestSanctions();
+    const sub = RNAppState.addEventListener('change', (s) => {
+      if (s === 'active') refreshGuestSanctions();
+    });
+    return () => sub.remove();
+  }, [refreshGuestSanctions]);
+
   const demoResolveHostReview = useCallback(
     (outingId: string, retained: boolean): { ok: true } | { ok: false; reason: string } => {
       // Démo seulement (__DEV__) : inerte en production.
@@ -7620,7 +7688,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             outingId: outing.id,
             requestId,
             kind: 'system',
-            text: 'Litige : arrivé selon l’invité, « Pas venu » selon le lieu. Photo demandée plus tard (démo) — aucune sanction automatique.',
+            // Lot C : « (démo) » retiré hors __DEV__.
+            text: demoLabel('Litige : arrivé selon l’invité, « Pas venu » selon le lieu. Photo demandée plus tard (démo) — aucune sanction automatique.'),
             createdAt: at,
           },
         });
@@ -8299,6 +8368,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       confirmHostPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
+      refreshGuestSanctions,
       demoPendingReviews,
       demoResolveGuestReview,
       demoResolveHostReview,
@@ -8417,6 +8487,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       confirmHostPresent,
       demoSimulateAutoComplete,
       demoSimulateDepositH6,
+      refreshGuestSanctions,
       demoPendingReviews,
       demoResolveGuestReview,
       demoResolveHostReview,

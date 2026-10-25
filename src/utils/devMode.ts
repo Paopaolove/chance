@@ -21,8 +21,17 @@ export function demoLabel(text: string): string {
   if (isDemoEnabled()) return text;
   return text
     .replace(/,\s+(?:Stripe\s+)?mock\)/g, ')')
-    .replace(/\s*\((?:[Dd]émo|mock|Stripe\s+mock)(?:\s*:[^)]*)?\)/g, '')
+    .replace(/\s*\((?:[Dd]émo|mock|stub|Stripe\s+mock)(?:\s*:[^)]*)?\)/g, '')
     .replace(/ +([.,])/g, '$1')
     .replace(/ {2,}/g, ' ')
     .trim();
+}
+
+/**
+ * 25/10 · Lot C : phrase qui trahit la démo (« connexion simulée », « démo
+ * locale »…). En développement : texte démo inchangé. Hors __DEV__ : texte
+ * de l’app finie (chaîne vide = rien à afficher).
+ */
+export function demoText(devText: string, prodText: string): string {
+  return isDemoEnabled() ? devText : prodText;
 }

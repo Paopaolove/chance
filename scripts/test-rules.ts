@@ -2102,7 +2102,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     } finally { (globalThis as any).__DEV__=true; }
     // aucun libellé brut hors appel demoLabel(…) dans les écrans et composants (menu démo exclu)
     const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
-    const stripCalls=(src:string)=>{ let out='', i=0; while(i<src.length){ const j=src.indexOf('demoLabel(',i); if(j<0){out+=src.slice(i);break;} out+=src.slice(i,j); let k=j+'demoLabel('.length, depth=1; while(k<src.length&&depth>0){ if(src[k]==='(')depth++; else if(src[k]===')')depth--; k++; } i=k; } return out; };
+    // demoText(dev, prod) (Lot C) : texte démo en __DEV__ seulement, comme demoLabel.
+    const stripCalls=(src0:string)=>{ const src=src0.replace(/demoText\(/g,'demoLabel('); let out='', i=0; while(i<src.length){ const j=src.indexOf('demoLabel(',i); if(j<0){out+=src.slice(i);break;} out+=src.slice(i,j); let k=j+'demoLabel('.length, depth=1; while(k<src.length&&depth>0){ if(src[k]==='(')depth++; else if(src[k]===')')depth--; k++; } i=k; } return out; };
     const noComments=(src:string)=>src.replace(/isDemoEnabled\(\)\s*\?\s*'[^']*'/g,'').replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'').replace(/\s\/\/ .*$/gm,'');
     const raw:string[]=[];
     for(const f of [...walk(path.join(__dirname,'..','src','screens')),...walk(path.join(__dirname,'..','src','components'))]){
@@ -2114,6 +2115,101 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     const pf=fs.readFileSync(path.join(__dirname,'..','src','screens','ProfileScreen.tsx'),'utf8');
     ok(/demoLabel\(\s*user\.bannedReason/.test(pf)&&/demoLabel\(\s*user\.profileMention/.test(pf),'25/10 p7: stored sanction texts shown through demoLabel');
   }
+}
+// Lot C · 25/10 : parcours « app terminée » (textes démo, levée de la priorité baissée)
+{
+  const DM=require('../src/utils/devMode');
+  const PRT=require('../src/utils/participationRights');
+  const CTX=require('../src/data/ChanceContext');
+  const fs=require('node:fs'), path=require('node:path');
+  const D1=24*H;
+  const rd=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const ctx0=rd('data','ChanceContext.tsx');
+  // 1) Textes qui trahissent la démo : en __DEV__ inchangés, hors __DEV__ reformulés ou masqués
+  ok(DM.demoText('Connexion simulée (démo)','Choisis comment te connecter')==='Connexion simulée (démo)','Lot C p1: dev → demo text kept');
+  (globalThis as any).__DEV__=false;
+  try {
+    ok(DM.demoText('Connexion simulée (démo)','Choisis comment te connecter')==='Choisis comment te connecter','Lot C p1: prod → finished-app text');
+    ok(DM.demoText('Démo locale','')==='','Lot C p1: prod → empty = hidden');
+  } finally { (globalThis as any).__DEV__=true; }
+  const ob=rd('screens','OnboardingScreen.tsx'), rg=rd('screens','RegisterScreen.tsx'), pf=rd('screens','ProfileScreen.tsx');
+  ok(/demoText\(\s*'Connexion simulée \(démo\)[^']*',\s*'Choisis comment te connecter : Apple, Google ou e-mail\.',?\s*\)/.test(ob),'Lot C p1: onboarding « Connexion simulée » reformulated outside __DEV__');
+  ok(/isDemoEnabled\(\) \? \(\s*<Text style=\{styles\.hint\}>Démo locale : rien n’est envoyé\.<\/Text>/.test(ob),'Lot C p1: onboarding « Démo locale » shown in __DEV__ only');
+  ok((ob.match(/demoText\('Mot de passe démo : au moins 4 caractères\.', 'Mot de passe : au moins 4 caractères\.'\)/g)||[]).length===1&&(rg.match(/demoText\('Mot de passe démo : au moins 4 caractères\.', 'Mot de passe : au moins 4 caractères\.'\)/g)||[]).length===1,'Lot C p1: « Mot de passe démo » reformulated (onboarding + register)');
+  ok(/demoText\('Sans compte, tu restes en mode invité sur cette démo\.', 'Sans compte, tu restes en mode invité\.'\)/.test(rg),'Lot C p1: register « cette démo » reformulated');
+  ok(/isDemoEnabled\(\) \? \(\s*<Text style=\{styles\.cardHint\}>\s*Pas de vraie authentification — connexion simulée locale\./.test(pf),'Lot C p1: profile « connexion simulée locale » shown in __DEV__ only');
+  // aucune phrase démo brute restante (hors demoText / demoLabel / bloc isDemoEnabled) dans écrans et composants (menu démo exclu)
+  {
+    const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
+    const bad:string[]=[];
+    const re=/Connexion simulée|connexion simulée|Démo locale|Mot de passe démo|sur cette démo|Pas de vraie authentification/g;
+    for(const f of [...walk(path.join(__dirname,'..','src','screens')),...walk(path.join(__dirname,'..','src','components'))]){
+      if(!/\.tsx?$/.test(f)||/DemoMenuModal/.test(f)) continue;
+      const src=fs.readFileSync(f,'utf8'); let m:any;
+      while((m=re.exec(src))){
+        const before=src.slice(Math.max(0,m.index-260),m.index);
+        const guarded=/demoText\(\s*'?[^)]*$/.test(before)||/isDemoEnabled\(\) \? \([^]*$/.test(before.slice(-200))||/^\s*\*|\/\//.test(src.slice(src.lastIndexOf('\n',m.index)+1,m.index));
+        if(!guarded) bad.push(path.basename(f)+':'+m[0]);
+      }
+    }
+    ok(bad.length===0,'Lot C p1: no raw demo sentence outside __DEV__ — '+bad.join(','));
+  }
+  // 2 bis) Données affichées hors __DEV__ (litige lieu, message système) : plus de « (démo) » / « (stub) »
+  {
+    const od=rd('screens','OutingDetailScreen.tsx');
+    ok(od.includes('`Litige · ${demoLabel(r.partnerDispute.note)}`'),'Lot C p2bis: partner dispute note shown through demoLabel');
+    ok(!/Photo demandée plus tard \(stub\)/.test(ctx0)&&(ctx0.match(/Photo demandée plus tard \(démo\)/g)||[]).length===3,'Lot C p2bis: dispute notes use the (démo) marker');
+    ok(/text: demoLabel\('Litige : arrivé selon l’invité, « Pas venu » selon le lieu\. Photo demandée plus tard \(démo\) — aucune sanction automatique\.'\)/.test(ctx0),'Lot C p2bis: partner dispute system message through demoLabel');
+    (globalThis as any).__DEV__=false;
+    try {
+      ok(DM.demoLabel('Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard (démo).')==='Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard.','Lot C p2bis: prod dispute note clean');
+      ok(DM.demoLabel('Photo demandée plus tard (stub).')==='Photo demandée plus tard.','Lot C p2bis: notes stored before (stub) cleaned too');
+      ok(DM.demoLabel('Litige : arrivé selon l’invité, « Pas venu » selon le lieu. Photo demandée plus tard (démo) — aucune sanction automatique.')==='Litige : arrivé selon l’invité, « Pas venu » selon le lieu. Photo demandée plus tard — aucune sanction automatique.','Lot C p2bis: prod system message clean');
+    } finally { (globalThis as any).__DEV__=true; }
+    ok(DM.demoLabel('Photo demandée plus tard (stub).')==='Photo demandée plus tard (stub).','Lot C p2bis: dev unchanged');
+    // lieux démo « Mon bistrot (démo) » : posés seulement par DEMO_BECOME_PARTNER, gardé __DEV__
+    const bi=ctx0.indexOf("case 'DEMO_BECOME_PARTNER'");
+    ok(bi>0&&/if \(!isDemoEnabled\(\)\) return state;/.test(ctx0.slice(bi,bi+200))&&(ctx0.match(/DEMO_PARTNER_DEFAULTS\[/g)||[]).length===1,'Lot C p2bis: demo venue names only reachable in __DEV__');
+  }
+  // 2) Priorité baissée / mention : levée automatique hors 3 mois glissants
+  const NOW=now;
+  const ago=(n:number)=>iso(NOW-n*D1);
+  const lp=(log:any[],strikes=log.length,u:any={})=>S({currentUser:{...me,lowerPriority:true,profileMention:'Absence après confirmation (démo)',guestNoShowCount:strikes,...u},guestNoShowStrikes:{u1:strikes},guestNoShowLog:{u1:log}});
+  const RF=(s0:any,at=NOW)=>D(s0,{type:'REFRESH_GUEST_SANCTIONS',payload:{at:iso(at)}});
+  const e=(id:string,n:number)=>({requestId:id,at:ago(n)});
+  const exp=RF(lp([e('x1',100),e('x2',20)]));
+  ok(exp.currentUser.lowerPriority===false&&exp.currentUser.profileMention===undefined,'Lot C p2: one absence left the 3 months → lower priority + mention lifted');
+  ok(exp.guestNoShowStrikes.u1===2&&exp.guestNoShowLog.u1.length===2&&exp.currentUser.guestNoShowCount===2,'Lot C p2: history and total counter kept (only the sanction is recalculated)');
+  const keep=lp([e('x1',60),e('x2',20)]);
+  ok(RF(keep)===keep&&RF(keep).currentUser.lowerPriority===true,'Lot C p2: 2 absences still within 3 months → unchanged');
+  ok(RF(keep,NOW+61*D1).currentUser.lowerPriority===false,'Lot C p2: same state read later (oldest gone) → lifted');
+  const both=RF(lp([e('x1',200),e('x2',95)]));
+  ok(both.currentUser.lowerPriority===false&&both.currentUser.profileMention===undefined,'Lot C p2: all absences older than 3 months → lifted');
+  const closed=lp([e('x1',200),e('x2',150),e('x3',100)],3,{banned:true,bannedReason:'3e absence après confirmation — compte fermé (démo)',profileMention:'3e absence — compte fermé (démo)'});
+  ok(RF(closed)===closed&&RF(closed).currentUser.banned===true,'Lot C p2: closed account never reopened by time');
+  const legacy=lp([],2);
+  ok(RF(legacy)===legacy,'Lot C p2: undated legacy counter (pre-25/10) kept as recent → not lifted');
+  const none=S({currentUser:{...me},guestNoShowStrikes:{},guestNoShowLog:{}});
+  ok(RF(none)===none&&RF(S({currentUser:null}))!==undefined,'Lot C p2: no sanction / no user → no-op');
+  ok(CTX.guestSanctionsNeedRefresh(lp([e('x1',100),e('x2',20)]),NOW)===true&&CTX.guestSanctionsNeedRefresh(keep,NOW)===false&&CTX.guestSanctionsNeedRefresh(closed,NOW)===false,'Lot C p2: refresh needed only when the window no longer justifies it');
+  // bornes : fenêtre = 3 mois calendaires, début exclu
+  const A=Date.parse('2026-10-25T10:00:00.000Z');
+  const L=[{requestId:'a',at:'2026-07-25T10:00:00.000Z'},{requestId:'b',at:'2026-10-01T10:00:00.000Z'}];
+  ok(PRT.guestSanctionAt(2,L,A).lowerPriority===false&&PRT.guestSanctionAt(2,L,A-1).lowerPriority===true&&PRT.guestSanctionAt(2,L,A).strikesInWindow===1,'Lot C p2: absence exactly 3 months old no longer counts');
+  // nouvelle absence : sanctions recalculées sur la fenêtre (une priorité échue ne revient pas d’elle-même)
+  {
+    const T=NOW-2*H, NSAT=T+H;
+    const self=(log:any[],u:any={})=>D(S({currentUser:{...me,lowerPriority:true,profileMention:'Absence après confirmation (démo)',...u},outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],guestNoShowStrikes:{u1:log.length},guestNoShowLog:{u1:log}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:log.length+1,lowerPriority:false,banned:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
+    const n1=self([{requestId:'x1',at:iso(NSAT-100*D1)},{requestId:'x2',at:iso(NSAT-120*D1)}]);
+    ok(n1.currentUser.lowerPriority===false&&n1.currentUser.profileMention===undefined&&n1.guestNoShowStrikes.u1===3,'Lot C p2: new absence with old ones expired → counts as 1st, stale lower priority dropped');
+    const n2=self([{requestId:'x1',at:iso(NSAT-100*D1)},{requestId:'x2',at:iso(NSAT-20*D1)}]);
+    ok(n2.currentUser.lowerPriority===true&&n2.currentUser.profileMention==='Absence après confirmation (démo)'&&!n2.currentUser.banned,'Lot C p2: new absence + 1 recent → lower priority');
+  }
+  // recalcul à la lecture : provider (ouverture / premier plan / changement) et accès au profil ; pas de minuterie
+  const ctx=rd('data','ChanceContext.tsx');
+  const i=ctx.indexOf('const refreshGuestSanctions = useCallback(');
+  ok(i>0&&/guestSanctionsNeedRefresh\(state, now\)/.test(ctx.slice(i,i+400))&&/addEventListener\('change'[^]*refreshGuestSanctions\(\)/.test(ctx.slice(i,i+1200))&&!/setInterval/.test(ctx.slice(i,i+1200)),'Lot C p2: recalculated on open / foreground / change, no timer');
+  ok(/addListener\('focus', refreshGuestSanctions\)/.test(pf),'Lot C p2: recalculated on profile access');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

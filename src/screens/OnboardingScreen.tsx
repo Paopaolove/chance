@@ -1,4 +1,4 @@
-import { demoLabel } from '../utils/devMode';
+import { demoLabel, demoText, isDemoEnabled } from '../utils/devMode';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import {
@@ -211,7 +211,7 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
       return;
     }
     if (password.trim().length < 4) {
-      setError('Mot de passe démo : au moins 4 caractères.');
+      setError(demoText('Mot de passe démo : au moins 4 caractères.', 'Mot de passe : au moins 4 caractères.'));
       return;
     }
     setError('');
@@ -291,8 +291,9 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
             Pour proposer ou rejoindre un moment.
           </Text>
           <Text style={styles.hint}>
-            {demoLabel(
+            {demoText(
               'Connexion simulée (démo) — Apple / Google / e-mail. Ce n’est pas une vraie authentification : aucune donnée n’est envoyée.',
+              'Choisis comment te connecter : Apple, Google ou e-mail.',
             )}
           </Text>
           <Button
@@ -326,7 +327,10 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
         >
           <StepBars current={1} onBack={() => go('account')} />
           <Text style={styles.title}>E-mail</Text>
-          <Text style={styles.hint}>Démo locale : rien n’est envoyé.</Text>
+          {/* 25/10 · Lot C : mention démo, développement seulement. */}
+          {isDemoEnabled() ? (
+            <Text style={styles.hint}>Démo locale : rien n’est envoyé.</Text>
+          ) : null}
           <Text style={styles.label}>E-mail</Text>
           <TextInput
             selectionColor={colors.primary}

@@ -823,7 +823,7 @@ export function OutingDetailScreen() {
                   <View style={{ marginTop: spacing.sm }}>
                     <Text style={styles.hint}>
                       {r.partnerDispute
-                        ? `Litige · ${r.partnerDispute.note}`
+                        ? `Litige · ${demoLabel(r.partnerDispute.note)}`
                         : r.leftTableAt
                           ? [hostLeaveView(r)!.label, hostLeaveView(r)!.earningsLabel.replace('pour toi', 'pour ton lieu')].filter(Boolean).join(' · ')
                           : r.attendance === 'present'

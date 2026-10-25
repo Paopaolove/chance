@@ -1021,6 +1021,11 @@ export type AppAction =
         decision: 'accepted' | 'refused';
       };
     }
+  /**
+   * 25/10 · Lot C : recalcul des sanctions invité sur les 3 mois glissants
+   * (levée automatique de la priorité baissée / mention). Pas de minuterie serveur.
+   */
+  | { type: 'REFRESH_GUEST_SANCTIONS'; payload: { at: string } }
   | {
       type: 'REPORT_GUEST_NO_SHOW';
       payload: {

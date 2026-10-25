@@ -51,6 +51,21 @@ export function guestStrikesInWindow(
   return dated + undated;
 }
 
+/**
+ * 25/10 · Lot C : priorité baissée / mention recalculées à l’instant nowMs.
+ * Une absence qui sort des 3 mois glissants ne compte plus : la priorité
+ * baissée se lève d’elle-même (pas de minuterie serveur, recalcul à la lecture).
+ * La fermeture du compte n’est jamais levée par le temps (voir l’appelant).
+ */
+export function guestSanctionAt(
+  total: number,
+  log: GuestNoShowLogEntry[] | undefined,
+  nowMs: number,
+): { strikesInWindow: number; lowerPriority: boolean; banned: boolean } {
+  const strikesInWindow = guestStrikesInWindow(total, log, nowMs);
+  return { strikesInWindow, ...guestSanctionFromStrike(strikesInWindow) };
+}
+
 /** Host no-shows: 1 = avertissement ; 2 → compte fermé. */
 export function hostSanctionFromStrike(strike: number): { banned: boolean } {
   return { banned: strike >= 2 };
