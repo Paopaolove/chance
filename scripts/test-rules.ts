@@ -2213,5 +2213,103 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(i>0&&/guestSanctionsNeedRefresh\(state, now\)/.test(ctx.slice(i,i+400))&&/addEventListener\('change'[^]*refreshGuestSanctions\(\)/.test(ctx.slice(i,i+1200))&&!/setInterval/.test(ctx.slice(i,i+1200)),'Lot C p2: recalculated on open / foreground / change, no timer');
   ok(/addListener\('focus', refreshGuestSanctions\)/.test(pf),'Lot C p2: recalculated on profile access');
 }
+// ── 25/10 · Débug bloquants (audit 6448264) ─────────────────────────────────
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rd=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const CTX=require('../src/data/ChanceContext');
+  const MA=require('../src/utils/momentActions');
+  const LT=require('../src/utils/leaveTable');
+  const RE=require('../src/utils/reviewEligibility');
+  const PRT=require('../src/utils/participationRights');
+  const RL=require('../src/utils/refusalLabels');
+  const T=now-2*H, M=60e3;
+  const out=(x:any={})=>o({startsAt:iso(T),status:'full',spotsLeft:0,...x});
+  const g=(x:any={})=>rq({status:'confirmed',depositStatus:'held',...x});
+  const hostMe:any={id:'h1',firstName:'Hôte'};
+  // B1 · un moment terminé reste terminé (L36, L41, L48 ; 18/10 L116)
+  {
+    const base=S({currentUser:hostMe,outings:[out()],requests:[g({attendance:'present',presenceBy:'host'}),g({id:'r2',userId:'u2',userName:'Deux'})]});
+    const done=D(base,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'host',at:iso(T+20*M)}});
+    ok(done.outings[0].status==='completed','B1: setup host closure');
+    const nv=D(done,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r2',guestId:'u2',strike:0,reportedAt:iso(T+40*M),reportedByUserId:'h1'}});
+    ok(nv.requests[1].attendance==='absent'&&nv.requests[1].depositStatus==='noshow_pending'&&nv.outings[0].status==='completed'&&nv.outings[0].completedAt===done.outings[0].completedAt,'B1: « Pas venu » after closure → absence recorded, moment stays completed');
+    ok(D(nv,{type:'COMPLETE_OUTING',payload:{outingId:'o1',by:'host',at:iso(T+50*M)}})===nv,'B1: closure not replayable, completedAt not rewritten');
+    ok(!LT.canGuestLeaveTable({startsAt:iso(T),outingStatus:nv.outings[0].status,requestStatus:'confirmed',nowMs:T+45*M}),'B1: leave stays closed after a late « Pas venu »');
+    ok(RE.reviewEligibility({fromUserId:'u1',toUserId:'h1',outing:nv.outings[0],requests:nv.requests,reviews:[]}).reason!=='not_completed','B1: present guest can still rate (not not_completed)');
+    const self=D({...done,currentUser:{...me}},{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r2',guestId:'u2',strike:1,reportedAt:iso(T+40*M),reportedByUserId:'u2'}});
+    ok(self.requests[1].depositStatus==='forfeited'&&self.outings[0].status==='completed','B1: self-declared absence after closure → forfeited, moment stays completed');
+    const hn=D({...done,currentUser:{...me}},{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:0,banned:false,reportedAt:iso(T+40*M),reportedByUserId:'u2'}});
+    ok(hn.outings[0].hostNoShowReported===true&&hn.outings[0].status==='completed'&&hn.outings[0].completedAt===done.outings[0].completedAt,'B1: host declared absent after closure → case opened, moment stays completed');
+    const op=D(S({currentUser:hostMe,outings:[out()],requests:[g()]}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:0,reportedAt:iso(T+40*M),reportedByUserId:'h1'}});
+    ok(op.outings[0].status==='closed','B1: not yet completed → still closed (unchanged)');
+    ok(CTX.closedKeepingCompleted('completed')==='completed'&&CTX.closedKeepingCompleted('open')==='closed'&&CTX.closedKeepingCompleted('full')==='closed','B1: helper never downgrades completed');
+    const ctx=rd('data','ChanceContext.tsx');
+    ok(!/o\.id === outingId \? \{ \.\.\.o, status: 'closed' as const \}/.test(ctx),'B1: no unconditional closed on absence declarations');
+  }
+  // B2 · « Annuler le moment » refusé dès H, ou avec un présent / parti (L46, L159)
+  {
+    const fut=(x:any={})=>o({startsAt:iso(now+2*H),...x});
+    const C0=(st:any,at:number)=>D(st,{type:'CANCEL_OUTING',payload:{outingId:'o1',cancelledAt:iso(at)}});
+    const pre=S({currentUser:hostMe,outings:[fut()],requests:[g()]});
+    ok(C0(pre,now).outings[0].status==='cancelled'&&C0(pre,now).requests[0].depositStatus==='returned','B2: before H → cancel allowed, deposits returned');
+    ok(C0(pre,now+2*H-1).outings[0].status==='cancelled','B2: 1 ms before H → allowed');
+    ok(C0(pre,now+2*H)===pre,'B2: exactly at H → refused (reducer)');
+    ok(C0(pre,now+3*H)===pre,'B2: after H → refused (reducer)');
+    const present=S({currentUser:hostMe,outings:[fut()],requests:[g({attendance:'present',presenceBy:'guest'})]});
+    ok(C0(present,now)===present,'B2: present guest (H−15) → refused');
+    const left=S({currentUser:hostMe,outings:[out({status:'open'})],requests:[g({leftTableAt:iso(T+5*M),depositStatus:'forfeited'})]});
+    ok(C0(left,now)===left&&left.requests[0].depositStatus==='forfeited','B2: guest left → refused, his forfeit untouched (L46)');
+    ok(MA.hostCancelRefusal(fut(),[g()],now)===null&&MA.hostCancelRefusal(fut(),[g()],now+2*H)==='moment_started'&&MA.hostCancelRefusal(fut(),[g({attendance:'present'})],now)==='guests_on_site'&&MA.hostCancelRefusal(fut({status:'completed'}),[],now)==='already_completed'&&MA.hostCancelRefusal(fut({status:'cancelled'}),[],now)==='already_cancelled','B2: refusal codes');
+    ok(MA.hostCancelRefusal(fut({isPartnerListing:true}),[g()],now+3*H)===null,'B2: partner listing unchanged (mécanique à part)');
+    ok(['moment_started','guests_on_site','already_completed','already_cancelled'].every((c:string)=>RL.refusalLabel(c)!==RL.REFUSAL_FALLBACK),'B2: refusal codes have French labels');
+    const od=rd('screens','OutingDetailScreen.tsx');
+    const ib=od.indexOf('title="Annuler le moment"');
+    ok(ib>0&&/hostCancelRefusal\(outing, state\.requests\)/.test(od.slice(ib-600,ib)),'B2: button hidden by the same guard');
+    const cb=rd('data','ChanceContext.tsx');
+    const ic=cb.indexOf('const cancelOuting = useCallback(');
+    ok(ic>0&&/hostCancelRefusal\(outing, state\.requests, Date\.now\(\)\)/.test(cb.slice(ic,ic+600)),'B2: cancelOuting action refuses with a reason');
+  }
+  // B3 · déclarations sur le détail du moment (prod) : hôte absent (L135) + auto-déclaration (L65), de H à H+6 (L77, L130)
+  {
+    const oo=(x:any={})=>o({startsAt:iso(T),status:'full',...x});
+    const mine=g({userId:'u1'});
+    ok(!MA.canShowDeclareHostAbsent(oo(),mine,'u1',T)&&MA.canShowDeclareHostAbsent(oo(),mine,'u1',T+1)&&MA.canShowDeclareHostAbsent(oo(),mine,'u1',T+6*H)&&!MA.canShowDeclareHostAbsent(oo(),mine,'u1',T+6*H+1),'B3: host absent — window H → H+6 inclusive');
+    ok(MA.canShowDeclareHostAbsent(oo({status:'completed'}),mine,'u1',T+H),'B3: host absent — still possible after closure (18/10)');
+    ok(!MA.canShowDeclareHostAbsent(oo(),mine,'h1',T+H)&&!MA.canShowDeclareHostAbsent(oo(),g({status:'accepted'}),'u1',T+H)&&!MA.canShowDeclareHostAbsent(oo(),mine,'u2',T+H),'B3: host absent — confirmed guest only (L135)');
+    ok(!MA.canShowDeclareHostAbsent(oo({hostNoShowReported:true,hostNoShowCase:{status:'pending',reportedAt:iso(T+H)}}),mine,'u1',T+2*H)&&!MA.canShowDeclareHostAbsent(oo({hostNoShowCase:{status:'not_retained',reportedAt:iso(T+H)}}),mine,'u1',T+2*H),'B3: host absent — one declaration per moment (gel 17/10)');
+    ok(!MA.canShowDeclareHostAbsent(oo({hostPresence:{at:iso(T),byUserId:'u1'}}),mine,'u1',T+H)&&MA.canShowDeclareHostAbsent(oo({hostPresence:{at:iso(T),byUserId:'h1'}}),mine,'u1',T+H),'B3: host absent — not against own confirmation; host self-confirmed → disagreement allowed (18/10)');
+    ok(!MA.canShowDeclareHostAbsent(oo({isPartnerListing:true}),mine,'u1',T+H)&&!MA.canShowDeclareHostAbsent(oo({status:'cancelled'}),mine,'u1',T+H)&&!MA.canShowDeclareHostAbsent(oo(),g({leftTableAt:iso(T+M)}),'u1',T+H),'B3: host absent — not on partner / cancelled / after leaving');
+    const ns=g({attendance:'absent',depositStatus:'noshow_pending',noShowReportedAt:iso(T+H)});
+    ok(MA.canShowDeclareHostAbsent(oo(),ns,'u1',T+2*H)&&MA.canShowDeclareHostAbsent(oo(),g({attendance:'present',presenceBy:'guest'}),'u1',T+H),'B3: host absent — « Pas venu » guest within his 24 h (L83) and present guest');
+    ok(!MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T)&&MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T+1)&&MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T+6*H)&&!MA.canShowSelfDeclareAbsence(oo(),mine,'u1',T+6*H+1),'B3: self absence — window H → H+6 inclusive');
+    ok(!MA.canShowSelfDeclareAbsence(oo(),g({attendance:'present'}),'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo(),ns,'u1',T+2*H)&&!MA.canShowSelfDeclareAbsence(oo(),g({depositStatus:'returned'}),'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo(),mine,'h1',T+H)&&!MA.canShowSelfDeclareAbsence(oo({hostNoShowReported:true}),mine,'u1',T+H)&&!MA.canShowSelfDeclareAbsence(oo({isPartnerListing:true}),mine,'u1',T+H),'B3: self absence — only if nothing indicated, deposit held, host not declared absent, normal table');
+    const sd=D(S({currentUser:{...me},outings:[oo()],requests:[mine]}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,reportedAt:iso(T+H),reportedByUserId:'u1'}});
+    ok(sd.requests[0].depositStatus==='forfeited'&&sd.requests[0].attendance==='absent'&&sd.guestNoShowStrikes.u1===1&&!sd.requests[0].noShowReportedAt,'B3: self declaration → loss immediate, no contest window (L65)');
+    const od=rd('screens','OutingDetailScreen.tsx');
+    ok(/canShowDeclareHostAbsent\(outing, full, me\)[^]*title="L’hôte n’est pas venu"[^]*reportHostNoShow\(outing\.id\)/.test(od),'B3: « L’hôte n’est pas venu » on the moment detail, wired to reportHostNoShow');
+    ok(/canShowSelfDeclareAbsence\(outing, full, me\)[^]*title="Je ne suis pas venu"[^]*reportGuestNoShow\(full\.id\)/.test(od),'B3: « Je ne suis pas venu » on the moment detail, wired to reportGuestNoShow');
+    const iu=od.indexOf('title="L’hôte n’est pas venu"');
+    ok(iu>0&&!/isDemoEnabled\(\)/.test(od.slice(iu-1500,iu)),'B3: not behind the demo guard');
+  }
+  // B4 · pas de barème hôte « Pas venu » (L160)
+  {
+    const two=(()=>{
+      let st:any=S({currentUser:{...hostMe},outings:[out(),{...out(),id:'o2'}],requests:[g(),g({id:'r2',outingId:'o2'})]});
+      for(const id of ['o1','o2']){
+        st=D(st,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:id,hostId:'h1',strike:0,banned:false,reportedAt:iso(T+H),reportedByUserId:'u1'}});
+        st=D(st,{type:'EXPIRE_HOST_NO_SHOW_CONTEST',payload:{outingId:id,at:iso(T+H+24*H)}});
+      }
+      return st;
+    })();
+    ok(two.outings.every((x:any)=>x.hostNoShowCase?.status==='retained')&&two.hostNoShowStrikes.h1===2,'B4: two host absences retained and counted');
+    ok(!two.currentUser.banned&&!two.currentUser.bannedReason&&two.currentUser.hostNoShowCount===2,'B4: 2nd retained host absence → no account closure');
+    ok(two.requests.every((r:any)=>r.depositStatus==='returned'),'B4: guests still get their deposits back');
+    ok(PRT.hostNoShowSanctionFromStrike(1).banned===false&&PRT.hostNoShowSanctionFromStrike(5).banned===false&&PRT.hostPublishSanctionFromStrike(2).banned===true&&!('hostSanctionFromStrike' in PRT),'B4: host no-show scale removed; never-honor unchanged');
+    const pf=rd('screens','ProfileScreen.tsx');
+    ok(!/no-show hôte|entraînera un ban|hostNoShowCount/.test(pf),'B4: profile no longer announces a host ban');
+    ok(!/2e no-show hôte/.test(rd('data','ChanceContext.tsx')),'B4: no « 2e no-show hôte — compte suspendu » reason');
+  }
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

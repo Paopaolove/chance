@@ -167,7 +167,7 @@ export interface User {
   /** Publishes often / never honors: 1 = warning, 2+ = ban (mock). */
   hostPublishStrikeCount?: number;
   /**
-   * Compte fermé (démo) : 2e no-show hôte / never-honor, ou 3e absence invité.
+   * Compte fermé (démo) : 2e publication jamais honorée, ou 3e absence invité (pas de barème hôte « Pas venu », L160).
    * ≠ blockUser (blocage pair local).
    */
   banned?: boolean;

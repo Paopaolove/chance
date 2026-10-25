@@ -512,7 +512,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             style={styles.btn}
           />
           <Button
-            title="No-show hôte sur moi (1er/2e)"
+            title="Déclarer l’hôte absent"
             variant="ghost"
             disabled={busy}
             onPress={() =>
@@ -524,7 +524,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 if (!req) {
                   Alert.alert(
                     'Démo',
-                    'Il faut une place confirmée (outgoing) pour signaler le no-show hôte. Un 2e strike nécessite une autre sortie.',
+                    'Il faut une place confirmée (outgoing) pour déclarer l’hôte absent.',
                   );
                   return;
                 }

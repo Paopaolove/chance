@@ -236,20 +236,16 @@ function ProfileScreenInner() {
             <Text style={styles.banTitle}>{demoLabel('Compte suspendu (démo)')}</Text>
             <Text style={styles.banBody}>
               {demoLabel(
-                user.bannedReason ?? '2e no-show en tant qu’hôte — tu ne peux plus publier.',
+                user.bannedReason ?? 'Tu ne peux plus publier de moment.',
               )}
             </Text>
           </View>
-        ) : (user.hostNoShowCount ?? 0) === 1 ||
-          (user.hostPublishStrikeCount ?? 0) === 1 ? (
+        ) : (user.hostPublishStrikeCount ?? 0) === 1 ? (
+          // 25/10 · L160 : plus de barème hôte « Pas venu » ; seul l’avertissement publication jamais honorée reste.
           <View style={styles.warnBanner}>
             <Text style={styles.warnTitle}>Avertissement</Text>
             <Text style={styles.warnBody}>
-              {demoLabel(
-                (user.hostNoShowCount ?? 0) === 1
-                  ? '1er no-show hôte. Un 2e entraînera un ban (démo).'
-                  : '1er avertissement publication jamais honorée. Un 2e = ban (démo).',
-              )}
+              {demoLabel('1er avertissement publication jamais honorée. Un 2e = ban (démo).')}
             </Text>
           </View>
         ) : null}

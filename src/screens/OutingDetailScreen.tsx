@@ -2,6 +2,11 @@ import { demoLabel } from '../utils/devMode';
 import { hostReturnedDepositLine, isNoShowWindowOpen } from '../utils/depositH6';
 import { refusalLabel } from '../utils/refusalLabels';
 import {
+  canShowDeclareHostAbsent,
+  canShowSelfDeclareAbsence,
+  hostCancelRefusal,
+} from '../utils/momentActions';
+import {
   DISCOMFORT_REPORT_PROMPT_TEXT,
   discomfortReportPromptAction,
   shouldOfferReportAfterLeave,
@@ -94,6 +99,7 @@ export function OutingDetailScreen() {
     guestSelfPresent,
     confirmHostPresent,
     reportGuestNoShow,
+    reportHostNoShow,
     cancelRequest,
     getLateReportsForOthers,
     respondVenueAlternate,
@@ -694,6 +700,12 @@ export function OutingDetailScreen() {
                   );
                 }}
               />
+              {hostCancelRefusal(outing, state.requests) ? (
+                // 25/10 · B2 : dès H (ou présent / parti), plus d’annulation du moment.
+                <Text style={[styles.hint, { marginTop: spacing.md }]}>
+                  {refusalLabel(hostCancelRefusal(outing, state.requests) ?? undefined)}
+                </Text>
+              ) : (
               <Button
                 title="Annuler le moment"
                 variant="danger"
@@ -719,6 +731,8 @@ export function OutingDetailScreen() {
                           if (res.ok) {
                             Alert.alert('Moment annulé', demoLabel('Cautions rendues si besoin (mock).'));
                             navigation.goBack();
+                          } else {
+                            Alert.alert('Impossible', refusalLabel(res.reason));
                           }
                         },
                       },
@@ -727,6 +741,7 @@ export function OutingDetailScreen() {
                 }}
                 style={{ marginTop: spacing.md }}
               />
+              )}
             </>
           ) : (
             <Text style={styles.hint}>
@@ -1225,6 +1240,62 @@ export function OutingDetailScreen() {
                               } else {
                                 Alert.alert('Merci', 'Présence de l’hôte confirmée.');
                               }
+                            }}
+                            style={{ marginTop: spacing.sm }}
+                          />
+                        ) : null}
+                        {canShowDeclareHostAbsent(outing, full, me) ? (
+                          // 25/10 · B3 : tout invité confirmé, de H à H+6 (L135, L77, L130).
+                          <Button
+                            title="L’hôte n’est pas venu"
+                            variant="ghost"
+                            onPress={() => {
+                              Alert.alert(
+                                'Déclarer l’hôte absent ?',
+                                full.attendance === 'absent'
+                                  ? 'L’hôte t’a signalé « Pas venu » : ta déclaration vaut contestation. Ta caution passe en revue : rendue si l’absence de l’hôte est retenue, sinon perdue.'
+                                  : 'L’hôte a 24 h pour contester. Si son absence est retenue, les cautions des invités sont rendues.',
+                                [
+                                  { text: 'Retour', style: 'cancel' },
+                                  {
+                                    text: 'Déclarer absent',
+                                    style: 'destructive',
+                                    onPress: () => {
+                                      const res = reportHostNoShow(outing.id);
+                                      if (!res.ok) {
+                                        Alert.alert('Impossible', refusalLabel(res.reason, 'host_noshow'));
+                                      }
+                                    },
+                                  },
+                                ],
+                              );
+                            }}
+                            style={{ marginTop: spacing.sm }}
+                          />
+                        ) : null}
+                        {canShowSelfDeclareAbsence(outing, full, me) ? (
+                          // 25/10 · B3 : auto-déclaration, caution perdue tout de suite, sans contestation (L20, L65).
+                          <Button
+                            title="Je ne suis pas venu"
+                            variant="ghost"
+                            onPress={() => {
+                              Alert.alert(
+                                'Te déclarer absent ?',
+                                'Ta caution de 20 € est perdue tout de suite (6,90 € Moment / 13,10 € hôte), sans contestation possible.',
+                                [
+                                  { text: 'Retour', style: 'cancel' },
+                                  {
+                                    text: 'Je ne suis pas venu',
+                                    style: 'destructive',
+                                    onPress: () => {
+                                      const res = reportGuestNoShow(full.id);
+                                      if (!res.ok) {
+                                        Alert.alert('Impossible', refusalLabel(res.reason));
+                                      }
+                                    },
+                                  },
+                                ],
+                              );
                             }}
                             style={{ marginTop: spacing.sm }}
                           />

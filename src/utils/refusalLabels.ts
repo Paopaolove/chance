@@ -30,6 +30,11 @@ const LABELS: Record<string, string> = {
   invalid_start: 'Heure de début invalide.',
   // Démo « Revue des contestations » (25/10)
   review_expired: 'Revue terminée : 7 jours sans décision, la caution a été rendue.',
+  // « Annuler le moment » (hôte) — 25/10 · B2
+  moment_started: 'Le moment a commencé : il ne peut plus être annulé.',
+  guests_on_site: 'Un invité est déjà présent ou parti : le moment ne peut plus être annulé.',
+  already_completed: 'Ce moment est terminé.',
+  already_cancelled: 'Ce moment a déjà été annulé.',
   host_pending: 'L’absence de l’hôte n’est pas encore tranchée : la caution ne peut pas être perdue maintenant.',
 };
 

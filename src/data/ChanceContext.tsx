@@ -181,9 +181,11 @@ import {
   guestSanctionAt,
   guestSanctionFromStrike,
   guestStrikesInWindow,
-  hostSanctionFromStrike,
+  hostNoShowSanctionFromStrike,
+  hostPublishSanctionFromStrike,
 } from '../utils/participationRights';
 import { makeVenueKey } from '../utils/venue';
+import { hostCancelRefusal } from '../utils/momentActions';
 import {
   demoGuestReviewRefusal,
   demoHostReviewRefusal,
@@ -226,6 +228,16 @@ import {
 const CONFIRM_WINDOW_MS = 10 * 60 * 1000;
 
 /** Restore one reserved seat (after expire / cancel accepted|confirmed). Never reopen closed/cancelled/completed. */
+/**
+ * 25/10 · B1 : une déclaration d’absence (invité, hôte, jamais honorée) ferme la
+ * table, mais ne fait jamais repasser un moment terminé (`completed`) en `closed`.
+ * Présence et absence restent déclarables après la clôture (18/10) sans rouvrir le
+ * départ, la clôture ni les avis.
+ */
+export function closedKeepingCompleted(status: Outing['status']): Outing['status'] {
+  return status === 'completed' ? 'completed' : 'closed';
+}
+
 function withRestoredSeat(o: Outing): Outing {
   if (
     o.status === 'closed' ||
@@ -520,16 +532,11 @@ function retainHostNoShow(state: AppState, outingId: string, at: string): AppSta
       outingId,
     );
   }
+  // 25/10 · L160 : absence d’hôte retenue comptée (trace), sans barème ni fermeture.
   const strike = (state.hostNoShowStrikes[hostId] ?? 0) + 1;
-  const { banned } = hostSanctionFromStrike(strike);
   let currentUser = state.currentUser;
   if (currentUser && currentUser.id === hostId) {
-    currentUser = {
-      ...currentUser,
-      hostNoShowCount: strike,
-      banned: banned || currentUser.banned,
-      bannedReason: banned ? '2e no-show hôte — compte suspendu (démo)' : currentUser.bannedReason,
-    };
+    currentUser = { ...currentUser, hostNoShowCount: strike };
   }
   let next: AppState = {
     ...state,
@@ -678,12 +685,15 @@ function reducer(state: AppState, action: AppAction): AppState {
       // on CANCEL_REQUEST; host cancel never forfeits guest deposits.
       const { outingId } = action.payload;
       const target = state.outings.find((o) => o.id === outingId);
-      if (
-        !target ||
-        target.status === 'completed' ||
-        target.status === 'cancelled'
-      ) {
-        return state;
+      if (!target) return state;
+      // 25/10 · B2 : plus d’annulation dès H ni avec un présent / parti (L46, L159).
+      {
+        const atMs = action.payload.cancelledAt
+          ? new Date(action.payload.cancelledAt).getTime()
+          : Date.now();
+        if (hostCancelRefusal(target, state.requests, Number.isFinite(atMs) ? atMs : Date.now())) {
+          return state;
+        }
       }
       return {
         ...state,
@@ -2098,7 +2108,8 @@ function reducer(state: AppState, action: AppAction): AppState {
           o.id === outingId
             ? {
                 ...o,
-                status: 'closed' as const,
+                // 25/10 · B1 : un moment terminé reste terminé.
+                status: closedKeepingCompleted(o.status),
                 hostNoShowReported: true,
                 hostNoShowCase: disagreement
                   ? {
@@ -2547,7 +2558,7 @@ function reducer(state: AppState, action: AppAction): AppState {
               : r,
           ),
           outings: state.outings.map((o) =>
-            o.id === outingId ? { ...o, status: 'closed' as const } : o,
+            o.id === outingId ? { ...o, status: closedKeepingCompleted(o.status) } : o,
           ),
         };
       }
@@ -2597,7 +2608,7 @@ function reducer(state: AppState, action: AppAction): AppState {
             : r,
         ),
         outings: state.outings.map((o) =>
-          o.id === outingId ? { ...o, status: 'closed' as const } : o,
+          o.id === outingId ? { ...o, status: closedKeepingCompleted(o.status) } : o,
         ),
       };
     }
@@ -2629,7 +2640,7 @@ function reducer(state: AppState, action: AppAction): AppState {
           o.id === outingId
             ? {
                 ...o,
-                status: 'closed' as const,
+                status: closedKeepingCompleted(o.status),
                 hostNeverHonorReported: true,
               }
             : o,
@@ -4162,12 +4173,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (outingId: string): { ok: true } | { ok: false; reason: string } => {
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
-      if (outing.status === 'completed') {
-        return { ok: false, reason: 'already_completed' };
-      }
-      if (outing.status === 'cancelled') {
-        return { ok: false, reason: 'already_cancelled' };
-      }
+      // 25/10 · B2 : mêmes gardes que le reducer (terminé, annulé, dès H, présent / parti).
+      const refusal = hostCancelRefusal(outing, state.requests, Date.now());
+      if (refusal) return { ok: false, reason: refusal };
       clearOutingSchedules(outingId);
       // Partenaire annule avec des confirmés : cautions rendues + 1 avertissement.
       const partnerHadConfirmed =
@@ -6753,7 +6761,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return {
           ok: true,
           strike: prev,
-          banned: hostSanctionFromStrike(prev).banned,
+          banned: hostNoShowSanctionFromStrike(prev).banned,
         };
       }
       const hostId = outing.hostId;
@@ -7439,13 +7447,13 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         return {
           ok: true,
           strike: prev,
-          banned: hostSanctionFromStrike(prev).banned,
+          banned: hostPublishSanctionFromStrike(prev).banned,
         };
       }
       const hostId = outing.hostId;
       const prev = state.hostPublishStrikes[hostId] ?? 0;
       const strike = prev + 1;
-      const { banned } = hostSanctionFromStrike(strike);
+      const { banned } = hostPublishSanctionFromStrike(strike);
       dispatch({
         type: 'REPORT_HOST_NEVER_HONOR',
         payload: { outingId, hostId, strike, banned },
