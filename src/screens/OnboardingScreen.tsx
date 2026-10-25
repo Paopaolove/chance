@@ -535,7 +535,7 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
               </Text>
               <Text style={styles.rulesLine}>Si tu es là, on te la rend.</Text>
               <Text style={[styles.rulesLine, styles.rulesGap]}>
-                Si tu annules au moins 3 heures avant, on te la rend aussi.
+                Si tu annules au moins 1 heure avant, on te la rend aussi.
               </Text>
               <Text style={styles.rulesLine}>
                 Si tu annules trop tard ou tu ne viens pas, tu la perds :

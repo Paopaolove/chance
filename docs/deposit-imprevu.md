@@ -14,7 +14,7 @@
 | **Invitation (`budgetMaxEuros`)** | Plafond couvert **par l’hôte au lieu** — pas via l’app, pas un transfert P2P. |
 | **Addition** | Ce qui se règle sur place hors plafond — hors scope caution. |
 
-**Règle produit :** annulation libre invité **au moins 3 heures** avant `startsAt` → caution **rendue**.  
+**Règle produit :** annulation libre invité **au moins 1 heure** avant `startsAt` (H−1, 25/10 soir ; avant : 3 h) → caution **rendue**.  
 **Perdue** (trop tard / absence) → **6,90 € Chance + 13,10 € hôte**. Pas d’autres amendes inventées.
 
 ---
@@ -44,7 +44,7 @@ Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT
 
 | Événement | Détail code |
 |-----------|-------------|
-| Annulation **invité** confirmé **≥ 3 h** | `cancelRequest` + `isCancelFreeWindow` |
+| Annulation **invité** confirmé **≥ 1 h (H−1)** | `cancelRequest` + `isCancelFreeWindow` |
 | Annulation **hôte** d’une place confirmée | `cancelRequest` `by: 'host'` |
 | **Annulation sortie** par l’hôte | `cancelOuting` — toutes les cautions held → returned |
 | **No-show hôte** | `reportHostNoShow` → `RETURN_DEPOSITS_FOR_OUTING` |
@@ -58,16 +58,16 @@ Helper UI : `describeDepositOutcome` / `describeDepositForfeitMoment` / `DEPOSIT
 
 | Événement | Détail code |
 |-----------|-------------|
-| Annulation **invité** confirmé **trop tard** (< 3 h) | `cancelRequest` guest — **sauf** exemption joker (reste `returned`) |
+| Annulation **invité** confirmé **trop tard** (après H−1) | `cancelRequest` guest — **sauf** exemption joker (reste `returned`) |
 | **Absence** invité après confirm | `reportGuestNoShow` — **sauf** exemption joker (pas de strike / forfeit) |
 | **Imprévu sans réponse à `startsAt`** (`auto_refused`) si reporter **invité** | Forfeit reporter (sauf joker ensuite) |
 
-### Imprévu refusé (manuel) — règle des 3 h + joker
+### Imprévu refusé (manuel) — règle H−1 + joker
 
 | Décision | Effet caution | Sortie |
 |----------|---------------|--------|
 | **Accepté** | Caution du reporter invité held → `returned` ; pas d’absence ; sa place seule | Sortie continue (autres confirmés restent) |
-| **Refusé** | Caution **reste `held`** — règle 3 h ; **ou joker** → returned, hôte 0 € | Sortie continue |
+| **Refusé** | Caution **reste `held`** — règle H−1 ; **ou joker** → returned, hôte 0 € | Sortie continue |
 | **Auto-refusé** à l’heure | Comme refus + absence → forfeit si invité ; **ou joker** | Sortie non annulée par l’imprévu |
 
 Une seule déclaration d’imprévu **par personne et par sortie** (motif + raison écrite).  
@@ -93,11 +93,11 @@ Ne pas ajouter dans le code ni l’UI :
 
 | Produit | Implémentation |
 |---------|----------------|
-| Free cancel ≥ 3 h | `CANCEL_FREE_BEFORE_HOURS` + `isCancelFreeWindow` |
+| Free cancel ≥ 1 h (H−1) | `CANCEL_FREE_BEFORE_HOURS` + `isCancelFreeWindow` |
 | Caution 20 € | `DEPOSIT_EUROS` |
 | Forfeit split 6,90 / 13,10 | `DEPOSIT_FORFEIT_CHANCE_EUROS` / `DEPOSIT_FORFEIT_HOST_EUROS` |
 | Joker 1× / mois Paris | `jokerUsedMonthKey` + `parisMonthKey` + conso atomique reducer / lock |
 | Exemption après joker | `isJokerExempted` — cancel / no-show ne re-perdent pas la caution |
 | Imprévu 1× / personne | garde `REPORT_IMPREVU` |
 | Accepté → pas absence + caution reporter rendue ; groupe intact | `RESPOND_IMPREVU` accepted (sans fermer la sortie) |
-| Refus → règle 3 h (ou joker) | **pas** de forfeit immédiat au refus manuel |
+| Refus → règle H−1 (ou joker) | **pas** de forfeit immédiat au refus manuel |

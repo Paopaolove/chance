@@ -772,7 +772,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Host cancels the whole outing (incl. confirmed). Distinct from CLOSE_OUTING.
       // Outing status → cancelled (≠ closed clôture / completed terminée).
       // Deposits: host-initiated → always returned (guests not at fault).
-      // Guest free-cancel window is CANCEL_FREE_BEFORE_HOURS (≥3h) via isCancelFreeWindow
+      // Guest free-cancel window is CANCEL_FREE_BEFORE_HOURS (≥1h, 25/10 soir) via isCancelFreeWindow
       // on CANCEL_REQUEST; host cancel never forfeits guest deposits.
       const { outingId } = action.payload;
       const target = state.outings.find((o) => o.id === outingId);
@@ -5264,7 +5264,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         };
       }
 
-      // Manual refuse → normal 3h rule: deposit stays held (no immediate forfeit).
+      // Manual refuse → normal H−1 rule: deposit stays held (no immediate forfeit).
       // Forfeit on absence is via auto_refused at startsAt or later cancel/ghost.
       dispatch({
         type: 'RESPOND_IMPREVU',
@@ -5279,7 +5279,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Imprévu refusé',
-        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). Tu peux utiliser ton joker si tu en as un.`,
+        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heure avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). Tu peux utiliser ton joker si tu en as un.`,
         createdAt: nowIso,
         type: 'imprevu',
         outingId: report.outingId,

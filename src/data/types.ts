@@ -392,7 +392,7 @@ export interface Request {
    * Caution mock (20 €, DEPOSIT_EUROS) — ≠ frais Moment, ≠ invitation / addition.
    * - none: pas bloquée (non confirmé)
    * - held: bloquée une fois à confirmSlot (idempotent, pas de double hold)
-   * - returned: rendue (cancel ≥3h, host cancelOuting / no-show, venue alternate
+   * - returned: rendue (cancel ≥1h — H−1, 25/10 soir, host cancelOuting / no-show, venue alternate
    *   refused, imprévu accepté…)
    * - forfeited: perdue (annulation trop tard, absence, auto_refuse imprévu invité à startsAt) — split 6,90/13,10
    * Voir docs/deposit-imprevu.md. Pas d’amendes inventées.
@@ -530,7 +530,7 @@ export type ImprevuMotive =
  * Cycle imprévu :
  * - pending: en attente de la 1re réponse d’un responderId
  * - accepted: accord → caution(s) returned + sortie annulée (pas de no-show)
- * - refused: refus explicite → caution reste held, règle des 3 h normale
+ * - refused: refus explicite → caution reste held, règle H−1 normale
  * - auto_refused: aucune réponse à startsAt → traité comme refus + absence
  *   (forfeit si reporter invité)
  */
@@ -542,7 +542,7 @@ export type ImprevuStatus =
 
 /**
  * Signal imprévu — une fois par personne et par sortie (pas de fil libre).
- * Accepté ≠ no-show. Refus ≠ forfeit immédiat (règle 3 h). Voir docs/deposit-imprevu.md.
+ * Accepté ≠ no-show. Refus ≠ forfeit immédiat (règle H−1). Voir docs/deposit-imprevu.md.
  */
 /**
  * Statut caution d’une demande.
@@ -840,7 +840,7 @@ export type AppAction =
   | { type: 'CLOSE_OUTING'; payload: { outingId: string } }
   /**
    * Host cancels the whole outing (including confirmed guests). Cancels all
-   * active requests; restores deposits per product (≥3h free window / host-
+   * active requests; restores deposits per product (≥1h free window / host-
    * initiated). Distinct from CLOSE_OUTING and COMPLETE_OUTING.
    */
   | { type: 'CANCEL_OUTING'; payload: { outingId: string; cancelledAt: string } }
@@ -888,7 +888,7 @@ export type AppAction =
         respondedByUserId?: string;
         /**
          * Forfeit reporter guest deposit — used for auto_refused at startsAt
-         * (absence). Manual refuse must NOT set this (règle 3 h).
+         * (absence). Manual refuse must NOT set this (règle H−1).
          */
         forfeitReporterDeposit?: boolean;
         /**

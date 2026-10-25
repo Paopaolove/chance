@@ -33,8 +33,12 @@ s=D(s,{type:'CONFIRM_SLOT',payload:{requestId:'r1',confirmedAt:iso(now+60e3)}});
 ok(s.requests[0].status==='confirmed'&&s.requests[0].depositStatus==='held','confirm holds caution');
 ok(D(s,{type:'DECLINE_REQUEST',payload:{requestId:'r1'}}).requests[0].status==='confirmed','decline must not hit confirmed');
 // cancel windows
-ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}}).requests[0].depositStatus==='returned','cancel ≥3h returned');
-ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+3*H),by:'guest'}}).requests[0].depositStatus==='forfeited','late cancel forfeited');
+ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}}).requests[0].depositStatus==='returned','cancel ≥1h returned');
+// 25/10 soir · Annulation invité : H−1 (plus 3 h) — moment à now+5 h
+ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+3*H),by:'guest'}}).requests[0].depositStatus==='returned','H−1: cancel at H−2 now returned (was lost with 3 h)');
+ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+4*H),by:'guest'}}).requests[0].depositStatus==='returned','H−1: cancel at H−1 exactly returned');
+ok(D(s,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+4*H+60e3),by:'guest'}}).requests[0].depositStatus==='forfeited','H−1: cancel at H−59 min forfeited');
+ok(PR.CANCEL_FREE_BEFORE_HOURS===1&&PR.isCancelFreeWindow(iso(now+H),now)&&!PR.isCancelFreeWindow(iso(now+H-1),now),'H−1: CANCEL_FREE_BEFORE_HOURS = 1, H−1 included');
 ok(D(s,{type:'CANCEL_OUTING',payload:{outingId:'o1'}}).requests[0].depositStatus==='returned','host cancel returns');
 ok(PR.DEPOSIT_FORFEIT_CHANCE_EUROS+PR.DEPOSIT_FORFEIT_HOST_EUROS===20,'split 6.90+13.10');
 // complete + present + photos
@@ -198,6 +202,15 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const jk=(startOffMs:number,x:any={},usedAt=now)=>D(S({outings:[o({startsAt:iso(now+startOffMs)})],requests:[rq({status:'confirmed',depositStatus:'held',...x})],imprevuReports:[{id:'i1',outingId:'o1',requestId:'r1',reporterId:'u1',reporterName:'Moi',responderIds:['h1'],motive:'autre',reason:'x',status:'refused',createdAt:iso(now)}]}),{type:'USE_JOKER_ON_IMPREVU',payload:{imprevuId:'i1',requestId:'r1',monthKey:'2099-01',usedAt:iso(usedAt)}});
   ok(jk(60*60e3).requests[0].depositStatus==='returned'&&jk(60*60e3).imprevuReports[0].jokerUsed===true,'joker before H ok');
   ok(jk(-60e3).requests[0].depositStatus==='held'&&!jk(-60e3).imprevuReports[0].jokerUsed,'joker after start refused');
+  // 25/10 soir · H−1 : le joker reste possible dans la dernière heure (avant H)
+  ok(jk(30*60e3).requests[0].depositStatus==='returned'&&jk(30*60e3).imprevuReports[0].jokerUsed===true&&jk(60e3).requests[0].depositStatus==='returned','H−1: joker still works within the last hour (H−30, H−1 min)');
+  {
+    const lc=D(jk(30*60e3),{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}});
+    ok(lc.requests[0].depositStatus==='returned','H−1: cancel within the hour after joker → stays returned');
+    const fs=require('node:fs'), path=require('node:path');
+    const txt=['screens/OnboardingScreen.tsx','screens/ConfirmSlotScreen.tsx','screens/OutingDetailScreen.tsx','screens/ImprevuScreen.tsx','data/ChanceContext.tsx','data/pricing.ts'].map((f)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8')).join('\n');
+    ok(!/3 heures|règle des 3 h/.test(txt)&&/au moins 1 heure avant/.test(txt),'H−1: no « 3 heures » left in cancellation texts');
+  }
   ok(jk(0).requests[0].depositStatus==='held','joker at H refused');
   ok(jk(60*60e3,{attendance:'present'}).requests[0].depositStatus==='held','joker refused when present');
   ok(jk(60*60e3,{guestArrivedAt:iso(now)}).requests[0].depositStatus==='held','joker refused when arrived');
@@ -2149,12 +2162,12 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
 
   // 7) « (démo) » / « (mock) » masqués hors __DEV__
   {
-    const samples=['Caution remboursée (mock).','Continuer avec Apple (démo)','Photo de la façade facultative (démo : stub) — elle ne bloque rien.','Place libérée — caution rendue (au moins 3 heures avant, mock). Les autres confirmés restent.','rejoins (caution 20 €, Stripe mock). La place','Caution 20 € bloquée à la confirmation (Stripe mock).','visible dans ses Demandes (démo : quand currentUser = destinataire). Pas publiée'];
+    const samples=['Caution remboursée (mock).','Continuer avec Apple (démo)','Photo de la façade facultative (démo : stub) — elle ne bloque rien.','Place libérée — caution rendue (au moins 1 heure avant, mock). Les autres confirmés restent.','rejoins (caution 20 €, Stripe mock). La place','Caution 20 € bloquée à la confirmation (Stripe mock).','visible dans ses Demandes (démo : quand currentUser = destinataire). Pas publiée'];
     ok(samples.every((x)=>DM.demoLabel(x)===x),'25/10 p7: dev → labels unchanged');
     (globalThis as any).__DEV__=false;
     try {
       const out=samples.map((x)=>DM.demoLabel(x));
-      ok(JSON.stringify(out)===JSON.stringify(['Caution remboursée.','Continuer avec Apple','Photo de la façade facultative — elle ne bloque rien.','Place libérée — caution rendue (au moins 3 heures avant). Les autres confirmés restent.','rejoins (caution 20 €). La place','Caution 20 € bloquée à la confirmation.','visible dans ses Demandes. Pas publiée']),'25/10 p7: prod → mentions removed, rest unchanged: '+JSON.stringify(out));
+      ok(JSON.stringify(out)===JSON.stringify(['Caution remboursée.','Continuer avec Apple','Photo de la façade facultative — elle ne bloque rien.','Place libérée — caution rendue (au moins 1 heure avant). Les autres confirmés restent.','rejoins (caution 20 €). La place','Caution 20 € bloquée à la confirmation.','visible dans ses Demandes. Pas publiée']),'25/10 p7: prod → mentions removed, rest unchanged: '+JSON.stringify(out));
       ok(DM.demoLabel('Seul un invité confirmé : 24 h.')==='Seul un invité confirmé : 24 h.','25/10 p7: other text untouched (French spacing kept)');
     } finally { (globalThis as any).__DEV__=true; }
     // aucun libellé brut hors appel demoLabel(…) dans les écrans et composants (menu démo exclu)
@@ -2383,18 +2396,21 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const DV=require('../src/utils/devMode');
   const T0=Date.parse('2026-10-25T18:00:00.000Z'), M=60e3;
   ok(MC.nextMomentBoundaryMs(T0,T0-M)===T0&&MC.nextMomentBoundaryMs(T0,T0)===T0+1&&MC.nextMomentBoundaryMs(T0,T0+5*H)===T0+6*H&&MC.nextMomentBoundaryMs(T0,T0+6*H)===T0+6*H+1&&MC.nextMomentBoundaryMs(T0,T0+6*H+1)===null,'Lot E: boundaries H, H+6 (presence) and just after H+6 (absences)');
-  ok(MC.nextMomentRefreshDelayMs(T0,T0-10*H)===H&&MC.nextMomentRefreshDelayMs(T0,T0-3*H-1000)===1005&&MC.nextMomentRefreshDelayMs(T0,T0+H)===MC.MOMENT_CLOCK_TICK_MS&&MC.nextMomentRefreshDelayMs(T0,T0-2)===7,'Lot E: refresh delay = next boundary (+5 ms), 30 s tick around the moment, capped at 1 h');
+  ok(MC.nextMomentRefreshDelayMs(T0,T0-10*H)===H&&MC.nextMomentRefreshDelayMs(T0,T0-H-1000)===1005&&MC.nextMomentRefreshDelayMs(T0,T0+H)===MC.MOMENT_CLOCK_TICK_MS&&MC.nextMomentRefreshDelayMs(T0,T0-2)===7,'Lot E: refresh delay = next boundary (+5 ms), 30 s tick around the moment, capped at 1 h');
   ok(MC.nextMomentRefreshDelayMs(T0,T0+6*H+2*M)===null&&MC.nextMomentRefreshDelayMs(NaN,T0)===null,'Lot E: nothing scheduled after H+6 (+1 min) or with an invalid start');
   // chaque bascule d’un bouton tombe sur une borne : juste avant / à la borne, l’état change
   const out:any={id:'o1',hostId:'h1',status:'full',startsAt:new Date(T0).toISOString()};
   const g:any={id:'r1',outingId:'o1',userId:'u1',status:'confirmed',depositStatus:'held'};
   const flips=(f:(n:number)=>boolean)=>{const r:number[]=[];for(let n=T0-4*H;n<=T0+7*H;n+=M){if(f(n)!==f(n+M)){let lo=n,hi=n+M;while(hi-lo>1){const mid=Math.floor((lo+hi)/2);if(f(mid)===f(lo))lo=mid;else hi=mid;}r.push(hi);}}return r;};
   const B=MC.momentBoundariesMs(T0);
+  const PRc=require('../src/data/pricing');
+  ok(!B.includes(T0-3*H)&&B.includes(T0-H)&&B.includes(T0-H+1)&&!MC.isMomentClockHot(T0,T0-H-1)&&MC.isMomentClockHot(T0,T0-H),'25/10 soir H−1: clock boundary moved from H−3 to H−1, hot window from H−1');
   const checks:[string,(n:number)=>boolean][]=[
     ['cancel',(n)=>MA.hostCancelRefusal(out,[g],n)===null],
     ['host absent',(n)=>MA.canShowDeclareHostAbsent(out,g,'u1',n)],
     ['self absence',(n)=>MA.canShowSelfDeclareAbsence(out,g,'u1',n)],
     ['presence',(n)=>OA2.isPresenceWindowOpen(out,n)],
+    ['free cancel (H−1)',(n)=>PRc.isCancelFreeWindow(out.startsAt,n)],
   ];
   for(const [name,f] of checks){const fl=flips(f);ok(fl.length>0&&fl.every((x:number)=>B.includes(x)),'Lot E: '+name+' switches only on a scheduled boundary');}
   const od=rd('screens','OutingDetailScreen.tsx'), hk=rd('utils','useMomentClock.ts');

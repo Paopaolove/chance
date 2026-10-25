@@ -18,8 +18,11 @@ export const DEPOSIT_FORFEIT_HOST_EUROS = 13.1;
  */
 export const DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS = DEPOSIT_EUROS;
 
-/** Annulation au moins N heures avant startsAt → caution rendue (heure serveur). */
-export const CANCEL_FREE_BEFORE_HOURS = 3;
+/**
+ * Annulation au moins N heures avant startsAt → caution rendue (heure serveur).
+ * 25/10 soir · Annulation invité : H−1 (plus 3 h). H−1 pile = encore rendue.
+ */
+export const CANCEL_FREE_BEFORE_HOURS = 1;
 
 export function isCancelFreeWindow(
   startsAtIso: string,
@@ -161,7 +164,7 @@ export function describeDepositOutcome(
 ): string {
   switch (status) {
     case 'held':
-      return `Caution ${DEPOSIT_EUROS} € bloquée à la confirmation. Rendue si tu annules au moins ${CANCEL_FREE_BEFORE_HOURS} heures avant, si l’hôte annule / ne vient pas, si un imprévu est accepté (ou joker), ou si tu refuses un lieu alternatif. Perdue si annulation trop tard ou absence.`;
+      return `Caution ${DEPOSIT_EUROS} € bloquée à la confirmation. Rendue si tu annules au moins ${CANCEL_FREE_BEFORE_HOURS} heure avant, si l’hôte annule / ne vient pas, si un imprévu est accepté (ou joker), ou si tu refuses un lieu alternatif. Perdue si annulation trop tard ou absence.`;
     case 'returned':
       return `Caution ${DEPOSIT_EUROS} € rendue.`;
     case 'returned_discomfort_leave':

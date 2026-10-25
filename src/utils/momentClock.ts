@@ -13,15 +13,15 @@ import {
 const MIN = 60 * 1000;
 const HOUR = 60 * MIN;
 
-/** Battement de sécurité pendant la période sensible (H−3 h → H+6 h + 1 min). */
+/** Battement de sécurité pendant la période sensible (H−1 h → H+6 h + 1 min). */
 export const MOMENT_CLOCK_TICK_MS = 30 * 1000;
 
 /** Bornes (ms absolues) qui changent l’affichage, dans l’ordre. */
 export function momentBoundariesMs(startMs: number): number[] {
   if (!Number.isFinite(startMs)) return [];
   return [
-    startMs - 3 * HOUR, // désistement gratuit (≥ 3 h)
-    startMs - HOUR, // chat (table normale)
+    startMs - HOUR, // chat (table normale) ; désistement gratuit encore ouvert (H−1 inclus)
+    startMs - HOUR + 1, // 25/10 soir : désistement gratuit fermé juste après H−1
     startMs - PRESENCE_MARK_FROM_BEFORE_MS, // présence H−15
     startMs, // H : plus d’annulation, absences ouvertes (H exclu → +1 ms)
     startMs + 1,
@@ -40,7 +40,7 @@ export function nextMomentBoundaryMs(startMs: number, nowMs: number): number | n
 /** Vrai pendant la période où un battement court est utile. */
 export function isMomentClockHot(startMs: number, nowMs: number): boolean {
   if (!Number.isFinite(startMs)) return false;
-  return nowMs >= startMs - 3 * HOUR && nowMs <= startMs + DEPOSIT_SILENCE_RETURN_AFTER_MS + MIN;
+  return nowMs >= startMs - HOUR && nowMs <= startMs + DEPOSIT_SILENCE_RETURN_AFTER_MS + MIN;
 }
 
 /**

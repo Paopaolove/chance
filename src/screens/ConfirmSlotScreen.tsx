@@ -334,7 +334,7 @@ export function ConfirmSlotScreen() {
         ) : null}
         <Text style={styles.depositSub}>
           Caution {DEPOSIT_EUROS} € (ce n’est pas l’invitation). Rendue si tu
-          viens, si tu annules au moins 3 heures avant, ou si {partner ? 'le lieu' : 'l’hôte'} annule.
+          viens, si tu annules au moins 1 heure avant, ou si {partner ? 'le lieu' : 'l’hôte'} annule.
           Perdue si trop tard ou absence : 6,90 € Moment / 13,10 € {partner ? 'lieu' : 'hôte'}.
         </Text>
       </View>

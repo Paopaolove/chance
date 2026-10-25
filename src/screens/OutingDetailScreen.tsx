@@ -331,7 +331,7 @@ export function OutingDetailScreen() {
                 else
                   Alert.alert(
                     'Imprévu refusé',
-                    'Caution encore bloquée. Annule au moins 3 heures avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). L’invité peut utiliser son joker.',
+                    'Caution encore bloquée. Annule au moins 1 heure avant pour la récupérer ; trop tard ou absence → perdue (6,90 € Moment / 13,10 € hôte). L’invité peut utiliser son joker.',
                   );
               }}
               style={{ marginTop: spacing.sm }}
@@ -1046,7 +1046,7 @@ export function OutingDetailScreen() {
                         ? 'accepté — moment annulé'
                         : getMyImprevu(outing.id)!.status === 'auto_refused'
                           ? 'sans réponse à l’heure'
-                          : 'refusé — au moins 3 heures / joker'}
+                          : 'refusé — au moins 1 heure avant / joker'}
                 </Text>
               ) : (
                 <Button
@@ -1357,7 +1357,7 @@ export function OutingDetailScreen() {
                         ? 'accepté — caution rendue'
                         : getMyImprevu(outing.id)!.status === 'auto_refused'
                           ? 'sans réponse — absence'
-                          : 'refusé — au moins 3 heures / joker'}
+                          : 'refusé — au moins 1 heure avant / joker'}
                 </Text>
               ) : (
                 <Button
@@ -1404,7 +1404,7 @@ export function OutingDetailScreen() {
                 getRequestById(myRequest.id)?.depositStatus === 'held' ? (
                 <Text style={styles.hint}>
                   {demoLabel(
-                    'Caution 20 € bloquée (mock). Rendue si tu annules au moins 3 heures avant, si l’hôte annule / imprévu accepté / joker ; perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).',
+                    'Caution 20 € bloquée (mock). Rendue si tu annules au moins 1 heure avant, si l’hôte annule / imprévu accepté / joker ; perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).',
                   )}
                 </Text>
               ) : null}
@@ -1592,7 +1592,7 @@ export function OutingDetailScreen() {
                     Alert.alert(
                       'Désistement',
                       res.depositReturned
-                        ? demoLabel('Place libérée — caution rendue (au moins 3 heures avant, mock). Les autres confirmés restent.')
+                        ? demoLabel('Place libérée — caution rendue (au moins 1 heure avant, mock). Les autres confirmés restent.')
                         : res.depositForfeited
                           ? `Place libérée — ${describeDepositForfeitMoment()} Les autres confirmés restent.`
                           : 'Place libérée. Les autres confirmés restent.',

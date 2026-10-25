@@ -32,9 +32,9 @@ export type DepositMutationResult =
 export interface DepositsService {
   /** Bloque 20 € à la confirmation (idempotent). */
   hold(requestId: string): Promise<DepositMutationResult> | DepositMutationResult;
-  /** Rend la caution (cancel ≥3 h, hôte annule, imprévu accepté…). */
+  /** Rend la caution (cancel ≥1 h, hôte annule, imprévu accepté…). */
   release(requestId: string): Promise<DepositMutationResult> | DepositMutationResult;
-  /** Perd la caution (cancel <3 h, ghost…). */
+  /** Perd la caution (cancel <1 h, ghost…). */
   forfeit(requestId: string): Promise<DepositMutationResult> | DepositMutationResult;
   getStatus(requestId: string): Promise<DepositStatus> | DepositStatus;
 }

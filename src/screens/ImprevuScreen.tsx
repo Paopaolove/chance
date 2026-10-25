@@ -148,7 +148,7 @@ export function ImprevuScreen() {
             ? 'Joker utilisé — caution rendue · ce n’est pas une absence · hôte 0 €'
             : existing.status === 'auto_refused'
               ? 'Sans réponse à l’heure — refus + absence (caution perdue : 6,90 € Moment / 13,10 € hôte si invité)'
-              : 'Refusé — caution encore bloquée · au moins 3 heures pour annuler sans perdre';
+              : 'Refusé — caution encore bloquée · jusqu’à 1 heure avant pour annuler sans perdre';
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {otherHeader}
@@ -214,7 +214,7 @@ export function ImprevuScreen() {
         Une fois par personne et par moment. Motif + raison écrite ; l’autre
         accepte ou refuse — pas de chat libre (réservé à H−1). Accepté → caution
         20 € rendue et moment annulé (ce n’est pas une absence). Refusé → tu
-        peux utiliser ton joker, sinon règle des 3 heures (trop tard / absence
+        peux utiliser ton joker, sinon règle d’1 heure avant (trop tard / absence
         → 6,90 € Moment / 13,10 € hôte).
       </Text>
 
