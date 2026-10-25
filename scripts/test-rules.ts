@@ -2265,7 +2265,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(['moment_started','guests_on_site','already_completed','already_cancelled'].every((c:string)=>RL.refusalLabel(c)!==RL.REFUSAL_FALLBACK),'B2: refusal codes have French labels');
     const od=rd('screens','OutingDetailScreen.tsx');
     const ib=od.indexOf('title="Annuler le moment"');
-    ok(ib>0&&/hostCancelRefusal\(outing, state\.requests\)/.test(od.slice(ib-600,ib)),'B2: button hidden by the same guard');
+    ok(ib>0&&/hostCancelRefusal\(outing, state\.requests, nowMs\)/.test(od.slice(ib-600,ib)),'B2: button hidden by the same guard');
     const cb=rd('data','ChanceContext.tsx');
     const ic=cb.indexOf('const cancelOuting = useCallback(');
     ok(ic>0&&/hostCancelRefusal\(outing, state\.requests, Date\.now\(\)\)/.test(cb.slice(ic,ic+600)),'B2: cancelOuting action refuses with a reason');
@@ -2287,8 +2287,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     const sd=D(S({currentUser:{...me},outings:[oo()],requests:[mine]}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,reportedAt:iso(T+H),reportedByUserId:'u1'}});
     ok(sd.requests[0].depositStatus==='forfeited'&&sd.requests[0].attendance==='absent'&&sd.guestNoShowStrikes.u1===1&&!sd.requests[0].noShowReportedAt,'B3: self declaration → loss immediate, no contest window (L65)');
     const od=rd('screens','OutingDetailScreen.tsx');
-    ok(/canShowDeclareHostAbsent\(outing, full, me\)[^]*title="L’hôte n’est pas venu"[^]*reportHostNoShow\(outing\.id\)/.test(od),'B3: « L’hôte n’est pas venu » on the moment detail, wired to reportHostNoShow');
-    ok(/canShowSelfDeclareAbsence\(outing, full, me\)[^]*title="Je ne suis pas venu"[^]*reportGuestNoShow\(full\.id\)/.test(od),'B3: « Je ne suis pas venu » on the moment detail, wired to reportGuestNoShow');
+    ok(/canShowDeclareHostAbsent\(outing, full, me, nowMs\)[^]*title="L’hôte n’est pas venu"[^]*reportHostNoShow\(outing\.id\)/.test(od),'B3: « L’hôte n’est pas venu » on the moment detail, wired to reportHostNoShow');
+    ok(/canShowSelfDeclareAbsence\(outing, full, me, nowMs\)[^]*title="Je ne suis pas venu"[^]*reportGuestNoShow\(full\.id\)/.test(od),'B3: « Je ne suis pas venu » on the moment detail, wired to reportGuestNoShow');
     const iu=od.indexOf('title="L’hôte n’est pas venu"');
     ok(iu>0&&!/isDemoEnabled\(\)/.test(od.slice(iu-1500,iu)),'B3: not behind the demo guard');
   }
@@ -2310,6 +2310,43 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(!/no-show hôte|entraînera un ban|hostNoShowCount/.test(pf),'B4: profile no longer announces a host ban');
     ok(!/2e no-show hôte/.test(rd('data','ChanceContext.tsx')),'B4: no « 2e no-show hôte — compte suspendu » reason');
   }
+}
+// ── 25/10 · Lot E : rafraîchissement à H / H+6 et Paywall hors __DEV__ ───────
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rd=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const MC=require('../src/utils/momentClock');
+  const MA=require('../src/utils/momentActions');
+  const OA2=require('../src/utils/outingActive');
+  const DV=require('../src/utils/devMode');
+  const T0=Date.parse('2026-10-25T18:00:00.000Z'), M=60e3;
+  ok(MC.nextMomentBoundaryMs(T0,T0-M)===T0&&MC.nextMomentBoundaryMs(T0,T0)===T0+1&&MC.nextMomentBoundaryMs(T0,T0+5*H)===T0+6*H&&MC.nextMomentBoundaryMs(T0,T0+6*H)===T0+6*H+1&&MC.nextMomentBoundaryMs(T0,T0+6*H+1)===null,'Lot E: boundaries H, H+6 (presence) and just after H+6 (absences)');
+  ok(MC.nextMomentRefreshDelayMs(T0,T0-10*H)===H&&MC.nextMomentRefreshDelayMs(T0,T0-3*H-1000)===1005&&MC.nextMomentRefreshDelayMs(T0,T0+H)===MC.MOMENT_CLOCK_TICK_MS&&MC.nextMomentRefreshDelayMs(T0,T0-2)===7,'Lot E: refresh delay = next boundary (+5 ms), 30 s tick around the moment, capped at 1 h');
+  ok(MC.nextMomentRefreshDelayMs(T0,T0+6*H+2*M)===null&&MC.nextMomentRefreshDelayMs(NaN,T0)===null,'Lot E: nothing scheduled after H+6 (+1 min) or with an invalid start');
+  // chaque bascule d’un bouton tombe sur une borne : juste avant / à la borne, l’état change
+  const out:any={id:'o1',hostId:'h1',status:'full',startsAt:new Date(T0).toISOString()};
+  const g:any={id:'r1',outingId:'o1',userId:'u1',status:'confirmed',depositStatus:'held'};
+  const flips=(f:(n:number)=>boolean)=>{const r:number[]=[];for(let n=T0-4*H;n<=T0+7*H;n+=M){if(f(n)!==f(n+M)){let lo=n,hi=n+M;while(hi-lo>1){const mid=Math.floor((lo+hi)/2);if(f(mid)===f(lo))lo=mid;else hi=mid;}r.push(hi);}}return r;};
+  const B=MC.momentBoundariesMs(T0);
+  const checks:[string,(n:number)=>boolean][]=[
+    ['cancel',(n)=>MA.hostCancelRefusal(out,[g],n)===null],
+    ['host absent',(n)=>MA.canShowDeclareHostAbsent(out,g,'u1',n)],
+    ['self absence',(n)=>MA.canShowSelfDeclareAbsence(out,g,'u1',n)],
+    ['presence',(n)=>OA2.isPresenceWindowOpen(out,n)],
+  ];
+  for(const [name,f] of checks){const fl=flips(f);ok(fl.length>0&&fl.every((x:number)=>B.includes(x)),'Lot E: '+name+' switches only on a scheduled boundary');}
+  const od=rd('screens','OutingDetailScreen.tsx'), hk=rd('utils','useMomentClock.ts');
+  ok(/useMomentClock\(outing\?\.startsAt\)/.test(od)&&od.indexOf('useMomentClock(outing?.startsAt)')<od.indexOf('if (!outing) {'),'Lot E: moment detail subscribes to the clock before any early return');
+  ok(/setTimeout\(/.test(hk)&&/clearTimeout\(/.test(hk)&&/nextMomentRefreshDelayMs/.test(hk),'Lot E: hook = one timer aligned on the next boundary, cleaned up');
+  // Paywall : plus de « paiement réel / Stripe » hors __DEV__
+  const pw=rd('screens','PaywallScreen.tsx');
+  ok(/demoText\(\s*`\$\{planTitle\} — aucun paiement réel\. Stripe arrivera plus tard\.`,\s*`\$\{planTitle\} est active\.`/.test(pw),'Lot E: paywall confirmation uses demoText (prod: « … est active. »)');
+  const outside=pw.replace(/demoText\([^]*?\),\n/g,'').replace(/\/\/.*$/gm,'');
+  ok(!/Stripe|paiement réel/.test(outside),'Lot E: no other Stripe / real-payment wording outside the demo guard');
+  const prev=(globalThis as any).__DEV__;
+  (globalThis as any).__DEV__=false;
+  ok(DV.demoText('x — aucun paiement réel. Stripe arrivera plus tard.','x est active.')==='x est active.'&&DV.demoLabel('Formule activée (démo)')==='Formule activée','Lot E: prod texts (__DEV__ = false)');
+  (globalThis as any).__DEV__=prev;
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

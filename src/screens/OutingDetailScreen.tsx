@@ -1,6 +1,7 @@
 import { demoLabel } from '../utils/devMode';
 import { hostReturnedDepositLine, isNoShowWindowOpen } from '../utils/depositH6';
 import { refusalLabel } from '../utils/refusalLabels';
+import { useMomentClock } from '../utils/useMomentClock';
 import {
   canShowDeclareHostAbsent,
   canShowSelfDeclareAbsence,
@@ -117,6 +118,9 @@ export function OutingDetailScreen() {
     partnerMarkNoShow,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
+  // 25/10 · Lot E : re-rendu seul à H, H+6 (et battement 30 s autour) ; l’heure est relue à chaque rendu.
+  useMomentClock(outing?.startsAt);
+  const nowMs = Date.now();
   const [message, setMessage] = useState(RECOMMENDED_INTRO);
   const [suggestedDate, setSuggestedDate] = useState('');
   // Après un départ malaise : « Tu veux signaler ? » (Oui / Non), rien de prérempli.
@@ -700,10 +704,10 @@ export function OutingDetailScreen() {
                   );
                 }}
               />
-              {hostCancelRefusal(outing, state.requests) ? (
+              {hostCancelRefusal(outing, state.requests, nowMs) ? (
                 // 25/10 · B2 : dès H (ou présent / parti), plus d’annulation du moment.
                 <Text style={[styles.hint, { marginTop: spacing.md }]}>
-                  {refusalLabel(hostCancelRefusal(outing, state.requests) ?? undefined)}
+                  {refusalLabel(hostCancelRefusal(outing, state.requests, nowMs) ?? undefined)}
                 </Text>
               ) : (
               <Button
@@ -794,7 +798,7 @@ export function OutingDetailScreen() {
                       )?.userName ?? 'un invité'
                     }.`}
               </Text>
-            ) : !outing.hostNoShowCase && isPresenceWindowOpen(outing) ? (
+            ) : !outing.hostNoShowCase && isPresenceWindowOpen(outing, nowMs) ? (
               <Button
                 title="Je suis présent"
                 variant="secondary"
@@ -901,7 +905,7 @@ export function OutingDetailScreen() {
                 outing.status !== 'cancelled' &&
                 !r.attendance &&
                 !r.leftTableAt &&
-                isPresenceWindowOpen(outing) ? (
+                isPresenceWindowOpen(outing, nowMs) ? (
                   <Button
                     title={`Marquer ${r.userName} présent`}
                     variant="secondary"
@@ -1177,7 +1181,7 @@ export function OutingDetailScreen() {
                     const full = getRequestById(myRequest.id);
                     if (!full || full.leftTableAt) return null;
                     const me = state.currentUser?.id ?? '';
-                    const windowOpen = isPresenceWindowOpen(outing);
+                    const windowOpen = isPresenceWindowOpen(outing, nowMs);
                     // Après un « Pas venu », « Je suis présent » vaut contestation (pendant les 24 h).
                     const canContestByPresence =
                       full.attendance === 'absent' &&
@@ -1244,7 +1248,7 @@ export function OutingDetailScreen() {
                             style={{ marginTop: spacing.sm }}
                           />
                         ) : null}
-                        {canShowDeclareHostAbsent(outing, full, me) ? (
+                        {canShowDeclareHostAbsent(outing, full, me, nowMs) ? (
                           // 25/10 · B3 : tout invité confirmé, de H à H+6 (L135, L77, L130).
                           <Button
                             title="L’hôte n’est pas venu"
@@ -1273,7 +1277,7 @@ export function OutingDetailScreen() {
                             style={{ marginTop: spacing.sm }}
                           />
                         ) : null}
-                        {canShowSelfDeclareAbsence(outing, full, me) ? (
+                        {canShowSelfDeclareAbsence(outing, full, me, nowMs) ? (
                           // 25/10 · B3 : auto-déclaration, caution perdue tout de suite, sans contestation (L20, L65).
                           <Button
                             title="Je ne suis pas venu"

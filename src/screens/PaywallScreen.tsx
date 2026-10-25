@@ -1,4 +1,4 @@
-import { demoLabel } from '../utils/devMode';
+import { demoLabel, demoText } from '../utils/devMode';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
@@ -40,7 +40,11 @@ export function PaywallScreen() {
   const afterSubscribe = (planTitle: string) => {
     Alert.alert(
       demoLabel('Formule activée (démo)'),
-      `${planTitle} — aucun paiement réel. Stripe arrivera plus tard.`,
+      // 25/10 · Lot E : la mention « paiement réel / Stripe » reste en développement seulement.
+      demoText(
+        `${planTitle} — aucun paiement réel. Stripe arrivera plus tard.`,
+        `${planTitle} est active.`,
+      ),
       [
         {
           text: 'OK',
