@@ -74,7 +74,6 @@ function ProfileScreenInner() {
     getPresenceChecklist,
     markGuestsPresentAndRate,
     guestSelfPresent,
-    guestArrivedPartner,
     hasJokerAvailable,
     getMyPastMoments,
     getPendingMomentPhotoConsentsForMe,
@@ -827,16 +826,20 @@ function ProfileScreenInner() {
                             ? 'Moment terminé — ta présence n’est pas encore confirmée.'
                             : 'Moment terminé — personne n’est marquée présente.'}
                         </Text>
-                        {item.requestId ? (
-                          // Invité : « Je suis présent » (ou « Je suis arrivé » en lieu partenaire), puis note de l’hôte.
+                        {item.requestId && isPartnerListing(item.outing) ? (
+                          // 25/10 soir · Partenaire calé The Fork : la présence vient de la liste
+                          // du lieu (ou du silence à H+6), jamais d’un pointage de l’invité.
+                          <Text style={styles.cardHint}>
+                            Le lieu pointe la table 30 min après l’heure. Rien coché à 6 h : caution rendue.
+                          </Text>
+                        ) : item.requestId ? (
+                          // Invité : « Je suis présent », puis note de l’hôte.
                           <Button
                             title="Marquer présent et noter"
                             variant="secondary"
                             onPress={() => {
                               const requestId = item.requestId!;
-                              const res = isPartnerListing(item.outing)
-                                ? guestArrivedPartner(requestId)
-                                : guestSelfPresent(requestId);
+                              const res = guestSelfPresent(requestId);
                               if (!res.ok) {
                                 Alert.alert(
                                   'Présence non enregistrée',

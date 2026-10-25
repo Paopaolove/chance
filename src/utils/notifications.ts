@@ -27,7 +27,9 @@ export type PriorityNotifType =
   /** Photo d’un moment passé à accepter (ou réponse à ma photo) → Profil. */
   | 'moment_photo'
   /** 18/10 · Fin du moment, présence non indiquée → détail du moment. */
-  | 'presence_check';
+  | 'presence_check'
+  /** 25/10 soir · Lieu partenaire à H+30 : liste des prénoms confirmés à pointer. */
+  | 'partner_venue_check';
 
 export type ScheduledNotifIds = {
   accepted?: string;

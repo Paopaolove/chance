@@ -4,7 +4,7 @@
  * Le parcours précise le libellé quand un même code n’a pas le même sens
  * (« Pas venu » hôte, « Pas venu » lieu partenaire, « Marquer présent »).
  */
-export type RefusalFlow = 'noshow' | 'partner_noshow' | 'presence' | 'host_noshow';
+export type RefusalFlow = 'noshow' | 'partner_noshow' | 'partner_check' | 'presence' | 'host_noshow';
 
 const LABELS: Record<string, string> = {
   // « Pas venu » (reportGuestNoShow) — table normale
@@ -35,6 +35,12 @@ const LABELS: Record<string, string> = {
   guests_on_site: 'Un invité est déjà présent ou parti : le moment ne peut plus être annulé.',
   already_completed: 'Ce moment est terminé.',
   already_cancelled: 'Ce moment a déjà été annulé.',
+  // 25/10 soir · Partenaire calé The Fork : liste du lieu (Table complète / décocher).
+  partner_use_check: 'Sur une annonce lieu, l’absence passe par la liste du soir : « Table complète », ou décoche qui n’est pas là.',
+  not_partner_listing: 'Cette annonce n’est pas une annonce lieu.',
+  cancelled: 'Ce moment a été annulé.',
+  already_done: 'La liste de ce soir est déjà validée.',
+  nobody: 'Personne à pointer sur cette liste.',
   host_pending: 'L’absence de l’hôte n’est pas encore tranchée : la caution ne peut pas être perdue maintenant.',
 };
 
@@ -45,6 +51,13 @@ const FLOW_LABELS: Record<RefusalFlow, Record<string, string>> = {
     not_participant: 'Seul le lieu qui publie l’annonce peut signaler cette absence.',
     not_allowed_now:
       '« Pas venu » n’est possible qu’à partir de l’heure prévue et jusqu’à 6 h après le début, si la personne n’a pas signalé son arrivée.',
+  },
+  // 25/10 soir · Liste du lieu (H+30 → H+6).
+  partner_check: {
+    not_host: 'Seul le lieu qui publie l’annonce valide la liste.',
+    too_early: 'La liste s’ouvre 30 min après l’heure prévue.',
+    too_late: 'La liste se valide jusqu’à 6 h après le début. Rien coché : les cautions sont rendues.',
+    host_no_show: 'Ton lieu a été déclaré absent : la liste n’est plus disponible.',
   },
   // Hôte déclaré absent par un invité.
   host_noshow: {

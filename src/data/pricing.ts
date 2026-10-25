@@ -11,6 +11,13 @@ export const DEPOSIT_FORFEIT_CHANCE_EUROS = 6.9;
 /** Part hôte quand la caution est perdue. */
 export const DEPOSIT_FORFEIT_HOST_EUROS = 13.1;
 
+/**
+ * 25/10 soir · Partenaire calé The Fork : absence retenue sur un moment
+ * partenaire (lieu qui décoche, sans contestation à 24 h ou revue retenue) →
+ * les 20 € entiers vont au lieu (pas le partage 6,90 / 13,10).
+ */
+export const DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS = DEPOSIT_EUROS;
+
 /** Annulation au moins N heures avant startsAt → caution rendue (heure serveur). */
 export const CANCEL_FREE_BEFORE_HOURS = 3;
 

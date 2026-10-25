@@ -240,6 +240,7 @@ export function openNotificationTarget(
       return true;
     }
 
+    case 'partner_venue_check':
     case 'presence_check': {
       // 18/10 · « Es-tu bien présent ? » → détail du moment (boutons de présence).
       const oid = outing?.id ?? outingId;

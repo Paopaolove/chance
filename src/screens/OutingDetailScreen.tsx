@@ -43,8 +43,9 @@ import { colors, fonts, radius, spacing, typography } from '../theme';
 import { chatUnlockOptsFor, isChatUnlocked, lateLabel } from '../utils/chat';
 import {
   canGuestSelfArrivePartner,
-  canPartnerFlagDispute,
-  canPartnerMarkGuestAbsent,
+  canPartnerVenueCheck,
+  partnerVenueCheckRequests,
+  PARTNER_VENUE_ABSENT_TEXT,
   isPartnerCultureListing,
   isPartnerListing,
   partnerListingChips,
@@ -115,7 +116,7 @@ export function OutingDetailScreen() {
     isMyLeaveDepositRefunded,
     leaveTable,
     guestArrivedPartner,
-    partnerMarkNoShow,
+    partnerVenueCheck,
   } = useChance();
   const outing = getOutingById(route.params.outingId);
   // 25/10 · Lot E : re-rendu seul à H, H+6 (et battement 30 s autour) ; l’heure est relue à chaque rendu.
@@ -126,6 +127,8 @@ export function OutingDetailScreen() {
   // Après un départ malaise : « Tu veux signaler ? » (Oui / Non), rien de prérempli.
   const [reportPromptOutingId, setReportPromptOutingId] = useState<string | null>(null);
   const [joinedId, setJoinedId] = useState<string | null>(null);
+  // 25/10 soir · Partenaire calé The Fork : invités décochés sur la liste du lieu.
+  const [venueUnchecked, setVenueUnchecked] = useState<string[]>([]);
   const { requireBeforeMoment, sheet: firstMomentSheet } = useFirstMomentGate();
 
   const myRequest = useMemo(() => {
@@ -663,10 +666,10 @@ export function OutingDetailScreen() {
                           ? 'A rejoint — confirmation en cours (chaise non réservée)'
                           : 'Accepté — à confirmer'
                         : r.status === 'confirmed'
-                          ? r.partnerDispute
-                            ? 'Litige présence'
+                          ? r.partnerVenueAbsent
+                            ? 'Confirmé · marqué absent par le lieu'
                             : r.guestArrivedAt
-                              ? 'Confirmé · arrivé'
+                              ? 'Confirmé · arrivée signalée'
                               : 'Confirmé'
                           : r.status}
                   </Text>
@@ -784,6 +787,72 @@ export function OutingDetailScreen() {
               style={{ marginTop: spacing.md }}
             />
           ) : null}
+          {/* 25/10 soir · Partenaire calé The Fork : liste du soir (H+30 → H+6), seule action du lieu. */}
+          {partner && outing.partnerVenueCheck ? (
+            <Text style={[styles.hint, { marginTop: spacing.md }]}>
+              {outing.partnerVenueCheck.absentRequestIds.length
+                ? `Liste validée · ${outing.partnerVenueCheck.absentRequestIds.length} absent(s) signalé(s) : 24 h pour contester, sinon 20 € pour ton lieu.`
+                : 'Table complète · cautions rendues.'}
+            </Text>
+          ) : null}
+          {partner && !outing.partnerVenueCheck && canPartnerVenueCheck(outing, state.requests, state.currentUser?.id ?? '', nowMs)
+            ? (() => {
+                const list = partnerVenueCheckRequests(outing, state.requests);
+                const unchecked = venueUnchecked.filter((id) => list.some((r) => r.id === id));
+                const submit = (absent: string[]) => {
+                  const res = partnerVenueCheck(outing.id, absent);
+                  if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason, 'partner_check'));
+                  else setVenueUnchecked([]);
+                };
+                return (
+                  <View style={{ marginTop: spacing.md }}>
+                    <Text style={styles.hint}>
+                      Ta table de ce soir. Décoche qui n’est pas là, sinon « Table complète ».
+                    </Text>
+                    {list.map((r) => {
+                      const on = !unchecked.includes(r.id);
+                      return (
+                        <Pressable
+                          key={`venue-check-${r.id}`}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: on }}
+                          onPress={() =>
+                            setVenueUnchecked((prev) =>
+                              prev.includes(r.id) ? prev.filter((x) => x !== r.id) : [...prev, r.id],
+                            )
+                          }
+                          style={{ paddingVertical: spacing.xs }}
+                        >
+                          <Text style={styles.hint}>
+                            {on ? '☑' : '☐'} {r.userName}
+                            {r.guestArrivedAt ? ' · arrivée signalée' : ''}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                    {unchecked.length === 0 ? (
+                      <Button title="Table complète" onPress={() => submit([])} style={{ marginTop: spacing.sm }} />
+                    ) : (
+                      <Button
+                        title={`Valider (${unchecked.length} absent${unchecked.length > 1 ? 's' : ''})`}
+                        variant="danger"
+                        onPress={() =>
+                          Alert.alert(
+                            'Valider la liste ?',
+                            `Chaque personne décochée reçoit « ${PARTNER_VENUE_ABSENT_TEXT} » et a 24 h pour contester. Sans contestation, les 20 € de caution vont à ton lieu.`,
+                            [
+                              { text: 'Retour', style: 'cancel' },
+                              { text: 'Valider', style: 'destructive', onPress: () => submit(unchecked) },
+                            ],
+                          )
+                        }
+                        style={{ marginTop: spacing.sm }}
+                      />
+                    )}
+                  </View>
+                );
+              })()
+            : null}
           {/* 18/10 · Présence croisée : l’hôte se dit présent (un invité peut aussi le confirmer). */}
           {!partner &&
           outing.status !== 'cancelled' &&
@@ -841,64 +910,26 @@ export function OutingDetailScreen() {
                 {partner ? (
                   <View style={{ marginTop: spacing.sm }}>
                     <Text style={styles.hint}>
-                      {r.partnerDispute
-                        ? `Litige · ${demoLabel(r.partnerDispute.note)}`
-                        : r.leftTableAt
-                          ? [hostLeaveView(r)!.label, hostLeaveView(r)!.earningsLabel.replace('pour toi', 'pour ton lieu')].filter(Boolean).join(' · ')
-                          : r.attendance === 'present'
-                          ? `${r.userName} · arrivé · caution rendue après 30 min`
+                      {r.leftTableAt
+                        ? [hostLeaveView(r)!.label, hostLeaveView(r)!.earningsLabel.replace('pour toi', 'pour ton lieu')].filter(Boolean).join(' · ')
+                        : r.attendance === 'present'
+                          ? `${r.userName} · présent · caution rendue`
                           : r.attendance === 'absent'
                             ? hostDepositStatus(r) === 'noshow_pending'
-                              ? `${r.userName} · absence signalée · caution en attente`
-                              : `${r.userName} · pas venu · caution perdue (6,90 € Moment / 13,10 € pour ton lieu)`
+                              ? `${r.userName} · marqué absent · caution en attente (24 h pour contester)`
+                              : r.noShowNotRetained || r.noShowVoided
+                                ? `${r.userName} · absence non retenue · caution rendue`
+                                : `${r.userName} · pas venu · 20 € pour ton lieu`
                             : r.noShowNotRetained
                               ? `${r.userName} · absence non retenue`
                             : r.noShowVoided
                               ? `${r.userName} · caution rendue`
                             : r.depositStatus === 'returned'
-                              ? `${r.userName} · caution rendue 6 h après le début`
-                              : 'Rien à faire si la personne est là. « Pas venu » seulement si la chaise reste vide, jusqu’à 6 h après le début.'}
+                              ? `${r.userName} · rien coché · caution rendue 6 h après le début`
+                              : r.guestArrivedAt
+                                ? `${r.userName} · arrivée signalée`
+                                : `${r.userName} · sur la liste de ce soir`}
                     </Text>
-                    {canPartnerMarkGuestAbsent(outing, r, state.currentUser?.id ?? '') ? (
-                      <Button
-                        title={`Pas venu (${r.userName})`}
-                        variant="danger"
-                        onPress={() => {
-                          Alert.alert(
-                            'Chaise vide ?',
-                            `${r.userName} n’a pas signalé son arrivée. « Pas venu » : la personne a 24 h pour contester ; sans contestation, caution perdue (6,90 € Moment / 13,10 € pour ton lieu).`,
-                            [
-                              { text: 'Retour', style: 'cancel' },
-                              {
-                                text: 'Pas venu',
-                                style: 'destructive',
-                                onPress: () => {
-                                  const res = partnerMarkNoShow(r.id);
-                                  if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason, 'partner_noshow'));
-                                },
-                              },
-                            ],
-                          );
-                        }}
-                        style={{ marginTop: spacing.sm }}
-                      />
-                    ) : null}
-                    {canPartnerFlagDispute(outing, r, state.currentUser?.id ?? '') ? (
-                      <Button
-                        title={`Pas venu (${r.userName} dit être arrivé)`}
-                        variant="ghost"
-                        onPress={() => {
-                          const res = partnerMarkNoShow(r.id);
-                          if (!res.ok) Alert.alert('Impossible', refusalLabel(res.reason, 'partner_noshow'));
-                          else
-                            Alert.alert(
-                              'Litige ouvert',
-                              'Arrivé selon l’invité, pas venu selon toi : l’équipe Moment demandera une photo plus tard. Aucune sanction automatique.',
-                            );
-                        }}
-                        style={{ marginTop: spacing.sm }}
-                      />
-                    ) : null}
                   </View>
                 ) : null}
                 {!partner &&
@@ -1112,19 +1143,28 @@ export function OutingDetailScreen() {
                 ? (() => {
                     const full = getRequestById(myRequest.id);
                     if (!full) return null;
-                    if (full.partnerDispute) {
+                    // 25/10 soir · Décoché par le lieu : la carte de contestation (24 h,
+                    // « je suis venu » + une phrase) s’affiche plus bas.
+                    if (full.partnerVenueAbsent) {
                       return (
                         <Text style={[styles.hint, { marginTop: spacing.sm }]}>
-                          Litige présence ouvert — l’équipe Moment te demandera
-                          une photo plus tard. Pas de sanction automatique.
+                          {PARTNER_VENUE_ABSENT_TEXT}.
                         </Text>
+                      );
+                    }
+                    if (full.attendance === 'present') {
+                      return (
+                        <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
+                          Présent selon le lieu — caution rendue.
+                        </CheckNote>
                       );
                     }
                     if (full.guestArrivedAt) {
                       return (
-                        <CheckNote center style={styles.depositReturnedRow} textStyle={styles.depositReturned}>
-                          Arrivée signalée — tu es présent.
-                        </CheckNote>
+                        <Text style={[styles.hint, { marginTop: spacing.sm }]}>
+                          Arrivée signalée au lieu. Le lieu pointe la table 30 min
+                          après l’heure ; rien coché à 6 h, caution rendue.
+                        </Text>
                       );
                     }
                     const canArrive = canGuestSelfArrivePartner(
@@ -1142,10 +1182,8 @@ export function OutingDetailScreen() {
                         return;
                       }
                       Alert.alert(
-                        res.dispute ? 'Litige ouvert' : 'Bien arrivé',
-                        res.dispute
-                          ? 'Le lieu avait signalé « Pas venu » — litige ouvert, pas de sanction automatique.'
-                          : 'Tu es présent : caution rendue après 30 min. Le lieu n’a rien à faire.',
+                        'Arrivée signalée',
+                        'Le lieu est prévenu. Ta caution suit la liste du lieu (30 min après l’heure) ; rien coché à 6 h, elle est rendue.',
                       );
                     };
                     return canArrive ? (

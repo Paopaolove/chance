@@ -7,11 +7,13 @@
  * - Revue : « Pas venu confirmé » = perdue ; « contestation acceptée » = rendue.
  * - La règle H+6 ne rend jamais une caution en délai ou contestée.
  * - Statuts internes : l’hôte voit la même chose pendant le délai et la revue.
- * Partenaires : même contestation (24 h, phrase, revue 7 jours).
+ * Partenaires : même contestation (24 h, phrase, revue 7 jours). 25/10 soir ·
+ * Partenaire calé The Fork : absence venue de la liste du lieu (décoché) →
+ * perte = 20 € entiers au lieu (`partnerVenueNoShowShareEuros`), compteur partenaire.
  * Hors périmètre : départ sans motif, malaise, auto-déclaration.
  */
 import type { Outing, Request } from '../data/types';
-import { DEPOSIT_FORFEIT_HOST_EUROS } from '../data/pricing';
+import { DEPOSIT_FORFEIT_HOST_EUROS, DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS } from '../data/pricing';
 
 /** Délai pour contester un « Pas venu » : 24 h après la déclaration de l’hôte. */
 export const NOSHOW_CONTEST_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -203,9 +205,33 @@ export function contestTimeLeftLabel(r: ContestRequest, nowMs = Date.now()): str
  * finalement perdue (jamais pendant l’attente, jamais si l’absence n’est pas retenue).
  */
 export function hostNoShowShareEuros(
-  r: Pick<Request, 'attendance' | 'depositStatus'> & { noShowNotRetained?: boolean },
+  r: Pick<Request, 'attendance' | 'depositStatus'> & {
+    noShowNotRetained?: boolean;
+    partnerVenueAbsent?: boolean;
+  },
 ): number {
+  // Partenaire (liste du lieu) : 20 € entiers, voir partnerVenueNoShowShareEuros.
+  if (r.partnerVenueAbsent) return 0;
   return r.attendance === 'absent' && r.depositStatus === 'forfeited' && !r.noShowNotRetained
     ? DEPOSIT_FORFEIT_HOST_EUROS
+    : 0;
+}
+
+/**
+ * 25/10 soir · Partenaire calé The Fork : part du lieu d’une absence retenue
+ * = les 20 € entiers (pas 6,90 / 13,10). Jamais pendant l’attente (24 h ou
+ * revue), jamais si l’absence n’est pas retenue.
+ */
+export function partnerVenueNoShowShareEuros(
+  r: Pick<Request, 'attendance' | 'depositStatus'> & {
+    noShowNotRetained?: boolean;
+    partnerVenueAbsent?: boolean;
+  },
+): number {
+  return r.partnerVenueAbsent &&
+    r.attendance === 'absent' &&
+    r.depositStatus === 'forfeited' &&
+    !r.noShowNotRetained
+    ? DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS
     : 0;
 }

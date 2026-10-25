@@ -12,7 +12,7 @@ import {
   normalizeContestNote,
 } from '../utils/noShowContest';
 import { DEPOSIT_EUROS, describeDepositForfeitSplit } from '../data/pricing';
-import { isPartnerListing } from '../utils/partners';
+import { PARTNER_VENUE_ABSENT_TEXT } from '../utils/partners';
 
 /**
  * Encart invité « Contester » un « Pas venu » déclaré par l’hôte :
@@ -20,8 +20,12 @@ import { isPartnerListing } from '../utils/partners';
  * bouton secondaire (un seul bouton plein par écran).
  */
 export function NoShowContestCard({ request }: { request: Request }) {
-  const { contestNoShow, state } = useChance();
-  const partner = isPartnerListing(state.outings.find((o) => o.id === request.outingId));
+  const { contestNoShow } = useChance();
+  // 25/10 soir · Partenaire calé The Fork : décoché sur la liste du lieu → caution entière au lieu.
+  const partner = !!request.partnerVenueAbsent;
+  const lossLabel = partner
+    ? `les ${DEPOSIT_EUROS} € de caution vont au lieu`
+    : `la caution est perdue (${describeDepositForfeitSplit()})`;
   const [note, setNote] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -48,13 +52,15 @@ export function NoShowContestCard({ request }: { request: Request }) {
   const open = isContestWindowOpen(request, nowMs);
   return (
     <View style={styles.card}>
-      <Text style={styles.title}>{partner ? 'Le lieu' : 'L’hôte'} t’a signalé « Pas venu »</Text>
+      <Text style={styles.title}>{partner ? PARTNER_VENUE_ABSENT_TEXT : 'L’hôte t’a signalé « Pas venu »'}</Text>
       <Text style={styles.body}>
         {request.noShowContestPausedAt
           ? `Délai suspendu tant que l’absence ${partner ? 'du lieu' : 'de l’hôte'} est en attente. Tu peux déjà contester, avec une phrase.`
           : open
-          ? `Tu étais là ? Il te reste ${contestTimeLeftLabel(request, nowMs)} pour contester, avec une phrase. Sans contestation, la caution est perdue (${describeDepositForfeitSplit()}).`
-          : `Délai de 24 h écoulé — caution perdue (${describeDepositForfeitSplit()}).`}
+          ? partner
+            ? `Tu étais là ? Il te reste ${contestTimeLeftLabel(request, nowMs)} pour dire « je suis venu », avec une phrase. Sans réponse, ${lossLabel}.`
+            : `Tu étais là ? Il te reste ${contestTimeLeftLabel(request, nowMs)} pour contester, avec une phrase. Sans contestation, ${lossLabel}.`
+          : `Délai de 24 h écoulé — ${lossLabel}.`}
       </Text>
       {open ? (
         <>
@@ -71,7 +77,7 @@ export function NoShowContestCard({ request }: { request: Request }) {
             accessibilityLabel="Phrase de contestation"
           />
           <Button
-            title="Contester"
+            title={partner ? 'Je suis venu' : 'Contester'}
             variant="secondary"
             disabled={!normalizeContestNote(note)}
             onPress={() => {

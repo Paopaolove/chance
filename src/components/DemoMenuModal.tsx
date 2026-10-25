@@ -15,7 +15,7 @@ import { describeDepositForfeitMoment } from '../data/pricing';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { Button } from './Button';
-import { isPartnerListing } from '../utils/partners';
+import { isPartnerListing, partnerVenueCheckRequests } from '../utils/partners';
 import { isDemoEnabled } from '../utils/devMode';
 
 type Props = {
@@ -64,6 +64,10 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     setPartnerPinned,
     simulatePartnerGuestConfirms,
     simulatePartnerNextDay,
+    partnerVenueCheck,
+    demoPartnerVenueCheckH30,
+    demoPartnerAbsentContest,
+    demoPartnerAbsentNoReply,
     seedDemoPastMoments,
     simulateOtherAddsMomentPhoto,
     simulateOtherMomentPhotoResponse,
@@ -102,6 +106,28 @@ export function DemoMenuModal({ visible, onClose }: Props) {
     ? getOutingById(myPartnerGuestReq.outingId) ?? null
     : null;
   const nextDayTarget = myPartnerOuting ?? myPartnerGuestOuting;
+  /** 25/10 soir · Ma dernière annonce lieu dont la liste du soir n’est pas encore validée. */
+  const venueCheckTarget = me
+    ? [...state.outings]
+        .filter(
+          (o) =>
+            o.hostId === me.id &&
+            isPartnerListing(o) &&
+            o.status !== 'cancelled' &&
+            !o.partnerVenueCheck &&
+            partnerVenueCheckRequests(o, state.requests).length > 0,
+        )
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+    : null;
+  /** 25/10 soir · Invité décoché par mon lieu, encore dans ses 24 h. */
+  const venueAbsentReq = me
+    ? state.requests.find(
+        (r) =>
+          r.partnerVenueAbsent &&
+          r.depositStatus === 'noshow_pending' &&
+          state.outings.some((o) => o.id === r.outingId && o.hostId === me.id),
+      ) ?? null
+    : null;
 
   const active = getActiveOutingForUser();
   /** 25/10 · Contestations en revue (outil de revue démo). */
@@ -784,16 +810,79 @@ export function DemoMenuModal({ visible, onClose }: Props) {
             style={styles.btn}
           />
           <Button
-            title="Lieu : mon annonce a commencé il y a 5 min (« Pas venu »)"
+            title="Lieu : simuler H+30 (notification + liste des prénoms)"
             variant="secondary"
-            disabled={busy || !myPartnerOuting}
+            disabled={busy || !venueCheckTarget}
             onPress={() =>
-              run('H+5', () => {
-                if (!myPartnerOuting) return;
-                simulateOutingInMinutes(myPartnerOuting.id, -5);
+              run('H+30 lieu', () => {
+                if (!venueCheckTarget) return;
+                const res = demoPartnerVenueCheckH30(venueCheckTarget.id);
+                Alert.alert(
+                  'H+30 (démo)',
+                  res.ok
+                    ? `Notification au lieu : ${res.names.join(', ') || '—'}. Ouvre l’annonce : « Table complète », ou décoche qui n’est pas là.`
+                    : res.reason,
+                );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Lieu : « Table complète »"
+            variant="secondary"
+            disabled={busy || !venueCheckTarget}
+            onPress={() =>
+              run('Table complète', () => {
+                if (!venueCheckTarget) return;
+                const res = partnerVenueCheck(venueCheckTarget.id, []);
+                if (!res.ok) Alert.alert('Démo', refusalLabel(res.reason, 'partner_check'));
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Lieu : décocher le 1er invité et valider"
+            variant="secondary"
+            disabled={busy || !venueCheckTarget}
+            onPress={() =>
+              run('Décocher', () => {
+                if (!venueCheckTarget) return;
+                const first = partnerVenueCheckRequests(venueCheckTarget, state.requests)[0];
+                const res = partnerVenueCheck(venueCheckTarget.id, first ? [first.id] : []);
+                if (!res.ok) Alert.alert('Démo', refusalLabel(res.reason, 'partner_check'));
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Invité décoché : « je suis venu » + une phrase"
+            variant="secondary"
+            disabled={busy || !venueAbsentReq}
+            onPress={() =>
+              run('Contestation', () => {
+                if (!venueAbsentReq) return;
+                const res = demoPartnerAbsentContest(venueAbsentReq.id);
                 Alert.alert(
                   'Démo',
-                  'Ouvre ton annonce : « Pas venu » apparaît pour chaque chaise vide (jusqu’à 6 h après le début).',
+                  res.ok
+                    ? 'Contestation envoyée : caution en attente de revue (outil de revue ci-dessus).'
+                    : res.reason,
+                );
+              })
+            }
+            style={styles.btn}
+          />
+          <Button
+            title="Invité décoché : 24 h sans réponse (20 € au lieu)"
+            variant="secondary"
+            disabled={busy || !venueAbsentReq}
+            onPress={() =>
+              run('24 h', () => {
+                if (!venueAbsentReq) return;
+                const res = demoPartnerAbsentNoReply(venueAbsentReq.id);
+                Alert.alert(
+                  'Démo',
+                  res.ok ? 'Absence retenue : les 20 € de caution vont au lieu.' : res.reason,
                 );
               })
             }
@@ -810,7 +899,7 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                 Alert.alert(
                   'H+6 (démo)',
                   res.ok
-                    ? `${res.refunded} caution(s) rendue(s) — silence des deux, aucune pénalité.`
+                    ? `${res.refunded} caution(s) rendue(s) — rien coché par le lieu, aucune pénalité.`
                     : res.reason,
                 );
               })

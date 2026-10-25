@@ -160,6 +160,8 @@ export interface User {
   hostNoShowCount?: number;
   /** Guest absence after confirm: 1 = forfeit; 2 = lower priority; 3+ = compte fermé. */
   guestNoShowCount?: number;
+  /** 25/10 soir · Absences retenues sur moments partenaires (12 mois glissants, 4 → fermé). */
+  partnerNoShowCount?: number;
   /** After 2nd guest no-show — deprioritized in host queues (mock). */
   lowerPriority?: boolean;
   /** Visible profile mention after repeated guest absence (mock). */
@@ -351,6 +353,16 @@ export interface Outing {
    * (annulation spectacle / no-show hôte) — idempotent.
    */
   partnerWarningApplied?: boolean;
+  /**
+   * 25/10 soir · Partenaire calé The Fork : la seule action du soir côté lieu,
+   * faite une fois (de H+30 à H+6). « Table complète » = personne décoché.
+   * Absente = rien coché (silence) : cautions rendues à H+6.
+   */
+  partnerVenueCheck?: {
+    at: string;
+    /** Invités décochés par le lieu (« pas là »). Vide = table complète. */
+    absentRequestIds: string[];
+  };
 }
 
 export interface Request {
@@ -419,7 +431,7 @@ export interface Request {
     resolvedAt?: string;
     /** Contestation par déclaration de l’hôte absent (pas de phrase). */
     viaHostNoShow?: boolean;
-    /** Partenaire : « Je suis arrivé » après « Pas venu » vaut contestation (phrase auto). */
+    /** Ancien état (avant 25/10 soir) : « Je suis arrivé » après « Pas venu » valait contestation. Plus produit. */
     viaArrival?: boolean;
     /** 18/10 : désaccord, présence confirmée d’un côté et « Pas venu » de l’autre (phrase auto). */
     viaPresence?: boolean;
@@ -460,9 +472,15 @@ export interface Request {
   guestArrivedAt?: string;
   /** Photo façade optionnelle (stub, non bloquante). */
   arrivalPhotoUri?: string;
-  /** Partenaire a tapé « Pas venu » (ISO UTC). */
+  /** Partenaire : le lieu a décoché l’invité (ISO UTC) — « Le lieu t’a marqué absent ». */
   partnerMarkedAbsentAt?: string;
-  /** Arrivé + « Pas venu » = litige (photo demandée plus tard, pas de sanction auto). */
+  /**
+   * 25/10 soir · Partenaire The Fork : absence venant de la liste du lieu.
+   * Perte = 20 € entiers au lieu (pas 6,90 / 13,10) ; compteur partenaire
+   * (4 absences retenues en 12 mois → compte fermé), pas le barème invité.
+   */
+  partnerVenueAbsent?: boolean;
+  /** Ancien litige partenaire (avant 25/10 soir) — plus créé, gardé pour lecture. */
   partnerDispute?: PartnerDispute;
 }
 
@@ -726,6 +744,11 @@ export interface AppState {
    * Facultatif : un état plus ancien n’a que le compteur.
    */
   guestNoShowLog?: Record<string, { requestId: string; at: string }[]>;
+  /**
+   * 25/10 soir · Guest id → absences retenues sur des moments partenaires
+   * (12 mois glissants, 4 → compte fermé). Distinct du barème invité.
+   */
+  partnerNoShowLog?: Record<string, { requestId: string; at: string }[]>;
   /** Host id → publish-never-honor count (1=warning, 2+=ban). */
   hostPublishStrikes: Record<string, number>;
   /** In-app mock notification banner (e.g. late alert). */
@@ -956,7 +979,11 @@ export type AppAction =
   /** 18/10 · Présence de l’hôte confirmée par lui-même ou par un invité confirmé (H−15 à H+6). */
   | { type: 'CONFIRM_HOST_PRESENT'; payload: { outingId: string; byUserId: string; at: string } }
   /** Invité : contester un « Pas venu » de l’hôte (phrase obligatoire, avant 24 h). */
-  | { type: 'CONTEST_NO_SHOW'; payload: { requestId: string; note: string; at: string } }
+  | {
+      type: 'CONTEST_NO_SHOW';
+      /** asUserId : démo seulement (__DEV__) — contester à la place d’un invité démo. */
+      payload: { requestId: string; note: string; at: string; asUserId?: string };
+    }
   /** Sans contestation à 24 h : caution perdue. Refusée avant l’échéance. */
   | { type: 'EXPIRE_NO_SHOW_CONTEST'; payload: { requestId: string; at: string } }
   /** Revue sans décision 7 jours après la contestation : caution rendue, absence non comptée. Refusée avant l’heure. */
@@ -966,7 +993,7 @@ export type AppAction =
   | { type: 'CONFIRM_HOST_NO_SHOW_AFTER_REVIEW'; payload: { outingId: string; at: string } }
   | { type: 'ACCEPT_HOST_NO_SHOW_CONTEST'; payload: { outingId: string; at: string } }
   | { type: 'EXPIRE_HOST_NO_SHOW_REVIEW'; payload: { outingId: string; at: string } }
-  /** Revue : « Pas venu confirmé » → caution perdue (6,90 / 13,10). */
+  /** Revue : « Pas venu confirmé » → caution perdue (6,90 / 13,10 ; partenaire : 20 € au lieu). */
   | { type: 'CONFIRM_NO_SHOW_AFTER_REVIEW'; payload: { requestId: string; at: string } }
   /** Revue : « contestation acceptée » → caution rendue. */
   | { type: 'ACCEPT_NO_SHOW_CONTEST'; payload: { requestId: string; at: string } }
@@ -1093,8 +1120,9 @@ export type AppAction =
    */
   | { type: 'APPLY_PARTNER_WARNING'; payload: { outingId: string; hostId: string } }
   /**
-   * Invité partenaire « Je suis arrivé » (dès H−15) → présent + caution rendue.
-   * Si le lieu avait déjà tapé « Pas venu » → litige (pas de sanction auto).
+   * Invité partenaire « Je suis arrivé » (dès H−15) : simple signal pour le lieu
+   * (25/10 soir). Ne rend pas l’argent et ne vaut pas présence : seule la liste
+   * du lieu (H+30) ou le silence à H+6 rend la caution.
    */
   | {
       type: 'GUEST_ARRIVED_PARTNER';
@@ -1104,13 +1132,15 @@ export type AppAction =
         arrivalPhotoUri?: string;
       };
     }
-  /** Lieu : « Pas venu » sur un invité qui a dit « Je suis arrivé » → litige. */
+  /**
+   * 25/10 soir · Partenaire The Fork : liste du lieu, une seule fois, de H+30
+   * à H+6. Cochés = présents (caution rendue) ; décochés = « Le lieu t’a
+   * marqué absent » (24 h pour contester, sinon 20 € au lieu).
+   */
   | {
-      type: 'OPEN_PARTNER_DISPUTE';
-      payload: { requestId: string; at: string };
+      type: 'PARTNER_VENUE_CHECK';
+      payload: { outingId: string; absentRequestIds: string[]; at: string };
     }
-  /** Lieu : « Pas venu » sans arrivée → trace (le lapin passe par REPORT_GUEST_NO_SHOW). */
-  | { type: 'MARK_PARTNER_ABSENT_AT'; payload: { requestId: string; at: string } }
   /** Partenaire : silence des deux à H+6 (25/10 soir, avant : lendemain) → caution rendue (pas d’absence, pas de présence). */
   | { type: 'RETURN_DEPOSIT_SILENCE'; payload: { requestId: string } }
   /** Photo d’un moment terminé (auteur = participant présent). */

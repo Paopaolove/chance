@@ -267,16 +267,25 @@ export function canPartnerOrUserCreateOuting(
   return { ok: true };
 }
 
-// ---------- Présence ----------
+// ---------- Présence (25/10 soir · Partenaire calé The Fork) ----------
 
 /** Fenêtre de déclaration d’absence : 6 h après le début (même borne que depositH6). */
 const PARTNER_ABSENCE_DECLARATION_MS = 6 * 60 * 60 * 1000;
 
+/** Liste du lieu : notification et action à partir de H+30. */
+export const PARTNER_VENUE_CHECK_AFTER_MS = 30 * 60 * 1000;
+
+/** Message à l’invité décoché. */
+export const PARTNER_VENUE_ABSENT_TEXT = 'Le lieu t’a marqué absent';
+
+/** Barème partenaire : 4 absences retenues sur 12 mois glissants → compte fermé. */
+export const PARTNER_NOSHOW_WINDOW_MONTHS = 12;
+export const PARTNER_NOSHOW_BAN_AT = 4;
+
 /**
- * Invité : « Je suis arrivé » dès H−15, jusqu’à H+6 (18/10, même fenêtre que
- * la confirmation croisée de présence).
- * Pas déjà présent. Si le lieu a déjà tapé « Pas venu », le bouton reste
- * dispo et ouvre un litige (pas de sanction auto).
+ * Invité : « Je suis arrivé » dès H−15, jusqu’à H+6. 25/10 soir : simple
+ * signal pour le lieu — ne rend pas l’argent, ne vaut pas présence. Plus
+ * possible une fois la liste du lieu faite (décoché → contestation).
  */
 export function canGuestSelfArrivePartner(
   outing: Outing,
@@ -286,10 +295,12 @@ export function canGuestSelfArrivePartner(
 ): boolean {
   if (!isPartnerListing(outing)) return false;
   if (outing.status === 'cancelled') return false;
+  if (outing.partnerVenueCheck) return false;
   if (request.userId !== actorId) return false;
   if (request.status !== 'confirmed') return false;
   if (request.guestArrivedAt) return false;
-  if (request.attendance === 'present') return false;
+  if (request.attendance) return false;
+  if (request.leftTableAt) return false;
   const startMs = new Date(outing.startsAt).getTime();
   if (!Number.isFinite(startMs)) return false;
   if (nowMs < startMs - PARTNER_GUEST_ARRIVED_BEFORE_MS) return false;
@@ -297,48 +308,106 @@ export function canGuestSelfArrivePartner(
 }
 
 /**
- * Lieu : « Pas venu » seulement si chaise vide, de H à H+6.
- * Si l’invité a tapé « Je suis arrivé » → litige (voir canPartnerFlagDispute).
+ * Invités sur la liste du lieu : confirmés, caution encore bloquée, ni
+ * présence ni absence déjà renseignée, pas partis de la table.
  */
-export function canPartnerMarkGuestAbsent(
-  outing: Outing,
-  request: Request,
-  actorId: string,
-  nowMs = Date.now(),
-): boolean {
-  if (!isPartnerListing(outing)) return false;
-  if (outing.status === 'cancelled') return false;
-  if (actorId !== outing.hostId) return false;
-  if (request.status !== 'confirmed') return false;
-  if (request.attendance || request.partnerDispute) return false;
-  // Gel 17/10 (point 2) : une seule déclaration d’absence par personne et par moment.
-  if (request.noShowNotRetained || request.noShowVoided) return false;
-  if (request.guestArrivedAt) return false;
-  // Gel 17/10 (point 1) : de H à H+6, comme toute déclaration d’absence (25/10 : H+6 inclus).
-  const startMs = new Date(outing.startsAt).getTime();
-  if (!Number.isFinite(startMs)) return false;
-  return nowMs > startMs && nowMs <= startMs + PARTNER_ABSENCE_DECLARATION_MS;
+export function partnerVenueCheckRequests<R extends Request>(
+  outing: Pick<Outing, 'id'>,
+  requests: R[],
+): R[] {
+  return requests.filter(
+    (r) =>
+      r.outingId === outing.id &&
+      r.status === 'confirmed' &&
+      !r.attendance &&
+      !r.leftTableAt &&
+      !r.noShowVoided &&
+      !r.noShowNotRetained &&
+      (r.depositStatus === 'held' || !r.depositStatus),
+  );
 }
 
+/** Prénoms confirmés de la liste (sans « (démo) »), pour la notification H+30. */
+export function partnerVenueCheckFirstNames(
+  outing: Pick<Outing, 'id'>,
+  requests: Request[],
+): string[] {
+  return partnerVenueCheckRequests(outing, requests).map(
+    (r) => r.userName.replace(/\s*\(démo\)\s*$/, '').trim().split(/\s+/)[0] ?? r.userName,
+  );
+}
+
+/** Corps de la notification H+30 au lieu : la liste des prénoms confirmés. */
+export function partnerVenueCheckNotifBody(names: string[]): string {
+  const list = names.length ? names.join(', ') : 'personne';
+  return `Confirmés : ${list}. « Table complète », ou décoche qui n’est pas là.`;
+}
+
+export type PartnerVenueCheckRefusal =
+  | 'not_partner_listing'
+  | 'not_host'
+  | 'cancelled'
+  | 'already_done'
+  | 'too_early'
+  | 'too_late'
+  | 'host_no_show'
+  | 'nobody';
+
 /**
- * Lieu : invité « arrivé » mais chaise vide → litige, et (18/10) désaccord de
- * présence : contestation ouverte. Déclaration d’absence : de H à H+6, une seule.
+ * Lieu : la liste (Table complète / décocher) est la seule action du soir.
+ * Une fois, de H+30 à H+6 inclus. Après H+6 : silence, cautions rendues.
  */
-export function canPartnerFlagDispute(
+export function partnerVenueCheckRefusal(
   outing: Outing,
-  request: Request,
+  requests: Request[],
+  actorId: string,
+  nowMs = Date.now(),
+): PartnerVenueCheckRefusal | null {
+  if (!isPartnerListing(outing)) return 'not_partner_listing';
+  if (actorId !== outing.hostId) return 'not_host';
+  if (outing.status === 'cancelled') return 'cancelled';
+  if (outing.partnerVenueCheck) return 'already_done';
+  // Lieu déclaré absent par un invité : cautions en attente, pas de liste.
+  if (outing.hostNoShowReported) return 'host_no_show';
+  const startMs = new Date(outing.startsAt).getTime();
+  if (!Number.isFinite(startMs)) return 'too_early';
+  if (nowMs < startMs + PARTNER_VENUE_CHECK_AFTER_MS) return 'too_early';
+  if (nowMs > startMs + PARTNER_ABSENCE_DECLARATION_MS) return 'too_late';
+  if (!partnerVenueCheckRequests(outing, requests).length) return 'nobody';
+  return null;
+}
+
+export function canPartnerVenueCheck(
+  outing: Outing,
+  requests: Request[],
   actorId: string,
   nowMs = Date.now(),
 ): boolean {
-  if (!isPartnerListing(outing)) return false;
-  if (outing.status === 'cancelled') return false;
-  if (actorId !== outing.hostId) return false;
-  if (request.status !== 'confirmed') return false;
-  if (!request.guestArrivedAt || request.partnerDispute) return false;
-  if (request.noShowNotRetained || request.noShowVoided) return false;
-  const startMs = new Date(outing.startsAt).getTime();
-  // 25/10 : H+6 inclus, comme toute déclaration d’absence.
-  return Number.isFinite(startMs) && nowMs > startMs && nowMs <= startMs + PARTNER_ABSENCE_DECLARATION_MS;
+  return partnerVenueCheckRefusal(outing, requests, actorId, nowMs) === null;
+}
+
+/** Début (exclu) de la fenêtre de 12 mois glissants qui finit à atMs. */
+export function partnerNoShowWindowStartMs(atMs: number): number {
+  const d = new Date(atMs);
+  d.setUTCMonth(d.getUTCMonth() - PARTNER_NOSHOW_WINDOW_MONTHS);
+  return d.getTime();
+}
+
+/** Absences partenaires retenues dans les 12 mois glissants avant atMs (inclus). */
+export function partnerNoShowsInWindow(
+  log: { requestId: string; at: string }[] | undefined,
+  atMs: number,
+): number {
+  const from = partnerNoShowWindowStartMs(atMs);
+  return (log ?? []).filter((e) => {
+    const t = new Date(e.at).getTime();
+    return Number.isFinite(t) && t > from && t <= atMs;
+  }).length;
+}
+
+/** 4 absences retenues sur 12 mois (moments partenaires) → compte fermé. */
+export function partnerNoShowSanction(countInWindow: number): { banned: boolean } {
+  return { banned: countInWindow >= PARTNER_NOSHOW_BAN_AT };
 }
 
 /**

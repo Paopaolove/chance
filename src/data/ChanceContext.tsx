@@ -63,9 +63,14 @@ import {
 } from '../utils/parisTime';
 import {
   canGuestSelfArrivePartner,
-  canPartnerFlagDispute,
-  canPartnerMarkGuestAbsent,
   canPartnerOrUserCreateOuting,
+  partnerNoShowSanction,
+  partnerNoShowsInWindow,
+  partnerVenueCheckFirstNames,
+  partnerVenueCheckNotifBody,
+  partnerVenueCheckRefusal,
+  partnerVenueCheckRequests,
+  PARTNER_VENUE_ABSENT_TEXT,
   isPartnerClosed,
   isPartnerCultureHost,
   isPartnerCultureListing,
@@ -131,6 +136,7 @@ import {
   NOSHOW_FINAL_NOTICE_KEPT_TEXT,
   NOSHOW_FINAL_NOTICE_TEXT,
   canNoShowGuestDeclareHostAbsent,
+  contestDeadlineMs,
   contestRefusal,
   isContestWindowOpen,
   isDepositKeptReviewOpen,
@@ -269,6 +275,7 @@ const initialState: AppState = {
   hostNoShowContestNotes: {},
   guestNoShowStrikes: {},
   guestNoShowLog: {},
+  partnerNoShowLog: {},
   hostPublishStrikes: {},
   toast: null,
   blockedUserIds: [],
@@ -451,6 +458,71 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
   };
 }
 
+/** 25/10 soir · Partenaire The Fork : message quand l’absence devient définitive. */
+export const PARTNER_NOSHOW_FINAL_NOTICE_TEXT =
+  'Ton absence est retenue. Les 20 € de caution vont au lieu.';
+
+/**
+ * 25/10 soir · Partenaire calé The Fork : absence retenue sur un moment
+ * partenaire (24 h sans contestation, revue retenue). Barème distinct du
+ * barème invité : 4 absences retenues sur 12 mois glissants → compte fermé.
+ * Le barème invité (2e priorité, 3e fermeture, 3 mois) n’est pas touché.
+ */
+function withPartnerNoShowStrike(state: AppState, requestId: string, at: string): AppState {
+  const req = state.requests.find((r) => r.id === requestId);
+  if (!req) return state;
+  const guestId = req.userId;
+  const prevLog = state.partnerNoShowLog?.[guestId] ?? [];
+  if (prevLog.some((e) => e.requestId === requestId)) return state; // idempotent
+  const atMs = Number.isFinite(new Date(at).getTime()) ? new Date(at).getTime() : Date.now();
+  const log = [...prevLog, { requestId, at }];
+  const inWindow = partnerNoShowsInWindow(log, atMs);
+  const { banned } = partnerNoShowSanction(inWindow);
+  const causedBan = banned && !partnerNoShowSanction(partnerNoShowsInWindow(prevLog, atMs)).banned;
+  let currentUser = state.currentUser;
+  let toast = state.toast;
+  if (currentUser && currentUser.id === guestId) {
+    currentUser = {
+      ...currentUser,
+      partnerNoShowCount: inWindow,
+      banned: banned || currentUser.banned,
+      bannedReason: banned && !currentUser.banned
+        ? '4 absences en 12 mois sur des moments lieu — compte fermé (démo)'
+        : currentUser.bannedReason,
+    };
+    if (!req.noShowFinalNotice) {
+      toast = {
+        id: `noshow-final-${requestId}`,
+        title: 'Absence retenue',
+        body: PARTNER_NOSHOW_FINAL_NOTICE_TEXT,
+        createdAt: at,
+      };
+    }
+  }
+  return {
+    ...state,
+    currentUser,
+    toast,
+    partnerNoShowLog: { ...state.partnerNoShowLog, [guestId]: log },
+    requests: state.requests.map((r) =>
+      r.id === requestId
+        ? {
+            ...r,
+            ...(causedBan ? { noShowCausedBan: true } : {}),
+            noShowFinalNotice: r.noShowFinalNotice ?? { text: PARTNER_NOSHOW_FINAL_NOTICE_TEXT, at },
+          }
+        : r,
+    ),
+  };
+}
+
+/** Absence devenue définitive : barème partenaire (liste du lieu) ou barème invité. */
+function withRetainedNoShow(state: AppState, requestId: string, at: string): AppState {
+  const req = state.requests.find((r) => r.id === requestId);
+  if (req?.partnerVenueAbsent) return withPartnerNoShowStrike(state, requestId, at);
+  return withGuestNoShowStrike(state, requestId, at);
+}
+
 /**
  * Règle B : hôte déclaré absent → « Pas venu » déclaré par l’hôte effacé et caution
  * rendue, même définitivement perdue (absence décomptée, fermeture causée annulée).
@@ -459,7 +531,19 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
 function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
   const req = state.requests.find((r) => r.id === requestId);
   if (!req || !isHostDeclaredNoShow(req)) return state;
-  let { guestNoShowStrikes, currentUser, guestNoShowLog } = state;
+  let { guestNoShowStrikes, currentUser, guestNoShowLog, partnerNoShowLog } = state;
+  // 25/10 soir · Partenaire (liste du lieu) : absence retirée du compteur partenaire.
+  if (req.partnerVenueAbsent && partnerNoShowLog?.[req.userId]?.some((e) => e.requestId === requestId)) {
+    const logLeft = partnerNoShowLog[req.userId].filter((e) => e.requestId !== requestId);
+    partnerNoShowLog = { ...partnerNoShowLog, [req.userId]: logLeft };
+    if (currentUser && currentUser.id === req.userId) {
+      currentUser = {
+        ...currentUser,
+        partnerNoShowCount: partnerNoShowsInWindow(logLeft, Date.now()),
+        ...(req.noShowCausedBan ? { banned: false, bannedReason: undefined } : {}),
+      };
+    }
+  }
   // Absence comptée (caution perdue, ou déjà rendue et acquise — 18/10) : décomptée.
   if ((req.depositStatus === 'forfeited' || req.noShowDepositKept) && req.noShowStrikeApplied) {
     const next = Math.max(0, (guestNoShowStrikes[req.userId] ?? 0) - 1);
@@ -493,6 +577,7 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
     ...state,
     guestNoShowStrikes,
     guestNoShowLog,
+    partnerNoShowLog,
     currentUser,
     requests: state.requests.map((r) => {
       if (r.id !== requestId) return r;
@@ -1268,6 +1353,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         hostNoShowContestNotes: {},
         guestNoShowStrikes: {},
         guestNoShowLog: {},
+        partnerNoShowLog: {},
         hostPublishStrikes: {},
         toast: null,
         blockedUserIds: [],
@@ -2239,22 +2325,8 @@ function reducer(state: AppState, action: AppAction): AppState {
             noShowContestPausedMs:
               (r.noShowContestPausedMs ?? 0) + Math.max(0, atMs - new Date(pausedAt).getTime()),
           };
-          // Partenaire (L69.6) : « Je suis arrivé » enregistré pendant la pause
-          // vaut contestation à la reprise (revue, pas de perte à l’échéance).
-          // Depuis le gel du 17/10, l’arrivée conteste tout de suite : filet pour un ancien état.
-          if (
-            isPartnerListing(o) &&
-            r.guestArrivedAt &&
-            r.attendance === 'absent' &&
-            r.depositStatus === 'noshow_pending' &&
-            !r.noShowContest
-          ) {
-            return {
-              ...resumed,
-              depositStatus: 'contested' as const,
-              noShowContest: { note: '« Je suis arrivé »', contestedAt: at, viaArrival: true },
-            };
-          }
+          // 25/10 soir · Partenaire calé The Fork : « Je suis arrivé » n’est qu’un signal ;
+          // il ne vaut plus contestation (« je suis venu » + une phrase, explicitement).
           return resumed;
         }),
       };
@@ -2493,6 +2565,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       }
       // Hôte déclaré « Pas venu » : cautions des invités rendues, plus de « Pas venu » invité.
       if (outingNoShow.hostNoShowReported) return state;
+      // 25/10 soir · Partenaire calé The Fork : le lieu ne passe que par sa liste
+      // (PARTNER_VENUE_CHECK), plus de « Pas venu » à l’unité.
+      if (isPartnerListing(outingNoShow) && reportedByUserId === outingNoShow.hostId) return state;
       // Absence non retenue après contestation, ou effacée : pas de nouvelle
       // déclaration (gel 17/10, point 2 : une seule par personne et par moment).
       if (existing.noShowNotRetained || existing.noShowVoided) return state;
@@ -2851,117 +2926,79 @@ function reducer(state: AppState, action: AppAction): AppState {
     }
 
     case 'GUEST_ARRIVED_PARTNER': {
+      // 25/10 soir · Partenaire calé The Fork : « Je suis arrivé » = simple signal
+      // pour le lieu. Ne rend pas l’argent, ne vaut pas présence : seule la liste
+      // du lieu (H+30) ou le silence à H+6 rend la caution. Décoché par le lieu :
+      // contestation « je suis venu » + phrase (CONTEST_NO_SHOW), pas ce bouton.
       const { requestId, arrivedAt, arrivalPhotoUri } = action.payload;
       return {
         ...state,
         requests: state.requests.map((r) => {
           if (r.id !== requestId || r.status !== 'confirmed') return r;
-          if (r.guestArrivedAt || r.attendance === 'present') return r;
-          const photo = arrivalPhotoUri ? { arrivalPhotoUri } : {};
-          if (r.attendance === 'absent') {
-            // « Pas venu » déjà tapé puis « Je suis arrivé » → litige, pas de sanction auto,
-            // et contestation (17/10) tant que la caution est en attente.
-            const contest =
-              r.depositStatus === 'noshow_pending' && !r.noShowContest
-                ? {
-                    depositStatus: 'contested' as const,
-                    noShowContest: {
-                      note: '« Je suis arrivé »',
-                      contestedAt: arrivedAt,
-                      viaArrival: true,
-                    },
-                  }
-                : {};
+          if (r.guestArrivedAt || r.attendance || r.leftTableAt) return r;
+          const po = state.outings.find((o) => o.id === r.outingId);
+          if (po?.partnerVenueCheck) return r;
+          return {
+            ...r,
+            guestArrivedAt: arrivedAt,
+            ...(arrivalPhotoUri ? { arrivalPhotoUri } : {}),
+          };
+        }),
+      };
+    }
+
+    case 'PARTNER_VENUE_CHECK': {
+      // 25/10 soir · Partenaire calé The Fork : la seule action du soir côté lieu,
+      // une fois, de H+30 à H+6 inclus. Cochés = présents (caution rendue) ;
+      // décochés = « Le lieu t’a marqué absent » : 24 h pour contester, sinon
+      // 20 € entiers au lieu (compteur partenaire, pas le barème invité).
+      const { outingId, absentRequestIds, at } = action.payload;
+      const outing = state.outings.find((o) => o.id === outingId);
+      const atMs = new Date(at).getTime();
+      const me = state.currentUser;
+      if (!outing || !me || !Number.isFinite(atMs)) return state;
+      if (partnerVenueCheckRefusal(outing, state.requests, me.id, atMs)) return state;
+      const listed = partnerVenueCheckRequests(outing, state.requests);
+      const listedIds = new Set(listed.map((r) => r.id));
+      const absent = new Set(absentRequestIds.filter((id) => listedIds.has(id)));
+      return {
+        ...state,
+        outings: state.outings.map((o) =>
+          o.id === outingId
+            ? {
+                ...o,
+                status: closedKeepingCompleted(o.status),
+                partnerVenueCheck: { at, absentRequestIds: [...absent] },
+              }
+            : o,
+        ),
+        requests: state.requests.map((r) => {
+          if (!listedIds.has(r.id)) return r;
+          if (absent.has(r.id)) {
             return {
               ...r,
-              ...contest,
-              guestArrivedAt: arrivedAt,
-              ...photo,
-              partnerDispute: r.partnerDispute ?? {
-                openedAt: arrivedAt,
-                trigger: 'arrival_after_absent' as const,
-                // Lot C : mention démo affichée via demoLabel (masquée hors __DEV__).
-                note: 'Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard (démo).',
-              },
+              attendance: 'absent' as const,
+              depositStatus: 'noshow_pending' as const,
+              noShowReportedAt: at,
+              partnerMarkedAbsentAt: at,
+              partnerVenueAbsent: true,
             };
           }
-          // Arrivé + pas de « Pas venu » → présent ; caution rendue à H+30
-          // (ou fin du moment), retenue d’ici là (départ avant H+30).
-          const po = state.outings.find((o) => o.id === r.outingId);
-          const returnNow =
-            !po ||
-            presenceReturnsDepositNow({
-              startsAt: po.startsAt,
-              outingStatus: po.status,
-              atMs: new Date(arrivedAt).getTime(),
-            });
-          return {
-            ...r,
-            attendance: 'present' as const,
-            presenceBy: 'guest' as const,
-            guestArrivedAt: arrivedAt,
-            ...photo,
-            depositStatus:
-              r.depositStatus === 'held' || !r.depositStatus
-                ? returnNow
-                  ? ('returned' as const)
-                  : ('held' as const)
-                : r.depositStatus,
-          };
+          // Coché par le lieu : présent, caution rendue (on est après H+30).
+          return applyPresence(r, outing, at, 'host');
         }),
-      };
-    }
-
-    case 'OPEN_PARTNER_DISPUTE': {
-      const { requestId, at } = action.payload;
-      return {
-        ...state,
-        requests: state.requests.map((r) => {
-          if (r.id !== requestId || r.status !== 'confirmed') return r;
-          if (r.partnerDispute || !r.guestArrivedAt) return r;
-          // 18/10 · Désaccord (arrivé selon l’invité, « Pas venu » selon le lieu) :
-          // contestation existante ouverte directement (caution en attente de revue).
-          const contest =
-            r.attendance === 'present' && !r.noShowContest
-              ? {
-                  attendance: 'absent' as const,
-                  depositStatus: 'contested' as const,
-                  noShowReportedAt: at,
-                  noShowContest: { note: '« Je suis arrivé »', contestedAt: at, viaArrival: true },
-                }
-              : {};
-          return {
-            ...r,
-            ...contest,
-            partnerMarkedAbsentAt: at,
-            partnerDispute: {
-              openedAt: at,
-              trigger: 'absent_after_arrival' as const,
-              // Lot C : mention démo affichée via demoLabel (masquée hors __DEV__).
-              note: 'Litige : l’invité dit être arrivé, le lieu signale « Pas venu ». Photo demandée plus tard (démo).',
-            },
-          };
-        }),
-      };
-    }
-
-    case 'MARK_PARTNER_ABSENT_AT': {
-      const { requestId, at } = action.payload;
-      return {
-        ...state,
-        requests: state.requests.map((r) =>
-          r.id === requestId ? { ...r, partnerMarkedAbsentAt: at } : r,
-        ),
       };
     }
 
     case 'CONTEST_NO_SHOW': {
-      const { requestId, note, at } = action.payload;
+      const { requestId, note, at, asUserId } = action.payload;
       const me = state.currentUser;
       const req = state.requests.find((r) => r.id === requestId);
       const atMs = new Date(at).getTime();
       if (!me || !req || !Number.isFinite(atMs)) return state;
-      if (contestRefusal(req, me.id, note, atMs)) return state;
+      // Démo seulement (__DEV__) : contester à la place d’un invité démo.
+      const actorId = asUserId && isDemoEnabled() ? asUserId : me.id;
+      if (contestRefusal(req, actorId, note, atMs)) return state;
       return {
         ...state,
         requests: state.requests.map((r) =>
@@ -2987,8 +3024,9 @@ function reducer(state: AppState, action: AppAction): AppState {
       // Absence de l’hôte en attente : 24 h suspendues.
       const expOuting = state.outings.find((o) => o.id === req.outingId);
       if (expOuting && isHostNoShowUnresolved(expOuting)) return state;
-      // Définitif : caution perdue et absence comptée maintenant.
-      return withGuestNoShowStrike(
+      // Définitif : caution perdue et absence comptée maintenant
+      // (partenaire : 20 € au lieu, compteur partenaire).
+      return withRetainedNoShow(
         {
           ...state,
           requests: state.requests.map((r) =>
@@ -3075,7 +3113,7 @@ function reducer(state: AppState, action: AppAction): AppState {
         }),
       };
       // « Pas venu confirmé » : absence comptée maintenant (définitif).
-      return accepted ? reviewed : withGuestNoShowStrike(reviewed, requestId, at);
+      return accepted ? reviewed : withRetainedNoShow(reviewed, requestId, at);
     }
 
     case 'RETURN_DEPOSITS_H6': {
@@ -3621,23 +3659,31 @@ interface ChanceContextValue {
   setPartnerPinned: (pinned: boolean) => void;
   /**
    * Invité partenaire : « Je suis arrivé » dès H−15 (photo façade optionnelle,
-   * stub non bloquant). → présent + caution rendue (ou litige si « Pas venu »).
+   * stub non bloquant). 25/10 soir : simple signal pour le lieu, ne rend pas
+   * l’argent (seule la liste du lieu ou le silence à H+6 le rend).
    */
   guestArrivedPartner: (
     requestId: string,
     opts?: { arrivalPhotoUri?: string },
   ) =>
-    | { ok: true; dispute: boolean }
+    | { ok: true }
     | { ok: false; reason: string };
   /**
-   * Lieu : « Pas venu » (chaise vide, de H à H+6). Sans « Je suis arrivé » →
-   * lapin (6,90 / 13,10). Après « Je suis arrivé » → litige, pas de sanction.
+   * 25/10 soir · Partenaire calé The Fork : liste du lieu (seule action du soir),
+   * une fois, de H+30 à H+6. absentRequestIds vide = « Table complète ».
    */
-  partnerMarkNoShow: (
-    requestId: string,
+  partnerVenueCheck: (
+    outingId: string,
+    absentRequestIds: string[],
   ) =>
-    | { ok: true; outcome: 'lapin' | 'dispute' }
+    | { ok: true; present: number; absent: number }
     | { ok: false; reason: string };
+  /** Démo QA : annonce lieu commencée il y a 31 min + notification H+30 avec les prénoms. */
+  demoPartnerVenueCheckH30: (outingId: string) => { ok: true; names: string[] } | { ok: false; reason: string };
+  /** Démo QA : l’invité décoché répond « je suis venu » + une phrase (contestation). */
+  demoPartnerAbsentContest: (requestId: string) => { ok: true } | { ok: false; reason: string };
+  /** Démo QA : l’invité décoché ne répond pas — 24 h écoulées, 20 € au lieu. */
+  demoPartnerAbsentNoReply: (requestId: string) => { ok: true } | { ok: false; reason: string };
   /** Démo QA : N invités confirment sur une annonce partenaire (1er confirmé gagne). */
   simulatePartnerGuestConfirms: (
     outingId: string,
@@ -3645,7 +3691,7 @@ interface ChanceContextValue {
   ) =>
     | { ok: true; confirmed: number; noSpot: number }
     | { ok: false; reason: string };
-  /** Démo QA : partenaire à H+6 (25/10 soir, ex-« lendemain ») — silence des deux → cautions rendues. */
+  /** Démo QA : partenaire à H+6 (25/10 soir, ex-« lendemain ») — rien coché → cautions rendues. */
   simulatePartnerNextDay: (
     outingId: string,
   ) => { ok: true; refunded: number } | { ok: false; reason: string };
@@ -5730,6 +5776,33 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const user = st.currentUser;
       const outing = st.outings.find((o) => o.id === outingId);
       if (!user || !outing) return false;
+      // 25/10 soir · Partenaire calé The Fork : à H+30, notification au lieu avec
+      // la liste des prénoms confirmés (seule action du soir). Rien pour les invités.
+      if (isPartnerListing(outing)) {
+        if (user.id !== outing.hostId) return false;
+        const refusal = partnerVenueCheckRefusal(outing, st.requests, user.id, Date.now());
+        if (refusal && !(opts?.demo && refusal === 'too_early')) return false;
+        const names = partnerVenueCheckFirstNames(outing, st.requests);
+        const venueToast: AppToast = {
+          id: uid('toast'),
+          title: 'Ta table de ce soir',
+          body: partnerVenueCheckNotifBody(names),
+          createdAt: new Date().toISOString(),
+          type: 'partner_venue_check',
+          outingId,
+        };
+        void (async () => {
+          void ensureAndroidChannel();
+          const push = await sendPriorityPush({
+            type: 'partner_venue_check',
+            title: venueToast.title,
+            body: venueToast.body,
+            data: { outingId },
+          });
+          if (!push.pushOk) dispatch({ type: 'SET_TOAST', payload: venueToast });
+        })();
+        return true;
+      }
       // Hors démo : seulement tant que la présence peut encore être indiquée (H+6).
       if (!opts?.demo && !isPresenceWindowOpen(outing, Date.now())) return false;
       if (!presenceCheckUserIds(outing, st.requests).includes(user.id)) return false;
@@ -7645,7 +7718,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     (
       requestId: string,
       opts?: { arrivalPhotoUri?: string },
-    ): { ok: true; dispute: boolean } | { ok: false; reason: string } => {
+    ): { ok: true } | { ok: false; reason: string } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       const req = state.requests.find((r) => r.id === requestId);
@@ -7655,7 +7728,6 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (!canGuestSelfArrivePartner(outing, req, user.id)) {
         return { ok: false, reason: 'not_yet' };
       }
-      const dispute = req.attendance === 'absent';
       dispatch({
         type: 'GUEST_ARRIVED_PARTNER',
         payload: {
@@ -7674,57 +7746,116 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           outingId: outing.id,
           requestId,
           kind: 'system',
-          text: dispute
-            ? `${req.userName} dit être arrivé après un « Pas venu » du lieu — litige ouvert, pas de sanction automatique.`
-            : `${req.userName} est arrivé. Caution rendue après 30 min.`,
+          // 25/10 soir : signal seulement, l’argent suit la liste du lieu (ou H+6).
+          text: `${req.userName} a signalé son arrivée. Le lieu pointe la table 30 min après l’heure.`,
           createdAt: new Date().toISOString(),
         },
       });
-      return { ok: true, dispute };
+      return { ok: true };
     },
     [state.currentUser, state.requests, state.outings],
   );
 
-  const partnerMarkNoShow = useCallback(
+  /**
+   * 25/10 soir · Partenaire calé The Fork : « Table complète » (rien décoché)
+   * ou liste avec décochés. Une fois, de H+30 à H+6. Message à chaque décoché :
+   * « Le lieu t’a marqué absent » (24 h pour « je suis venu » + une phrase).
+   */
+  const partnerVenueCheck = useCallback(
     (
-      requestId: string,
-    ):
-      | { ok: true; outcome: 'lapin' | 'dispute' }
-      | { ok: false; reason: string } => {
+      outingId: string,
+      absentRequestIds: string[],
+    ): { ok: true; present: number; absent: number } | { ok: false; reason: string } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
-      const req = state.requests.find((r) => r.id === requestId);
-      if (!req) return { ok: false, reason: 'not_found' };
-      const outing = state.outings.find((o) => o.id === req.outingId);
+      const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       const at = new Date().toISOString();
-      if (canPartnerFlagDispute(outing, req, user.id)) {
-        dispatch({ type: 'OPEN_PARTNER_DISPUTE', payload: { requestId, at } });
+      const refusal = partnerVenueCheckRefusal(outing, state.requests, user.id, new Date(at).getTime());
+      if (refusal) return { ok: false, reason: refusal };
+      const listed = partnerVenueCheckRequests(outing, state.requests);
+      const absentIds = new Set(absentRequestIds.filter((id) => listed.some((r) => r.id === id)));
+      dispatch({
+        type: 'PARTNER_VENUE_CHECK',
+        payload: { outingId, absentRequestIds: [...absentIds], at },
+      });
+      for (const r of listed) {
+        const isAbsent = absentIds.has(r.id);
         dispatch({
           type: 'ADD_CHAT_MESSAGE',
           payload: {
             id: uid('msg'),
-            threadKey: chatThreadKey(outing.id, requestId),
+            threadKey: chatThreadKey(outing.id, r.id),
             outingId: outing.id,
-            requestId,
+            requestId: r.id,
             kind: 'system',
-            // Lot C : « (démo) » retiré hors __DEV__.
-            text: demoLabel('Litige : arrivé selon l’invité, « Pas venu » selon le lieu. Photo demandée plus tard (démo) — aucune sanction automatique.'),
+            text: isAbsent
+              ? `${PARTNER_VENUE_ABSENT_TEXT}. Tu as 24 h pour dire « je suis venu », avec une phrase. Sans réponse, les 20 € de caution vont au lieu.`
+              : `${r.userName} · présent selon le lieu. Caution rendue.`,
             createdAt: at,
           },
         });
-        return { ok: true, outcome: 'dispute' };
       }
-      if (!canPartnerMarkGuestAbsent(outing, req, user.id)) {
-        return { ok: false, reason: 'not_allowed_now' };
-      }
-      dispatch({ type: 'MARK_PARTNER_ABSENT_AT', payload: { requestId, at } });
-      // « Pas venu » sans « Je suis arrivé » → lapin (6,90 Moment / 13,10 lieu).
-      const res = reportGuestNoShow(requestId);
-      if (!res.ok) return { ok: false, reason: res.reason };
-      return { ok: true, outcome: 'lapin' };
+      const toast: AppToast = {
+        id: uid('toast'),
+        title: absentIds.size ? 'Liste validée' : 'Table complète',
+        body: absentIds.size
+          ? `${absentIds.size} absent(s) signalé(s) : 24 h pour contester. Sans contestation, les 20 € te reviennent.`
+          : 'Tout le monde est là : cautions rendues.',
+        createdAt: at,
+        outingId,
+      };
+      dispatch({ type: 'SET_TOAST', payload: toast });
+      return { ok: true, present: listed.length - absentIds.size, absent: absentIds.size };
     },
-    [state.currentUser, state.requests, state.outings, reportGuestNoShow],
+    [state.currentUser, state.outings, state.requests],
+  );
+
+  const demoPartnerVenueCheckH30 = useCallback(
+    (outingId: string): { ok: true; names: string[] } | { ok: false; reason: string } => {
+      // Démo seulement (__DEV__) : inerte en production.
+      if (!isDemoEnabled()) return DEMO_DISABLED;
+      const outing = state.outings.find((o) => o.id === outingId);
+      if (!outing || !isPartnerListing(outing)) return { ok: false, reason: 'not_partner_listing' };
+      const startsAt = new Date(Date.now() - 31 * 60 * 1000).toISOString();
+      dispatch({ type: 'SHIFT_OUTING_START', payload: { outingId, startsAt } });
+      const names = partnerVenueCheckFirstNames(outing, state.requests);
+      // La relance lit l’état courant : l’heure décalée est relue au tour suivant.
+      setTimeout(() => notifyPresenceCheck(outingId, { demo: true }), 0);
+      return { ok: true, names };
+    },
+    [state.outings, state.requests, notifyPresenceCheck],
+  );
+
+  const demoPartnerAbsentContest = useCallback(
+    (requestId: string): { ok: true } | { ok: false; reason: string } => {
+      // Démo seulement (__DEV__) : inerte en production.
+      if (!isDemoEnabled()) return DEMO_DISABLED;
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req || !req.partnerVenueAbsent) return { ok: false, reason: 'not_found' };
+      const at = new Date().toISOString();
+      const note = 'Je suis venu, j’étais au bar en attendant la table.';
+      const refusal = contestRefusal(req, req.userId, note, new Date(at).getTime());
+      if (refusal) return { ok: false, reason: refusal };
+      dispatch({ type: 'CONTEST_NO_SHOW', payload: { requestId, note, at, asUserId: req.userId } });
+      return { ok: true };
+    },
+    [state.requests],
+  );
+
+  const demoPartnerAbsentNoReply = useCallback(
+    (requestId: string): { ok: true } | { ok: false; reason: string } => {
+      // Démo seulement (__DEV__) : inerte en production.
+      if (!isDemoEnabled()) return DEMO_DISABLED;
+      const req = state.requests.find((r) => r.id === requestId);
+      if (!req || !req.partnerVenueAbsent) return { ok: false, reason: 'not_found' };
+      if (req.depositStatus !== 'noshow_pending') return { ok: false, reason: 'not_pending' };
+      const d = contestDeadlineMs(req, Date.now());
+      if (!Number.isFinite(d)) return { ok: false, reason: 'not_pending' };
+      dispatch({ type: 'EXPIRE_NO_SHOW_CONTEST', payload: { requestId, at: new Date(d).toISOString() } });
+      return { ok: true };
+    },
+    [state.requests],
   );
 
   const simulatePartnerGuestConfirms = useCallback(
@@ -8434,7 +8565,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       demoLeavePartner,
       setPartnerPinned,
       guestArrivedPartner,
-      partnerMarkNoShow,
+      partnerVenueCheck,
+      demoPartnerVenueCheckH30,
+      demoPartnerAbsentContest,
+      demoPartnerAbsentNoReply,
       simulatePartnerGuestConfirms,
       simulatePartnerNextDay,
       getMomentParticipants,
@@ -8553,7 +8687,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       demoLeavePartner,
       setPartnerPinned,
       guestArrivedPartner,
-      partnerMarkNoShow,
+      partnerVenueCheck,
+      demoPartnerVenueCheckH30,
+      demoPartnerAbsentContest,
+      demoPartnerAbsentNoReply,
       simulatePartnerGuestConfirms,
       simulatePartnerNextDay,
       getMomentParticipants,

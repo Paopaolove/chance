@@ -161,9 +161,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(L(p0,now,'discomfort').confidentialLeaveReports[0].guestDepositRefundedEuros===20,'present guest leaving with discomfort refunded');
     const p1=D(st(-40*60e3),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
     ok(p1.requests[0].depositStatus==='returned'&&L(p1,now).requests[0].depositStatus==='returned','present after H+30: returned, leave free');
-    // partenaire : arrivée avant H+30 → retenue, départ sans motif → perdue
+    // partenaire : « Je suis arrivé » = signal (25/10 soir), caution retenue, départ sans motif → perdue
     const pa=D(S({outings:[o({startsAt:iso(now-5*60e3),isPartnerListing:true,status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]}),{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(now)}});
-    ok(pa.requests[0].attendance==='present'&&pa.requests[0].depositStatus==='held'&&L(pa,now).requests[0].depositStatus==='forfeited','partner arrival <H+30 held, early leave forfeited');
+    ok(pa.requests[0].guestArrivedAt===iso(now)&&pa.requests[0].attendance===undefined&&pa.requests[0].depositStatus==='held'&&L(pa,now).requests[0].depositStatus==='forfeited','partner arrival = signal, held, early leave forfeited');
   }
   // départ exactement à H : autorisé, avant H+30 → perdue sans motif
   { const h0=L(st(0),now); ok(!!h0.requests[0].leftTableAt&&h0.requests[0].depositStatus==='forfeited','leave exactly at H allowed, forfeited'); }
@@ -426,7 +426,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const ctx=src('data/ChanceContext.tsx');
   const re=/const (simulate\w+|demo\w+|seed\w+|resetDemo) = useCallback\(/g; let m:any; const names:string[]=[]; const unguarded:string[]=[];
   while((m=re.exec(ctx))){ names.push(m[1]); const body=ctx.slice(m.index,m.index+400); if(!body.includes('if (!isDemoEnabled())')) unguarded.push(m[1]); }
-  ok(names.length===23&&names.includes('demoResolveGuestReview')&&names.includes('simulateOtherHideConsent')&&names.includes('demoSimulateDepositH6'),'static: demo callbacks found ('+names.length+')');
+  ok(names.length===26&&names.includes('demoPartnerVenueCheckH30')&&names.includes('demoResolveGuestReview')&&names.includes('simulateOtherHideConsent')&&names.includes('demoSimulateDepositH6'),'static: demo callbacks found ('+names.length+')');
   for(const n of ['reviewPartnerApplication','setPartnerPinned']){ const i=ctx.indexOf('const '+n+' = useCallback('); ok(i>0&&ctx.slice(i,i+400).includes('if (!isDemoEnabled())'),'static: menu-only '+n+' guarded'); }
   ok(unguarded.length===0,'static: every demo callback guarded'+(unguarded.length?' — missing: '+unguarded.join(','):''));
   // appels hors menu démo
@@ -1050,12 +1050,12 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(hp!==pp&&pp.includes('lieu')&&!pp.includes('hôte')&&hp!=='Seul l’hôte de la table peut le faire.','not_participant: libellé propre au parcours partenaire');
   ok(RL.refusalLabel('too_early','presence').includes('15 min')&&RL.refusalLabel('not_host','presence').includes('présence')&&RL.refusalLabel('already_absent','presence').includes('« Pas venu »'),'presence: too_early / not_host / already_absent labels');
   const all=[...RL.REFUSAL_CODES,'zzz_unknown'];
-  ok(['noshow','partner_noshow','presence'].every((f)=>all.every((c)=>!snake.test(RL.refusalLabel(c,f))&&RL.refusalLabel(c,f).length>5)),'every code × every flow: clear French, no raw code');
+  ok(['noshow','partner_noshow','partner_check','presence'].every((f)=>all.every((c)=>!snake.test(RL.refusalLabel(c,f))&&RL.refusalLabel(c,f).length>5)),'every code × every flow: clear French, no raw code');
   const fs=require('node:fs'), path=require('node:path');
   const od=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
   const after=(call:string)=>{const i=od.indexOf(call);const nx=od.indexOf('onPress',i+1);return od.slice(i,nx>0?nx:i+1500);};
   ok(/refusalLabel\(res\.reason, 'presence'\)/.test(after('markGuestPresent(r.id)'))&&!/Alert\.alert\('Impossible', res\.reason\)/.test(after('markGuestPresent(r.id)')),'« Marquer présent »: refusal through refusalLabels');
-  ok((od.match(/partnerMarkNoShow\(r\.id\);\s*if \(!res\.ok\) Alert\.alert\('Impossible', refusalLabel\(res\.reason, 'partner_noshow'\)\)/g)||[]).length===2,'partnerMarkNoShow alerts: partner flow labels');
+  ok((od.match(/partnerVenueCheck\(outing\.id, absent\);\s*if \(!res\.ok\) Alert\.alert\('Impossible', refusalLabel\(res\.reason, 'partner_check'\)\)/g)||[]).length===1,'partnerVenueCheck alerts: partner_check flow labels');
 }
 
 // contestation d’un « Pas venu » de l’hôte : 24 h, phrase obligatoire, revue (Paolo 17/10, 15 h 44 — délai 24 h)
@@ -1115,8 +1115,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(!/contest|J’étais|noShowContest/.test(hv(c0)),'host projection: no contest field / sentence');
   ok(hv(p0)===hv(c0),'host view identical contested / not contested');
   // hors périmètre : départ sans motif, malaise ; partenaire : même contestation (17/10)
-  const pst=NS(st({isPartnerListing:true}));
-  ok(pst.requests[0].depositStatus==='noshow_pending'&&CT(pst,NSAT+MIN).requests[0].depositStatus==='contested','partner « Pas venu »: same contest (24 h, sentence)');
+  const pst=D(st({isPartnerListing:true}),{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:['r1'],at:iso(NSAT)}});
+  ok(pst.requests[0].depositStatus==='noshow_pending'&&CT(pst,NSAT+MIN).requests[0].depositStatus==='contested','partner unchecked: same contest (24 h, sentence)');
   {
     const sl=S({currentUser:me,outings:[o({startsAt:iso(now-10*MIN),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})]});
     const L=(s0:any,reason?:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lvc'}});
@@ -1135,7 +1135,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const ctx=rd('data/ChanceContext.tsx'), od=rd('screens/OutingDetailScreen.tsx'), card=rd('components/NoShowContestCard.tsx');
   ok(/requestsDueForContestExpiry\(state\.requests, now\)[\s\S]{0,300}EXPIRE_NO_SHOW_CONTEST[\s\S]{0,900}setInterval\(tick, 60_000\)[\s\S]{0,200}'active'/.test(ctx),'static: local 24 h timer (interval + foreground)');
   ok(/reportedByUserId: user\.id/.test(ctx),'static: reportGuestNoShow passes the author');
-  ok(od.includes('<NoShowContestCard')&&card.includes('title="Contester"')&&card.includes('variant="secondary"')&&card.includes('contestTimeLeftLabel')&&!/shadow|elevation/i.test(card),'static: guest « Contester » card, time left, secondary button, no shadow');
+  ok(od.includes('<NoShowContestCard')&&card.includes("'Je suis venu' : 'Contester'")&&card.includes('variant="secondary"')&&card.includes('contestTimeLeftLabel')&&!/shadow|elevation/i.test(card),'static: guest « Contester » card, time left, secondary button, no shadow');
   ok(od.includes('absence signalée · caution en attente'),'static: host sees « caution en attente »');
   ok(NC.contestTimeLeftLabel(p0.requests[0],NSAT+60*MIN+30e3)==='23 h 00'&&NC.contestTimeLeftLabel(p0.requests[0],DL-12*MIN)==='12 min','time-left label');
 }
@@ -1481,6 +1481,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
 }
 
 // partenaires : même contestation que les tables normales (24 h, phrase, revue 7 jours)
+// 25/10 soir · Partenaire calé The Fork : l’absence vient de la liste du lieu (décoché),
+// 20 € entiers au lieu, compteur partenaire (4 en 12 mois), pas le barème invité.
 {
   const NC=require('../src/utils/noShowContest');
   const LT=require('../src/utils/leaveTable');
@@ -1488,39 +1490,109 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const MIN=60e3, D1=24*H, D7=7*24*H, T=now-2*H, NSAT=T+H, CT=NSAT+2*H;
   const guest:any={...me};
   const st=(more:any={})=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'})],...more});
-  const NS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  const NS=(s0:any)=>({...D({...s0,currentUser:host},{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:['r1'],at:iso(NSAT)}}),currentUser:s0.currentUser});
   const C=(s0:any,at:number,note='J’étais en terrasse zq7')=>D(s0,{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note,at:iso(at)}});
   const EXP=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(at)}});
   const ER=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_REVIEW',payload:{requestId:'r1',at:iso(at)}});
   const p=NS(st());
-  ok(p.requests[0].depositStatus==='noshow_pending'&&p.requests[0].attendance==='absent'&&!p.guestNoShowStrikes.u1,'partner « Pas venu »: pending 24 h, nothing counted (no immediate loss)');
+  ok(p.requests[0].depositStatus==='noshow_pending'&&p.requests[0].attendance==='absent'&&p.requests[0].partnerVenueAbsent===true&&p.requests[0].partnerMarkedAbsentAt===iso(NSAT)&&!p.guestNoShowStrikes.u1&&!(p.partnerNoShowLog?.u1?.length),'partner unchecked: pending 24 h, nothing counted (no immediate loss)');
   ok(C(p,NSAT+D1-MIN).requests[0].depositStatus==='contested'&&C(p,NSAT+D1).requests[0].depositStatus==='noshow_pending','partner contest: 24 h − 1 min ok, 24 h refused');
   ok(C(p,CT,'  ').requests[0].depositStatus==='noshow_pending','partner contest: sentence mandatory');
   ok(EXP(p,NSAT+D1-MIN).requests[0].depositStatus==='noshow_pending','partner: no loss at 24 h − 1 min');
   const lost=EXP(p,NSAT+D1);
-  ok(lost.requests[0].depositStatus==='forfeited'&&lost.guestNoShowStrikes.u1===1&&lost.requests[0].noShowFinalNotice.text===NC.NOSHOW_FINAL_NOTICE_TEXT,'partner: lost at 24 h without contest, absence counted, final message');
+  ok(lost.requests[0].depositStatus==='forfeited'&&!lost.guestNoShowStrikes.u1&&lost.partnerNoShowLog.u1.length===1&&lost.currentUser.partnerNoShowCount===1&&!lost.currentUser.lowerPriority&&lost.requests[0].noShowFinalNotice.text==='Ton absence est retenue. Les 20 € de caution vont au lieu.','partner: lost at 24 h without answer, partner counter (not guest barème), final message');
+  ok(NC.partnerVenueNoShowShareEuros(lost.requests[0])===20&&NC.hostNoShowShareEuros(lost.requests[0])===0,'partner: 20 € entire to the venue (no 6,90 / 13,10 split)');
+  ok(NC.partnerVenueNoShowShareEuros(p.requests[0])===0,'partner: 0 € to the venue while pending');
   const c=C(p,CT);
   ok(!PU.shouldAutoRefundPartnerSilence(c.outings[0],c.requests[0],T+48*H)&&!PU.shouldAutoRefundPartnerSilence(p.outings[0],p.requests[0],T+48*H)&&D(c,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='contested','partner silence (H+6) never settles a pending or contested partner deposit');
   ok(ER(c,CT+D7-MIN).requests[0].depositStatus==='contested','partner review: 7 d − 1 min still pending');
   const tx=ER(c,CT+D7);
-  ok(tx.requests[0].depositStatus==='returned'&&tx.requests[0].noShowNotRetained===true&&!tx.guestNoShowStrikes.u1,'partner review: 7 d without decision → returned, not counted');
+  ok(tx.requests[0].depositStatus==='returned'&&tx.requests[0].noShowNotRetained===true&&!tx.guestNoShowStrikes.u1&&!(tx.partnerNoShowLog?.u1?.length),'partner review: 7 d without decision → returned, not counted');
   const acc=D(c,{type:'ACCEPT_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(CT+H)}});
   const conf=D(c,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(CT+H)}});
-  ok(acc.requests[0].depositStatus==='returned'&&acc.requests[0].attendance===undefined&&!acc.guestNoShowStrikes.u1,'partner: contest accepted → returned, absence erased');
-  ok(conf.requests[0].depositStatus==='forfeited'&&conf.guestNoShowStrikes.u1===1,'partner: contest rejected → lost and counted');
-  // « Je suis arrivé » après « Pas venu » : litige comme aujourd’hui
+  ok(acc.requests[0].depositStatus==='returned'&&acc.requests[0].attendance===undefined&&!acc.guestNoShowStrikes.u1&&!(acc.partnerNoShowLog?.u1?.length)&&NC.partnerVenueNoShowShareEuros(acc.requests[0])===0,'partner: contest accepted → returned, absence not counted');
+  ok(conf.requests[0].depositStatus==='forfeited'&&!conf.guestNoShowStrikes.u1&&conf.partnerNoShowLog.u1.length===1&&NC.partnerVenueNoShowShareEuros(conf.requests[0])===20,'partner: review retained → 20 € to the venue, partner counter');
+  // « Je suis arrivé » après décoché : plus de litige automatique, la contestation passe par « je suis venu » + phrase
   const arr=D(p,{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(CT)}});
-  ok(arr.requests[0].partnerDispute?.trigger==='arrival_after_absent'&&arr.requests[0].depositStatus==='contested'&&arr.requests[0].noShowContest.viaArrival===true,'decision 6: « Je suis arrivé » after « Pas venu » = contest (dispute kept)');
+  ok(JSON.stringify(arr)===JSON.stringify(p),'25/10 soir: « Je suis arrivé » after being unchecked = no-op (contest via « je suis venu »)');
   // confidentialité vis-à-vis du lieu
   const hv=JSON.stringify(c.requests.map(LT.projectRequestForHost));
   ok(!/zq7|noShowContest/.test(hv)&&LT.hostDepositStatus(c.requests[0])==='noshow_pending'&&LT.hostDepositStatus(p.requests[0])==='noshow_pending','partner sees « caution en attente », never the sentence');
   // auto-déclaration : perte immédiate (inchangé)
   const self=D(st(),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
   ok(self.requests[0].depositStatus==='forfeited','partner: self-declared absence still immediate');
+  // le lieu ne peut plus déclarer « Pas venu » à l’unité
+  const hostNS=D({...st(),currentUser:host},{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
+  ok(hostNS.requests[0].depositStatus==='held'&&!hostNS.requests[0].attendance,'25/10 soir: venue « Pas venu » à l’unité refused (list only)');
   const fs=require('node:fs'), path=require('node:path');
   const scr=fs.readFileSync(path.join(__dirname,'..','src','screens','OutingDetailScreen.tsx'),'utf8');
   const card=fs.readFileSync(path.join(__dirname,'..','src','components','NoShowContestCard.tsx'),'utf8');
-  ok(/la personne a 24 h pour contester/.test(scr)&&/absence signalée · caution en attente`\n/.test(scr)&&/'Le lieu' : 'L’hôte'/.test(card),'partner screens: 24 h contest wording');
+  ok(/marqué absent · caution en attente \(24 h pour contester\)/.test(scr)&&/PARTNER_VENUE_ABSENT_TEXT/.test(card)&&/pour dire « je suis venu », avec une phrase/.test(card)&&/de caution vont au lieu/.test(card),'partner screens: « Le lieu t’a marqué absent », 24 h, « je suis venu »');
+  ok(!/6,90 € Moment \/ 13,10 € pour ton lieu/.test(scr)&&!/Pas venu \(\$\{r\.userName\}/.test(scr),'partner screens: old « Pas venu » / 6,90-13,10 removed');
+}
+
+// 25/10 soir · Partenaire calé The Fork : liste du lieu à H+30, H+6 silence, compteur 4/12 mois
+{
+  const PU=require('../src/utils/partners');
+  const MIN=60e3, T=now-2*H;
+  const g2={...rq({id:'r2',userId:'u2',userName:'Bea (démo)',status:'confirmed',depositStatus:'held'})};
+  const st=(ox:any={},more:any={})=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true,...ox})],requests:[rq({status:'confirmed',depositStatus:'held',userName:'Moi Dupont'}),g2],...more});
+  const VC=(s0:any,abs:string[],at:number)=>D(s0,{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:abs,at:iso(at)}});
+  // fenêtre H+30 → H+6, une fois
+  ok(PU.partnerVenueCheckRefusal(st().outings[0],st().requests,'h1',T+29*MIN)==='too_early'&&PU.partnerVenueCheckRefusal(st().outings[0],st().requests,'h1',T+30*MIN)===null&&PU.partnerVenueCheckRefusal(st().outings[0],st().requests,'h1',T+6*H)===null&&PU.partnerVenueCheckRefusal(st().outings[0],st().requests,'h1',T+6*H+1)==='too_late','venue check window: H+30 → H+6');
+  ok(PU.partnerVenueCheckRefusal(st().outings[0],st().requests,'u1',T+H)==='not_host'&&PU.partnerVenueCheckRefusal(o({startsAt:iso(T)}),st().requests,'h1',T+H)==='not_partner_listing','venue check: venue only, partner listing only');
+  ok(JSON.stringify(VC(st(),[],T+29*MIN))===JSON.stringify(st()),'venue check before H+30: no-op');
+  // Table complète
+  const full=VC(st(),[],T+H);
+  ok(full.requests.every((r:any)=>r.attendance==='present'&&r.depositStatus==='returned')&&full.outings[0].partnerVenueCheck.absentRequestIds.length===0,'« Table complète »: everyone present, deposits returned');
+  ok(JSON.stringify(VC(full,['r1'],T+H+MIN))===JSON.stringify(full)&&PU.partnerVenueCheckRefusal(full.outings[0],full.requests,'h1',T+H)==='already_done','venue check: once only');
+  // décocher
+  const one=VC(st(),['r1'],T+H);
+  ok(one.requests[0].attendance==='absent'&&one.requests[0].depositStatus==='noshow_pending'&&one.requests[0].partnerVenueAbsent&&one.requests[1].attendance==='present'&&one.requests[1].depositStatus==='returned','uncheck: unchecked pending, checked returned');
+  ok(JSON.stringify(VC(st(),['zzz'],T+H).requests.map((r:any)=>r.attendance))==='["present","present"]','uncheck: unknown id ignored');
+  // liste et notif
+  ok(JSON.stringify(PU.partnerVenueCheckFirstNames(st().outings[0],st().requests))==='["Moi","Bea"]'&&PU.partnerVenueCheckNotifBody(['Moi','Bea'])==='Confirmés : Moi, Bea. « Table complète », ou décoche qui n’est pas là.','H+30 notif: confirmed first names');
+  ok(PU.partnerVenueCheckRequests(st().outings[0],[...st().requests,rq({id:'r3',userId:'u3',status:'cancelled'})]).length===2,'venue list: confirmed only');
+  // H+6 rien coché : cautions rendues (inchangé 4bc4393)
+  const DH=require('../src/utils/depositH6');
+  ok(DH.shouldReturnDepositH6(st().outings[0],st().requests[0],T+6*H)&&!DH.shouldReturnDepositH6(st().outings[0],st().requests[0],T+6*H-MIN),'H+6 silence: partner deposits returned');
+  ok(!DH.shouldReturnDepositH6(one.outings[0],one.requests[0],T+7*H),'H+6: unchecked guest stays pending');
+  // auto-pointage invité : simple signal, pas d’argent
+  const ga=D({...st({startsAt:iso(now-10*MIN)}),currentUser:me},{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(now)}});
+  ok(ga.requests[0].guestArrivedAt===iso(now)&&ga.requests[0].attendance===undefined&&ga.requests[0].depositStatus==='held','self-check alone: signal only, no refund, no presence');
+  const ga40=D({...st({startsAt:iso(now-40*MIN)}),currentUser:me},{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(now)}});
+  ok(ga40.requests[0].depositStatus==='held'&&ga40.requests[0].attendance===undefined,'self-check after H+30: still no refund');
+  ok(!PU.canGuestSelfArrivePartner(one.outings[0],{...one.requests[1],attendance:undefined},'u2',T+H),'self-check closed once the venue list is validated');
+  // hôte absent déclaré : pas de liste
+  ok(PU.partnerVenueCheckRefusal({...st().outings[0],hostNoShowReported:true},st().requests,'h1',T+H)==='host_no_show','venue check refused if venue reported absent');
+  // compteur partenaire : 4 absences retenues en 12 mois → compte fermé
+  const day=24*H;
+  ok(PU.partnerNoShowSanction(3).banned===false&&PU.partnerNoShowSanction(4).banned===true,'partner barème: 4 → closed');
+  const old=[{requestId:'a',at:iso(now-400*day)},{requestId:'b',at:iso(now-100*day)},{requestId:'c',at:iso(now-50*day)}];
+  ok(PU.partnerNoShowsInWindow(old,now)===2,'partner window: 12 months');
+  const gst=(log:any)=>S({currentUser:me,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'})],partnerNoShowLog:{u1:log},guestNoShowStrikes:{u1:2}});
+  const lose=(s0:any)=>{const a=VC({...s0,currentUser:host},['r1'],T+H);return D({...a,currentUser:s0.currentUser},{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(T+H+24*H)}});};
+  const third=lose(gst(old));
+  ok(!third.currentUser.banned&&third.currentUser.partnerNoShowCount===3&&third.guestNoShowStrikes.u1===2,'3rd partner absence in 12 months: not closed, guest barème untouched');
+  const fourth=lose(gst([...old,{requestId:'d',at:iso(now-10*day)}]));
+  ok(fourth.currentUser.banned===true&&fourth.currentUser.partnerNoShowCount===4&&fourth.requests[0].noShowCausedBan===true,'4th partner absence in 12 months: account closed');
+  // non-régression table normale : pas de liste, « Pas venu » hôte + barème invité (2/3 · 3 mois), 6,90 / 13,10
+  const NC=require('../src/utils/noShowContest');
+  const nt=(more:any={})=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],...more});
+  ok(JSON.stringify(VC(nt(),['r1'],T+H))===JSON.stringify(nt()),'normal table: venue list refused (unchanged)');
+  const nns=D(nt({guestNoShowStrikes:{u1:1}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:2,lowerPriority:true,reportedAt:iso(T+H),reportedByUserId:'h1'}});
+  const nlost=D({...nns,currentUser:me},{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(T+H+24*H)}});
+  ok(nns.requests[0].depositStatus==='noshow_pending'&&nlost.requests[0].depositStatus==='forfeited'&&nlost.guestNoShowStrikes.u1===2&&nlost.currentUser.lowerPriority===true&&!(nlost.partnerNoShowLog?.u1?.length),'normal table: guest barème unchanged (2nd → priority), no partner counter');
+  ok(NC.hostNoShowShareEuros(nlost.requests[0])===13.1&&NC.partnerVenueNoShowShareEuros(nlost.requests[0])===0,'normal table: 6,90 / 13,10 split unchanged');
+  const PR=require('../src/utils/participationRights');
+  ok(PR.hostNoShowSanctionFromStrike(1).banned===false&&PR.hostNoShowSanctionFromStrike(2).banned===true,'host barème 4bc4393 unchanged (1 warning, 2 closed)');
+  // static : UI liste + menu démo
+  const fs=require('node:fs'), path=require('node:path');
+  const rd=(f:string)=>fs.readFileSync(path.join(__dirname,'..','src',f),'utf8');
+  const od=rd('screens/OutingDetailScreen.tsx'), dm=rd('components/DemoMenuModal.tsx'), ctx=rd('data/ChanceContext.tsx');
+  ok(/title="Table complète"/.test(od)&&/accessibilityRole="checkbox"/.test(od)&&/refusalLabel\(res\.reason, 'partner_check'\)/.test(od),'static: venue checklist (« Table complète », uncheck)');
+  ok(/simuler H\+30 \(notification \+ liste des prénoms\)/.test(dm)&&/« Table complète »/.test(dm)&&/décocher le 1er invité/.test(dm)&&/« je suis venu » \+ une phrase/.test(dm)&&/24 h sans réponse \(20 € au lieu\)/.test(dm)&&/simuler H\+6 \(silence → caution rendue\)/.test(dm),'static: demo menu H+30 / Table complète / uncheck / contest / H+6');
+  ok(/type: 'partner_venue_check'/.test(ctx)&&!/OPEN_PARTNER_DISPUTE|MARK_PARTNER_ABSENT_AT|partnerMarkNoShow/.test(ctx),'static: H+30 venue notif, old « Pas venu » lieu flow removed');
 }
 
 // dernier passage contestation (Paolo, 17/10) : six décisions
@@ -1586,18 +1658,15 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(NS(okH,T+6*H+1,'r2','u2').requests[1].depositStatus==='held','decision 5: refused after H+6');
   // 6) partenaires : lieu déclaré absent = même règle que l’hôte
   const pm=()=>mk({},{isPartnerListing:true});
-  const pp=HN(NS(pm()),NSAT+2*H);
-  ok(pp.outings[0].hostNoShowCase.status==='pending'&&!pp.partnerWarningsByHost?.h1&&pp.requests[1].depositStatus==='held'&&pp.requests[0].noShowContestPausedAt,'decision 6: lieu absent → 24 h for the venue, no immediate warning, deposits pending, guest 24 h paused');
+  // 25/10 soir : plus de « Pas venu » du lieu à l’unité (liste H+30) — lieu déclaré absent seul.
+  const pp=HN(pm(),NSAT+2*H);
+  ok(pp.outings[0].hostNoShowCase.status==='pending'&&!pp.partnerWarningsByHost?.h1&&pp.requests[1].depositStatus==='held'&&pp.requests[0].depositStatus==='held','decision 6: lieu absent → 24 h for the venue, no immediate warning, deposits pending');
   ok(!PU.shouldAutoRefundPartnerSilence(pp.outings[0],pp.requests[1],T+48*H)&&D(pp,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r2'}}).requests[1].depositStatus==='held','decision 6: partner silence (H+6) suspended while venue absence pending');
   ok(CH(pp,NSAT+2*H+D1-MIN).outings[0].hostNoShowCase.status==='contested'&&CH(pp,NSAT+2*H+D1).outings[0].hostNoShowCase.status==='pending','decision 6: venue contest 24 h − 1 min ok / 24 h refused');
   const pr=RETH(pp);
   ok(pr.outings[0].hostNoShowCase.status==='retained'&&pr.partnerWarningsByHost.h1===1&&!pr.hostNoShowStrikes.h1&&pr.requests[0].depositStatus==='returned'&&pr.requests[0].attendance===undefined&&pr.requests[1].depositStatus==='returned','decision 6: venue retained absent → partner warning, B, deposits returned');
   const pa=ACCH(back(CH(pp,NSAT+3*H)),NSAT+4*H);
-  ok(pa.outings[0].hostNoShowReported===false&&!pa.partnerWarningsByHost?.h1&&pa.requests[0].depositStatus==='noshow_pending'&&!pa.requests[0].noShowContestPausedAt,'decision 6: venue contest accepted → no warning, guests back to normal');
-  // « Je suis arrivé » après « Pas venu » = contestation ; caution déjà perdue : litige seul
-  const arr=D(NS(pm()),{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(NSAT+H)}});
-  ok(arr.requests[0].depositStatus==='contested'&&arr.requests[0].noShowContest.viaArrival===true&&EXP(arr,NSAT+D1).requests[0].depositStatus==='contested','decision 6: arrival after « Pas venu » = contest, no 24 h loss');
-  ok(!/Je suis arrivé|viaArrival/.test(JSON.stringify(arr.requests.map(require('../src/utils/leaveTable').projectRequestForHost))),'arrival contest invisible to the venue (host projection)');
+  ok(pa.outings[0].hostNoShowReported===false&&!pa.partnerWarningsByHost?.h1&&pa.requests[0].depositStatus==='held'&&pa.requests[1].depositStatus==='held','decision 6: venue contest accepted → no warning, guests back to normal');
   // texte : « La caution est rendue d’office »
   ok(require('../src/utils/refusalLabels').refusalLabel('too_late').includes('La caution est rendue d’office.')&&!require('../src/utils/refusalLabels').refusalLabel('too_late').includes('Elle est rendue'),'text: « La caution est rendue d’office »');
 }
@@ -1693,50 +1762,23 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const left=22*H; // 2 h écoulées avant la pause
   ok(NC.contestDeadlineMs(res.requests[0],NSAT+10*H)===NSAT+10*H+left,'gel 3: on resume, 22 h left (time remaining before the pause)');
   ok(C(res,NSAT+10*H+left-MIN).requests[0].depositStatus==='contested'&&C(res,NSAT+10*H+left).requests[0].depositStatus==='noshow_pending','gel 3: after resume, contest ok at remaining − 1 min, refused at the deadline');
-  // partenaire : « Je suis arrivé » pendant la pause vaut contestation tout de suite (L69.6)
-  const pp=HN(NS(mk({isPartnerListing:true})),NSAT+2*H);
-  const arr=D(pp,{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(NSAT+3*H)}});
-  ok(arr.requests[0].depositStatus==='contested'&&arr.requests[0].noShowContest?.note==='« Je suis arrivé »'&&arr.requests[0].partnerDispute?.trigger==='arrival_after_absent','gel 3: partner arrival during the pause → contest at once (and dispute)');
 }
 
-// QA : arrivée partenaire pendant la pause (L69.6) ; gel 17/10 : contestation immédiate, reprise = filet pour un ancien état
+// 25/10 soir · Partenaire calé The Fork : « Je suis arrivé » ne vaut plus contestation (ex-L69.6 / Z)
 {
   const NC=require('../src/utils/noShowContest');
-  const LT=require('../src/utils/leaveTable');
-  const MIN=60e3, D1=24*H, D7=7*D1, T=now-2*H, NSAT=T+H;
+  const MIN=60e3, D1=24*H, T=now-2*H, NSAT=T+H;
   const guest:any={...me};
-  const mk=()=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
-  const NS=(s0:any)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'h1'}});
-  const HN=(s0:any,at:number)=>D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:1,banned:false,reportedAt:iso(at),reportedByUserId:'u2'}});
-  const ARR=(s0:any,at:number)=>D(s0,{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(at)}});
-  const CH=(s0:any,at:number)=>({...D({...s0,currentUser:{...host}},{type:'CONTEST_HOST_NO_SHOW',payload:{outingId:'o1',note:'Le lieu était ouvert',at:iso(at)}}),currentUser:guest});
-  const ACCH=(s0:any,at:number)=>D(s0,{type:'ACCEPT_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(at)}});
+  const mk=()=>S({currentUser:guest,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held',guestArrivedAt:iso(T)}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})]});
+  const VC=(s0:any)=>({...D({...s0,currentUser:host},{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:['r1'],at:iso(NSAT)}}),currentUser:s0.currentUser});
   const EXP=(s0:any,at:number)=>D(s0,{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(at)}});
-  const live=ARR(HN(NS(mk()),NSAT+2*H),NSAT+3*H);
-  ok(live.requests[0].depositStatus==='contested'&&live.requests[0].noShowContest.contestedAt===iso(NSAT+3*H)&&live.requests[0].guestArrivedAt===iso(NSAT+3*H)&&live.requests[0].partnerDispute?.trigger==='arrival_after_absent','Z (gel 3): arrival during the pause recorded (dispute) and contest at once');
-  ok(ARR(live,NSAT+4*H).requests[0].guestArrivedAt===iso(NSAT+3*H),'Z: second tap ignored (unchanged)');
-  ok(EXP(ACCH(CH(live,NSAT+4*H),NSAT+10*H),NSAT+3*D1).requests[0].depositStatus==='contested','Z (gel 3): venue present → contest stays under review, no loss at 24 h');
-  // ancien état (arrivée enregistrée pendant la pause sans contestation) : la reprise la convertit (b376288)
-  const legacy=HN(NS(mk()),NSAT+2*H);
-  const paused={...legacy,requests:legacy.requests.map((r:any)=>r.id==='r1'?{...r,guestArrivedAt:iso(NSAT+3*H),partnerDispute:{trigger:'arrival_after_absent',at:iso(NSAT+3*H)}}:r)};
-  const RES=NSAT+10*H;
-  const res=ACCH(CH(paused,NSAT+4*H),RES);
-  const r0=res.requests[0];
-  ok(r0.depositStatus==='contested'&&r0.noShowContest.viaArrival===true&&r0.noShowContest.contestedAt===iso(RES)&&!r0.noShowContestPausedAt,'Z: on resume (venue present), arrival = contest under review');
-  const dl=NC.contestDeadlineMs(r0,RES);
-  ok(EXP(res,dl).requests[0].depositStatus==='contested'&&EXP(res,dl+D1).requests[0].depositStatus==='contested'&&!EXP(res,dl).guestNoShowStrikes.u1,'Z: no loss at the 24 h deadline');
-  ok(NC.reviewDeadlineMs(r0)===RES+D7,'Z: 7-day review counted from the resume');
-  ok(!/Je suis arrivé|viaArrival/.test(JSON.stringify(res.requests.map(LT.projectRequestForHost))),'Z: contest invisible to the venue');
-  // lieu retenu absent : règle B comme avant
-  const ret=D(paused,{type:'EXPIRE_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(NSAT+2*H+D1)}});
-  ok(ret.outings[0].hostNoShowCase.status==='retained'&&ret.requests[0].depositStatus==='returned'&&ret.requests[0].attendance===undefined&&ret.requests[0].noShowVoided===true&&!ret.guestNoShowStrikes.u1,'Z: arrival during the pause, venue retained absent → deposit returned (B)');
-  // sans arrivée : reprise normale du délai (inchangé)
-  const noArr=ACCH(CH(HN(NS(mk()),NSAT+2*H),NSAT+4*H),RES);
-  ok(noArr.requests[0].depositStatus==='noshow_pending'&&!noArr.requests[0].noShowContest,'Z: no arrival → plain resume, no contest');
-  // table normale : aucune arrivée partenaire, rien ne change
+  const v=VC(mk());
+  ok(v.requests[0].depositStatus==='noshow_pending'&&!v.requests[0].noShowContest,'arrival signal before the list: unchecked guest still has to contest');
+  ok(EXP(v,NSAT+D1).requests[0].depositStatus==='forfeited','arrival signal alone: no contest → 20 € to the venue at 24 h');
+  ok(EXP(v,NSAT+D1).requests[0].partnerVenueAbsent===true&&NC.partnerVenueNoShowShareEuros(EXP(v,NSAT+D1).requests[0])===20,'arrival signal alone: partner share 20 €');
   const fs=require('node:fs'), path=require('node:path');
   const ctx=fs.readFileSync(path.join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
-  ok(/isPartnerListing\(o\) &&\s*r\.guestArrivedAt[\s\S]{0,700}viaArrival: true/.test(ctx),'static: arrival contest only on partner listings');
+  ok(!/viaArrival: true/.test(ctx),'static: no arrival-as-contest any more');
 }
 
 // Gel de la contestation (17/10, 19 h 20) : points 1, 2 et 4
@@ -1758,14 +1800,14 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(HN(mk(),T+MIN).outings[0].hostNoShowReported===true&&HN(mk({isPartnerListing:true}),T+MIN).outings[0].hostNoShowReported===true,'gel 1: host and venue absence accepted just after H');
   const pm=mk({isPartnerListing:true});
   const pr=pm.requests[0];
-  ok(!P.canPartnerMarkGuestAbsent(pm.outings[0],pr,'h1',T-MIN)&&P.canPartnerMarkGuestAbsent(pm.outings[0],pr,'h1',T+MIN)&&P.canPartnerMarkGuestAbsent(pm.outings[0],pr,'h1',T+6*H)&&!P.canPartnerMarkGuestAbsent(pm.outings[0],pr,'h1',T+6*H+1),'gel 1: venue « Pas venu » only from H to H+6 (included)');
+  ok(P.partnerVenueCheckRefusal(pm.outings[0],pm.requests,'h1',T+MIN)==='too_early'&&P.partnerVenueCheckRefusal(pm.outings[0],pm.requests,'h1',T+30*MIN)===null&&P.partnerVenueCheckRefusal(pm.outings[0],pm.requests,'h1',T+6*H)===null&&P.partnerVenueCheckRefusal(pm.outings[0],pm.requests,'h1',T+6*H+1)==='too_late','25/10 soir: venue list only from H+30 to H+6 (included)');
   ok(NS(mk(),T-MIN).requests[0].attendance===undefined&&NS(mk(),T+6*H+1).requests[0].attendance===undefined&&NS(mk(),T+6*H).requests[0].attendance==='absent','gel 1: guest « Pas venu » H → H+6 included (normal table)');
   // point 2 : une seule déclaration par personne et par moment
   const voided=RETH(HN(NS(mk()),NSAT+MIN));
   ok(voided.requests[0].noShowVoided===true&&voided.requests[0].attendance===undefined,'setup: guest « Pas venu » erased by host absence (B)');
   const unblocked={...voided,outings:voided.outings.map((x:any)=>({...x,hostNoShowReported:false}))};
   ok(NS(unblocked,NSAT+2*H).requests[0].attendance===undefined&&NS(unblocked,NSAT+2*H).requests[0].depositStatus==='returned','gel 2: erased guest absence cannot be declared again');
-  ok(!P.canPartnerMarkGuestAbsent(pm.outings[0],{...pr,noShowVoided:true},'h1',T+MIN)&&!P.canPartnerMarkGuestAbsent(pm.outings[0],{...pr,noShowNotRetained:true},'h1',T+MIN),'gel 2: venue cannot re-declare an erased or not-retained absence');
+  ok(P.partnerVenueCheckRequests(pm.outings[0],[{...pr,noShowVoided:true},{...pr,id:'rx',noShowNotRetained:true}]).length===0,'gel 2: venue list never shows an erased or not-retained absence');
   const rex=D(D({...HN(mk(),T+2*H),currentUser:{...host}},{type:'CONTEST_HOST_NO_SHOW',payload:{outingId:'o1',note:'x',at:iso(T+2*H+MIN)}}),{type:'EXPIRE_HOST_NO_SHOW_REVIEW',payload:{outingId:'o1',at:iso(T+2*H+MIN+7*D1)}});
   ok(rex.outings[0].hostNoShowCase.status==='review_expired'&&HN(rex,T+3*H).outings[0].hostNoShowCase.status==='review_expired'&&!HN(rex,T+3*H).outings[0].hostNoShowReported,'gel 2: host absence not re-declarable after an undecided review');
   // point 4 : sanctions recalculées sur les absences restantes
@@ -1824,9 +1866,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(hostLate.outings[0].hostNoShowCase?.status==='contested'&&!hostLate.outings[0].hostPresence,'disagreement: host confirmed after a pending « Pas venu » → contested');
   ok(HP(HNS(mk(),T+H,'u1'),'u1',T+2*H).outings[0].hostNoShowCase.status==='pending','disagreement: declarer cannot confirm the host afterwards');
   const pa=D(mk({},{isPartnerListing:true}),{type:'GUEST_ARRIVED_PARTNER',payload:{requestId:'r1',arrivedAt:iso(T+5*MIN)}});
-  ok(pa.requests[0].attendance==='present'&&pa.requests[0].presenceBy==='guest','partner: « Je suis arrivé » = guest self-confirmation');
-  const pd=D({...pa,currentUser:host},{type:'OPEN_PARTNER_DISPUTE',payload:{requestId:'r1',note:'x',at:iso(T+H)}});
-  ok(pd.requests[0].depositStatus==='contested'&&pd.requests[0].noShowContest?.viaArrival,'partner: « Pas venu » after arrival → contested');
+  ok(pa.requests[0].attendance===undefined&&pa.requests[0].guestArrivedAt===iso(T+5*MIN)&&pa.requests[0].depositStatus==='held','partner: « Je suis arrivé » = signal only (25/10 soir), no self-confirmation');
   // point 3 : silence → rendue à H+6 (inchangé)
   const R6=(s0:any,at:number)=>D(s0,{type:'RETURN_DEPOSITS_H6',payload:{outingId:'o1',at:iso(at)}});
   ok(R6(mk(),T+6*H).requests[0].depositStatus==='returned'&&R6(mk(),T+6*H-MIN).requests[0].depositStatus==='held','silence: returned at H+6, not before');
@@ -1984,7 +2024,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     // présence : inchangée (H+6 exclu)
     ok(OA.presenceWindowRefusal(o({startsAt:iso(T)}),T+6*H)==='too_late','25/10 p1: presence window unchanged (H+6 excluded)');
     const pm=S({currentUser:host,outings:[o({startsAt:iso(T),isPartnerListing:true,status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held',guestArrivedAt:iso(T)})]});
-    ok(P.canPartnerFlagDispute(pm.outings[0],pm.requests[0],'h1',T+6*H)&&!P.canPartnerFlagDispute(pm.outings[0],pm.requests[0],'h1',T+6*H+1),'25/10 p1: venue dispute bound H+6 included');
+    ok(P.canPartnerVenueCheck(pm.outings[0],pm.requests,'h1',T+6*H)&&!P.canPartnerVenueCheck(pm.outings[0],pm.requests,'h1',T+6*H+1),'25/10 p1: venue list bound H+6 included');
   }
 
   // 2) Départ « 30 min » : compteur depuis H ; à 30 min exactement = après
@@ -2175,9 +2215,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   // 2 bis) Données affichées hors __DEV__ (litige lieu, message système) : plus de « (démo) » / « (stub) »
   {
     const od=rd('screens','OutingDetailScreen.tsx');
-    ok(od.includes('`Litige · ${demoLabel(r.partnerDispute.note)}`'),'Lot C p2bis: partner dispute note shown through demoLabel');
-    ok(!/Photo demandée plus tard \(stub\)/.test(ctx0)&&(ctx0.match(/Photo demandée plus tard \(démo\)/g)||[]).length===3,'Lot C p2bis: dispute notes use the (démo) marker');
-    ok(/text: demoLabel\('Litige : arrivé selon l’invité, « Pas venu » selon le lieu\. Photo demandée plus tard \(démo\) — aucune sanction automatique\.'\)/.test(ctx0),'Lot C p2bis: partner dispute system message through demoLabel');
+    // 25/10 soir · Partenaire calé The Fork : litige lieu supprimé (liste + contestation « je suis venu »).
+    ok(!od.includes('r.partnerDispute.note')&&!/Photo demandée plus tard/.test(ctx0),'Lot C p2bis → 25/10 soir: partner dispute UI and notes removed');
     (globalThis as any).__DEV__=false;
     try {
       ok(DM.demoLabel('Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard (démo).')==='Litige : le lieu a signalé « Pas venu », l’invité dit être arrivé. Photo demandée plus tard.','Lot C p2bis: prod dispute note clean');
