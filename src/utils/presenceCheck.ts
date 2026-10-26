@@ -25,11 +25,13 @@ export function isHostPresent(outing: Pick<Outing, 'hostPresence'>): boolean {
  *   déclaré l’hôte absent, n’a pas contesté et n’a pas quitté la table.
  */
 export function presenceCheckUserIds(
-  outing: Pick<Outing, 'id' | 'hostId' | 'status' | 'hostPresence' | 'hostNoShowCase'>,
-  requests: Pick<
+  outing: Pick<Outing, 'id' | 'hostId' | 'status' | 'hostPresence' | 'hostNoShowCase'> &
+    Partial<Pick<Outing, 'partnerVenueCheck'>>,
+  requests: (Pick<
     Request,
     'outingId' | 'userId' | 'status' | 'attendance' | 'presenceBy' | 'leftTableAt' | 'noShowContest'
-  >[],
+  > &
+    Partial<Pick<Request, 'partnerSelfAbsent'>>)[],
 ): string[] {
   if (outing.status === 'cancelled') return [];
   const confirmed = requests.filter((r) => r.outingId === outing.id && r.status === 'confirmed');
@@ -37,6 +39,8 @@ export function presenceCheckUserIds(
   const hostIndicated =
     outing.hostPresence?.byUserId === outing.hostId ||
     outing.hostNoShowCase?.reportedBy === outing.hostId ||
+    // Lieu : la liste de H+30 vaut indication.
+    !!outing.partnerVenueCheck ||
     confirmed.some(
       (r) =>
         (r.attendance === 'present' && r.presenceBy !== 'guest') ||
@@ -47,6 +51,8 @@ export function presenceCheckUserIds(
   for (const r of confirmed) {
     const indicated =
       (r.attendance === 'present' && r.presenceBy === 'guest') ||
+      // Débug audit 36 : l’invité qui s’est déclaré absent (lieu) a déjà indiqué.
+      !!r.partnerSelfAbsent ||
       !!r.leftTableAt ||
       !!r.noShowContest ||
       outing.hostPresence?.byUserId === r.userId ||

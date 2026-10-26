@@ -133,6 +133,7 @@ import {
   DEPOSIT_EUROS_LEAVE,
   presenceReturnsDepositNow,
   canGuestWithdrawConfirmedSeat,
+  isPartnerSeatLocked,
 } from '../utils/leaveTable';
 import { buildDemoAutoCompleteAction } from '../utils/demoComplete';
 import {
@@ -629,7 +630,7 @@ function retainHostNoShow(state: AppState, outingId: string, at: string): AppSta
       ...currentUser,
       hostNoShowCount: strike,
       banned: banned || currentUser.banned,
-      bannedReason: banned ? '2e no-show hôte — compte fermé (démo)' : currentUser.bannedReason,
+      bannedReason: banned ? '2e absence d’hôte retenue — compte fermé (démo)' : currentUser.bannedReason,
     };
   }
   let next: AppState = {
@@ -842,6 +843,15 @@ function reducer(state: AppState, action: AppAction): AppState {
           partner: isPartnerListing(outing),
           nowMs: new Date(cancelledAt).getTime(),
         })
+      ) {
+        return state;
+      }
+      if (
+        by === 'guest' &&
+        req.status === 'confirmed' &&
+        outing &&
+        isPartnerListing(outing) &&
+        isPartnerSeatLocked(outing, req)
       ) {
         return state;
       }
@@ -1968,6 +1978,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       }
       const outingMark = state.outings.find((o) => o.id === reqMark.outingId);
       if (!outingMark || outingMark.status === 'cancelled') return state;
+      // Débug audit 36 : lieu → la liste de H+30 est la seule action du soir.
+      if (isPartnerListing(outingMark)) return state;
       // 18/10 : de H−15 à H+6, clôture comprise.
       if (
         !isPresenceWindowOpen(
@@ -2570,7 +2582,8 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (outingNoShow.hostNoShowReported) return state;
       // 25/10 soir · Partenaire calé The Fork : le lieu ne passe que par sa liste
       // (PARTNER_VENUE_CHECK), plus de « Pas venu » à l’unité.
-      if (isPartnerListing(outingNoShow) && reportedByUserId === outingNoShow.hostId) return state;
+      // Débug audit 36 : sur un lieu, seul l’invité se déclare (sinon barème table normale).
+      if (isPartnerListing(outingNoShow) && reportedByUserId !== guestId) return state;
       // Absence non retenue après contestation, ou effacée : pas de nouvelle
       // déclaration (gel 17/10, point 2 : une seule par personne et par moment).
       if (existing.noShowNotRetained || existing.noShowVoided) return state;
@@ -4341,6 +4354,14 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       ) {
         return { ok: false, reason: 'outing_started' };
       }
+      if (
+        by === 'guest' &&
+        req.status === 'confirmed' &&
+        isPartnerListing(outing) &&
+        isPartnerSeatLocked(outing, req)
+      ) {
+        return { ok: false, reason: 'partner_seat_locked' };
+      }
       let depositReturned: boolean | undefined;
       let depositForfeited: boolean | undefined;
       if (req.status === 'confirmed') {
@@ -4978,7 +4999,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           outingId,
           requestId,
           kind: 'system',
-          text: 'Le chat est ouvert — 1 h avant le moment. Bon moment !',
+          // Débug audit 36 : lieu / invitation urgente → chat ouvert dès la confirmation.
+          text:
+            outing && (isPartnerListing(outing) || outing.urgentOnSite)
+              ? 'Le chat est ouvert. Bon moment !'
+              : 'Le chat est ouvert — 1 h avant le moment. Bon moment !',
           createdAt: now,
         },
       ];
@@ -4997,7 +5022,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         outing && state.currentUser?.id === outing.hostId
           ? req?.userName ?? 'Invité'
           : outing?.hostName ?? 'Hôte';
-      seed.push({
+      // Débug audit 36 : le faux message de l’autre membre reste en démo (__DEV__).
+      if (isDemoEnabled()) seed.push({
         id: uid('msg'),
         threadKey: key,
         outingId,
@@ -6149,6 +6175,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       // Lot 6: only the host marks presence.
       if (!canActorMarkGuestPresent(user.id, outing.hostId)) {
         return { ok: false, reason: 'not_host' };
+      }
+      if (isPartnerListing(outing)) {
+        return { ok: false, reason: 'partner_venue_list' };
       }
       if (req.attendance === 'absent') {
         return { ok: false, reason: 'already_absent' };

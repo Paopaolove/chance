@@ -51,6 +51,30 @@ export function canGuestWithdrawConfirmedSeat(opts: {
   return !hasMomentStarted(opts.startsAt, opts.nowMs);
 }
 
+/**
+ * Débug audit 36 · Lieu : plus de désistement une fois le soir « joué » —
+ * présence ou absence posée, liste du lieu faite, contestation ouverte ou
+ * absence du lieu signalée. Sinon l’invité décoché perdrait sa contestation.
+ */
+export function isPartnerSeatLocked(
+  outing: { partnerVenueCheck?: unknown; hostNoShowReported?: boolean },
+  req: {
+    attendance?: 'present' | 'absent';
+    noShowContest?: unknown;
+    partnerSelfAbsent?: boolean;
+    leftTableAt?: string;
+  },
+): boolean {
+  return Boolean(
+    req.attendance ||
+      req.noShowContest ||
+      req.partnerSelfAbsent ||
+      req.leftTableAt ||
+      outing.partnerVenueCheck ||
+      outing.hostNoShowReported,
+  );
+}
+
 /** Joker : refusé dès H, ou si l’invité est déjà marqué présent / arrivé. */
 export function isJokerAllowedNow(opts: {
   startsAt: string;

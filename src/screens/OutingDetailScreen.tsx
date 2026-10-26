@@ -30,7 +30,10 @@ import { Button } from '../components/Button';
 import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import {
+  DEPOSIT_EUROS,
   describeDepositForfeitMoment,
+  describeDepositForfeitSplit,
+  isCancelFreeWindow,
   PARTNER_DEPOSIT_FORFEIT_LABEL,
 } from '../data/pricing';
 import { budgetChipLabel, categoryLabels, mockHosts } from '../data/mockOutings';
@@ -69,6 +72,7 @@ import {
   isDepositReturnedForGuest,
   isJokerAllowedNow,
   canGuestWithdrawConfirmedSeat,
+  isPartnerSeatLocked,
 } from '../utils/leaveTable';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { hasFullPhotoAccess, hostPhotoSize } from '../utils/subscription';
@@ -653,9 +657,12 @@ export function OutingDetailScreen() {
           <HostNoShowContestCard outing={outing} />
         ) : myRequest && 'id' in myRequest && myRequest.status === 'confirmed' ? (
           <Text style={[styles.hint, { marginTop: spacing.md }]}>
-            {partner
-              ? 'Absence du lieu signalée : les cautions sont en attente de la décision.'
-              : 'Absence de l’hôte signalée : les cautions sont en attente de la décision.'}
+            {outing.hostNoShowCase?.depositsKept
+              ? // Débug audit 36 : cautions déjà rendues = acquises, revue pour la sanction seulement.
+                'Absence de l’hôte signalée : les cautions déjà rendues restent acquises.'
+              : partner
+                ? 'Absence du lieu signalée : les cautions sont en attente de la décision.'
+                : 'Absence de l’hôte signalée : les cautions sont en attente de la décision.'}
           </Text>
         ) : null
       ) : null}
@@ -985,7 +992,7 @@ export function OutingDetailScreen() {
                       if (res.ok) {
                         Alert.alert(
                           'Présent',
-                          demoLabel(`Caution de ${r.userName} rendue après 30 min (mock). Confirmé ≠ présent.`),
+                          demoLabel(`Présence enregistrée : caution de ${r.userName} rendue après 30 min (mock).`),
                         );
                       } else {
                         Alert.alert('Impossible', refusalLabel(res.reason, 'presence'));
@@ -1311,7 +1318,7 @@ export function OutingDetailScreen() {
                               } else {
                                 Alert.alert(
                                   'Présent',
-                                  'Ta présence est confirmée : caution rendue après 30 min, note possible.',
+                                  'Ta présence est confirmée : caution rendue après 30 min, note possible après le moment.',
                                 );
                               }
                             }}
@@ -1560,7 +1567,8 @@ export function OutingDetailScreen() {
                     res.discomfort
                       ? 'Caution rendue, rien n’est compté. Moment est prévenu en toute confidentialité — l’hôte ne voit pas le motif.'
                       : res.deposit === 'forfeited'
-                        ? `Départ avant 30 min : caution perdue (${describeDepositForfeitMoment()}).`
+                        ? // Débug audit 36 : départ ≠ absent → partage maintenu, lieu nommé.
+                          `Départ avant 30 min : caution ${DEPOSIT_EUROS} € perdue (${describeDepositForfeitSplit({ venue: partner })}).`
                         : 'Caution rendue, rien n’est compté.',
                   );
                 };
@@ -1617,22 +1625,39 @@ export function OutingDetailScreen() {
                 style={{ marginTop: spacing.md }}
               />
               {'id' in myRequest &&
-              canGuestWithdrawConfirmedSeat({ startsAt: outing.startsAt, partner }) ? (
+              canGuestWithdrawConfirmedSeat({ startsAt: outing.startsAt, partner }) &&
+              !(partner && isPartnerSeatLocked(outing, myRequest)) ? (
                 <Button
                   title="Me désister"
                   variant="ghost"
                   onPress={() => {
-                    const res = cancelRequest(myRequest.id, 'guest');
-                    if (!res.ok) return;
+                    const withdraw = () => {
+                      const res = cancelRequest(myRequest.id, 'guest');
+                      if (!res.ok) return;
+                      Alert.alert(
+                        'Désistement',
+                        res.depositReturned
+                          ? demoLabel('Place libérée — caution rendue (au moins 1 heure avant, mock). Les autres confirmés restent.')
+                          : res.depositForfeited
+                            ? `Place libérée — ${describeDepositForfeitMoment({ partner })} Les autres confirmés restent.`
+                            : 'Place libérée. Les autres confirmés restent.',
+                      );
+                      navigation.goBack();
+                    };
+                    // Débug audit 36 : hors fenêtre gratuite (moins d’1 h avant), on confirme
+                    // avant de faire perdre la caution.
+                    if (isCancelFreeWindow(outing.startsAt)) {
+                      withdraw();
+                      return;
+                    }
                     Alert.alert(
-                      'Désistement',
-                      res.depositReturned
-                        ? demoLabel('Place libérée — caution rendue (au moins 1 heure avant, mock). Les autres confirmés restent.')
-                        : res.depositForfeited
-                          ? `Place libérée — ${describeDepositForfeitMoment()} Les autres confirmés restent.`
-                          : 'Place libérée. Les autres confirmés restent.',
+                      'Te désister ?',
+                      `Moins d’1 h avant le début : ${describeDepositForfeitMoment({ partner })} (sauf imprévu accepté).`,
+                      [
+                        { text: 'Garder ma place', style: 'cancel' },
+                        { text: 'Me désister', style: 'destructive', onPress: withdraw },
+                      ],
                     );
-                    navigation.goBack();
                   }}
                   style={{ marginTop: spacing.md }}
                 />

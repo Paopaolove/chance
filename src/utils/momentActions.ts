@@ -9,7 +9,8 @@ import { hasMomentStarted } from './leaveTable';
 import { canNoShowGuestDeclareHostAbsent } from './noShowContest';
 import { isPartnerListing } from './partners';
 
-type CancelOuting = Pick<Outing, 'id' | 'status' | 'startsAt'> & Partial<Pick<Outing, 'isPartnerListing'>>;
+type CancelOuting = Pick<Outing, 'id' | 'status' | 'startsAt'> &
+  Partial<Pick<Outing, 'isPartnerListing' | 'partnerVenueCheck' | 'hostNoShowReported'>>;
 type CancelRequest = Pick<Request, 'outingId' | 'status'> &
   Partial<Pick<Request, 'leftTableAt' | 'attendance'>>;
 
@@ -25,14 +26,17 @@ export function hostCancelRefusal(
 ): 'already_completed' | 'already_cancelled' | 'moment_started' | 'guests_on_site' | null {
   if (outing.status === 'completed') return 'already_completed';
   if (outing.status === 'cancelled') return 'already_cancelled';
-  // Partenaire restau : inchangé (mécanique à part, 18/10).
-  if (isPartnerListing(outing as Outing)) return null;
-  if (hasMomentStarted(outing.startsAt, nowMs)) return 'moment_started';
+  const partner = isPartnerListing(outing as Outing);
+  // Partenaire restau : pas de borne à H (mécanique à part, 18/10)…
+  if (!partner && hasMomentStarted(outing.startsAt, nowMs)) return 'moment_started';
+  // … mais, débug audit 36, plus d’annulation une fois la liste faite ou
+  // l’absence du lieu signalée (sinon cautions bloquées en attente).
+  if (partner && (outing.partnerVenueCheck || outing.hostNoShowReported)) return 'guests_on_site';
   const onSite = requests.some(
     (r) =>
       r.outingId === outing.id &&
       r.status === 'confirmed' &&
-      (!!r.leftTableAt || r.attendance === 'present'),
+      (!!r.leftTableAt || !!r.attendance),
   );
   return onSite ? 'guests_on_site' : null;
 }

@@ -543,6 +543,9 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
               <Text style={styles.rulesLine}>
                 6,90 € pour Moment, 13,10 € pour l’hôte.
               </Text>
+              <Text style={styles.rulesLine}>
+                Chez un lieu partenaire : les 20 € entiers au lieu.
+              </Text>
               <Text style={[styles.rulesLine, styles.rulesGap]}>
                 Un imprévu, tu peux le signaler une fois par moment, avec une
                 phrase.

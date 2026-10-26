@@ -130,8 +130,8 @@ export function formatPriceEuros(value: number): string {
 }
 
 /** Libellé court du partage caution perdue (6,90 / 13,10). */
-export function describeDepositForfeitSplit(): string {
-  return `${formatPriceEuros(DEPOSIT_FORFEIT_CHANCE_EUROS)} pour Moment, ${formatPriceEuros(DEPOSIT_FORFEIT_HOST_EUROS)} pour l’hôte`;
+export function describeDepositForfeitSplit(opts?: { venue?: boolean }): string {
+  return `${formatPriceEuros(DEPOSIT_FORFEIT_CHANCE_EUROS)} pour Moment, ${formatPriceEuros(DEPOSIT_FORFEIT_HOST_EUROS)} pour ${opts?.venue ? 'le lieu' : 'l’hôte'}`;
 }
 
 /**

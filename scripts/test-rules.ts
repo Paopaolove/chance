@@ -917,7 +917,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
       ok(/const simulatePartnerNextDay = useCallback\([\s\S]{0,900}h6AtIso\(outing\)[\s\S]{0,400}type: 'RETURN_DEPOSITS_H6'/.test(ctxS),'25/10 soir · demo: partner silence dated H+6 via RETURN_DEPOSITS_H6');
       ok(/!isPartnerListing\(outing\) \|\| req\.depositReturnCause === 'h6'/.test(ctxS),'25/10 soir · partner: no « Pas venu » once the deposit was returned at H+6');
     }
-    ok(NS(pst,H6+MIN).requests[0].depositStatus==='held'&&NS(pst,H6-MIN).requests[0].depositStatus==='forfeited','gel 1: partner « Pas venu » bounded by H+6 too (accepted at H+6 − 1 min, refused after H+6)');
+    const NSu=(s0:any,at:number)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(at),reportedByUserId:'u1'}});
+    // Débug audit 36 : sur un lieu, seul l’invité se déclare (auto-déclaration).
+    ok(NSu(pst,H6+MIN).requests[0].depositStatus==='held'&&NSu(pst,H6-MIN).requests[0].depositStatus==='forfeited','gel 1: partner « Pas venu » bounded by H+6 too (accepted at H+6 − 1 min, refused after H+6)');
     ok(D(pst,{type:'RETURN_DEPOSIT_SILENCE',payload:{requestId:'r1'}}).requests[0].depositStatus==='returned','partner: silence return action still works');
   }
   // imprévu refusé après H+6 : pas de perte ; avant H+6 : inchangé
@@ -2388,7 +2390,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(one.hostNoShowStrikes.h1===1&&one.currentUser.hostNoShowCount===1&&!one.currentUser.banned,'25/10 soir: 1st retained host absence → warning only, account open');
     const two=run(['o1','o2']);
     ok(two.outings.every((x:any)=>x.hostNoShowCase?.status==='retained')&&two.hostNoShowStrikes.h1===2,'25/10 soir: two host absences retained and counted');
-    ok(two.currentUser.banned===true&&/2e no-show hôte/.test(two.currentUser.bannedReason??'')&&two.currentUser.hostNoShowCount===2,'25/10 soir: 2nd retained host absence → account closed');
+    ok(two.currentUser.banned===true&&/2e absence d’hôte retenue/.test(two.currentUser.bannedReason??'')&&two.currentUser.hostNoShowCount===2,'25/10 soir: 2nd retained host absence → account closed');
     ok(two.requests.every((r:any)=>r.depositStatus==='returned'),'25/10 soir: guests still get their deposits back');
     // Absence en attente (24 h non écoulées) : aucune fermeture tant que ce n’est pas retenu (L63).
     let pend:any=run(['o1']);
@@ -2397,7 +2399,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
     ok(PRT.hostNoShowSanctionFromStrike(1).banned===false&&PRT.hostNoShowSanctionFromStrike(2).banned===true&&PRT.hostNoShowSanctionFromStrike(5).banned===true&&PRT.hostPublishSanctionFromStrike(1).banned===false&&PRT.hostPublishSanctionFromStrike(2).banned===true&&!('hostSanctionFromStrike' in PRT),'25/10 soir: host no-show scale 1 = warning / 2 = closed; never-honor unchanged');
     ok(PRT.guestSanctionFromStrike(1).banned===false&&PRT.guestSanctionFromStrike(1).lowerPriority===false&&PRT.guestSanctionFromStrike(2).lowerPriority===true&&PRT.guestSanctionFromStrike(2).banned===false&&PRT.guestSanctionFromStrike(3).banned===true,'25/10 soir: guest scale unchanged (2 = priority, 3 = closed)');
     const pf=rd('screens','ProfileScreen.tsx');
-    ok(/hostNoShowCount \?\? 0\) === 1/.test(pf)&&/1er no-show hôte\. Un 2e = compte fermé/.test(pf)&&/1er avertissement publication jamais honorée/.test(pf),'25/10 soir: profile warns 1st host no-show, distinct from never-honor');
+    ok(/hostNoShowCount \?\? 0\) === 1/.test(pf)&&/1re absence d’hôte retenue\. Une 2e = compte fermé/.test(pf)&&/1er avertissement publication jamais honorée/.test(pf),'25/10 soir: profile warns 1st host no-show, distinct from never-honor');
   }
 }
 // ── 25/10 · Lot E : rafraîchissement à H / H+6 et Paywall hors __DEV__ ───────
@@ -2461,6 +2463,63 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(bad.length===0,'lot 35: no « suspendu » / « ban » in user-facing strings'+(bad.length?' — '+bad.join(' | '):''));
   const pf=rdf('screens','ProfileScreen.tsx');
   ok(/demoLabel\('Compte fermé \(démo\)'\)/.test(pf)&&/Un 2e = compte fermé \(démo\)/.test(pf),'lot 35: profile « Compte fermé (démo) », « Un 2e = compte fermé »');
+}
+// 26/10 · Débug audit 36 (HEAD 88648a8)
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const MK=require('../src/utils/markPresent'), MA=require('../src/utils/momentActions'), LT=require('../src/utils/leaveTable'), PC=require('../src/utils/presenceCheck');
+  const H=3600e3, MIN=60e3, now=Date.now(), iso=(ms:number)=>new Date(ms).toISOString();
+  const guest={id:'u1',firstName:'Moi'} as any, venue={id:'h1',firstName:'Lieu'} as any;
+  const T=now-10*MIN;
+  const o=(x:any={})=>({id:'o1',hostId:'h1',hostName:'Lieu',status:'open',capacity:2,spotsLeft:1,startsAt:iso(T),category:'resto',budgetMaxEuros:20,neighborhood:'X',isPartnerListing:true,...x});
+  const rq=(x:any={})=>({id:'r1',outingId:'o1',userId:'u1',userName:'Moi',status:'confirmed',depositStatus:'held',createdAt:iso(now-H),...x});
+  const S=(x:any={})=>({...I,currentUser:venue,outings:[o()],requests:[rq()],momentPhotos:[],...x});
+  // BLOQUANT 2 : le lieu ne pointe pas hors liste
+  const done=D(S(),{type:'COMPLETE_OUTING',payload:{outingId:'o1',at:iso(now)}});
+  const mk=D(done,{type:'MARK_GUESTS_PRESENT',payload:{outingId:'o1',requestIds:['r1'],markedAt:iso(now)}});
+  ok(mk.requests[0].attendance===undefined&&mk.requests[0].depositStatus==='held','audit 36: venue cannot MARK_GUESTS_PRESENT outside the H+30 list');
+  const m1=D(S(),{type:'MARK_GUEST_PRESENT',payload:{requestId:'r1',markedAt:iso(now)}});
+  ok(m1.requests[0].attendance===undefined,'audit 36: venue cannot MARK_GUEST_PRESENT');
+  const cl=MK.presenceChecklist({userId:'h1',outing:o(),requests:[rq()],nowMs:now});
+  ok(cl.ok===false&&cl.reason==='partner_venue_list'&&/liste/.test(MK.markPresentReasonLabel('partner_venue_list')),'audit 36: presence checklist refused on a venue, with a label');
+  ok(MK.presenceChecklist({userId:'h1',outing:o({isPartnerListing:false}),requests:[rq()],nowMs:now}).ok===true,'audit 36: normal table checklist unchanged');
+  const pf=rdf('screens','ProfileScreen.tsx');
+  ok(/isPartnerListing\(item\.outing\) \? \([\s\S]{0,400}Ta liste se valide sur l’écran du moment/.test(pf),'audit 36: Profile shows a hint, not the checklist, to the venue');
+  // BLOQUANT 3 : plus de désistement une fois la liste faite
+  const later=S({outings:[o({startsAt:iso(now-40*MIN)})]});
+  const chk=D(later,{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:['r1'],at:iso(now)}});
+  ok(chk.requests[0].depositStatus==='noshow_pending','audit 36: setup — guest unticked');
+  const wd=D({...chk,currentUser:guest},{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+MIN),by:'guest'}});
+  ok(wd.requests[0].status==='confirmed'&&wd.requests[0].depositStatus==='noshow_pending','audit 36: unticked guest cannot withdraw (keeps the contest)');
+  const chk2=D(later,{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:[],at:iso(now)}});
+  const wd2=D({...chk2,currentUser:guest},{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now+MIN),by:'guest'}});
+  ok(wd2.requests[0].status==='confirmed'&&wd2.requests[0].attendance==='present','audit 36: ticked guest cannot withdraw');
+  const wd3=D({...S(),currentUser:guest},{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(now),by:'guest'}});
+  ok(wd3.requests[0].status==='cancelled'&&wd3.requests[0].depositStatus==='forfeited','audit 36: before the list, late withdrawal still possible (forfeit)');
+  ok(LT.isPartnerSeatLocked({},{})===false&&LT.isPartnerSeatLocked({partnerVenueCheck:{}},{})===true&&LT.isPartnerSeatLocked({},{partnerSelfAbsent:true})===true,'audit 36: isPartnerSeatLocked');
+  const od=rdf('screens','OutingDetailScreen.tsx');
+  ok(/!\(partner && isPartnerSeatLocked\(outing, myRequest\)\)/.test(od),'audit 36: « Me désister » hidden once the evening is settled on a venue');
+  // NB : confirmation avant perte, texte lieu
+  ok(/'Te désister \?'/.test(od)&&/isCancelFreeWindow\(outing\.startsAt\)/.test(od)&&!/Place libérée — \$\{describeDepositForfeitMoment\(\)\}/.test(od),'audit 36: late withdrawal asks first, forfeit text partner-aware');
+  ok(/describeDepositForfeitSplit\(\{ venue: partner \}\)/.test(od)&&/13,10 € pour le lieu/.test(require('../src/data/pricing').describeDepositForfeitSplit({venue:true})),'audit 36: early leave on a venue names the venue');
+  // NB : reducer — sur un lieu, seul l’invité se déclare absent
+  const rn=D(S(),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(now)}});
+  ok(rn.requests[0].attendance===undefined&&rn.requests[0].depositStatus==='held','audit 36: partner no-show without reporter refused');
+  // NB : annulation du lieu après la liste
+  const cc=D(chk,{type:'CANCEL_OUTING',payload:{outingId:'o1',cancelledAt:iso(now+MIN)}});
+  ok(cc.outings[0].status!=='cancelled','audit 36: venue cannot cancel after its list');
+  ok(MA.hostCancelRefusal(o({startsAt:iso(now+3*H)}),[rq()],now)===null&&MA.hostCancelRefusal(o(),[rq()],now)===null,'audit 36: venue cancel before the list unchanged');
+  // NB : relance présence — l’invité qui s’est déclaré absent n’est pas relancé
+  ok(JSON.stringify(PC.presenceCheckUserIds({id:'o1',hostId:'h1',status:'closed'} as any,[rq({attendance:'absent',partnerSelfAbsent:true})] as any))==='[]','audit 36: self-declared absent guest not pinged');
+  ok(JSON.stringify(PC.presenceCheckUserIds({id:'o1',hostId:'h1',status:'closed',partnerVenueCheck:{at:iso(now)}} as any,[rq({attendance:'present',presenceBy:'host'})] as any))==='["u1"]','audit 36: venue list counts as the host’s indication');
+  // NB : libellés
+  const ctx=rdf('data','ChanceContext.tsx');
+  ok(!/no-show hôte/.test(pf)&&!/'2e no-show hôte/.test(ctx),'audit 36: no « no-show hôte » jargon in labels');
+  ok(/if \(isDemoEnabled\(\)\) seed\.push/.test(ctx),'audit 36: fake chat message only in demo');
+  ok(!/Confirmé ≠ présent\./.test(od)&&/note possible après le moment/.test(od),'audit 36: presence alerts without jargon');
+  ok(/depositsKept\s*\?/.test(od),'audit 36: guest banner honours depositsKept');
+  ok(/Chez un lieu partenaire : les 20 € entiers au lieu\./.test(rdf('screens','OnboardingScreen.tsx')),'audit 36: onboarding mentions the venue rule');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

@@ -30,7 +30,8 @@ export type MarkPresentReason =
   | 'too_early'
   | 'too_late'
   | 'none_selected'
-  | 'invalid_selection';
+  | 'invalid_selection'
+  | 'partner_venue_list';
 
 type Input = {
   userId: string | null | undefined;
@@ -65,6 +66,10 @@ export function presenceChecklist(
   }
   if (!canActorMarkGuestPresent(userId, outing.hostId)) {
     return { ok: false, reason: 'not_host' };
+  }
+  // Débug audit 36 : sur un lieu, seule la liste de H+30 (The Fork) fait foi.
+  if (outing.isPartnerListing === true) {
+    return { ok: false, reason: 'partner_venue_list' };
   }
   const confirmed = requests.filter(
     (r) => r.outingId === outing.id && r.status === 'confirmed',
@@ -149,6 +154,8 @@ export function markPresentReasonLabel(reason: string): string {
       return 'Aucun invité confirmé à marquer présent.';
     case 'outing_not_found':
       return 'Moment introuvable.';
+    case 'partner_venue_list':
+      return 'Chez un lieu, la présence se valide sur la liste, 30 min après le début.';
     default:
       return 'Présence non enregistrée.';
   }

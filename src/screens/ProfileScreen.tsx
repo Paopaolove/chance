@@ -247,7 +247,7 @@ function ProfileScreenInner() {
             <Text style={styles.warnBody}>
               {demoLabel(
                 (user.hostNoShowCount ?? 0) === 1
-                  ? '1er no-show hôte. Un 2e = compte fermé (démo).'
+                  ? '1re absence d’hôte retenue. Une 2e = compte fermé (démo).'
                   : '1er avertissement publication jamais honorée. Un 2e = compte fermé (démo).',
               )}
             </Text>
@@ -832,6 +832,12 @@ function ProfileScreenInner() {
                           <Text style={styles.cardHint}>
                             Le lieu pointe la table 30 min après l’heure. Rien coché à 6 h : caution rendue.
                           </Text>
+                        ) : isPartnerListing(item.outing) ? (
+                          // Débug audit 36 : lieu-hôte → la liste de H+30 sur l’écran du moment,
+                          // pas de pointage ici.
+                          <Text style={styles.cardHint}>
+                            Ta liste se valide sur l’écran du moment, 30 min après l’heure. Rien coché à 6 h : cautions rendues.
+                          </Text>
                         ) : item.requestId ? (
                           // Invité : « Je suis présent », puis note de l’hôte.
                           <Button
@@ -881,8 +887,8 @@ function ProfileScreenInner() {
                               <View style={{ marginTop: spacing.sm }}>
                                 <Text style={styles.cardHint}>
                                   Coche les invités qui étaient là. Les autres
-                                  restent sans présence (« Pas venu » toujours
-                                  possible).
+                                  restent sans présence (« Pas venu » possible
+                                  jusqu’à 6 h après le début).
                                 </Text>
                                 {candidates.map((c) => {
                                   const on = presenceChecked.includes(c.requestId);
