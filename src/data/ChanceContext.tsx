@@ -494,7 +494,8 @@ function withPartnerNoShowStrike(state: AppState, requestId: string, at: string)
         ? '4 absences en 12 mois sur des moments lieu — compte fermé (démo)'
         : currentUser.bannedReason,
     };
-    if (!req.noShowFinalNotice) {
+    // Lot 37 : auto-déclaration lieu → un seul toast, celui du callback reportGuestNoShow.
+    if (!req.noShowFinalNotice && !req.partnerSelfAbsent) {
       toast = {
         id: `noshow-final-${requestId}`,
         title: 'Absence retenue',
@@ -887,6 +888,13 @@ function reducer(state: AppState, action: AppAction): AppState {
                 ...r,
                 status: 'cancelled' as const,
                 ...(req.status === 'confirmed' ? { depositStatus } : {}),
+                // Lot 37 : trop tard sur un lieu → 20 € entiers au lieu (0 € Moment).
+                ...(req.status === 'confirmed' &&
+                depositStatus === 'forfeited' &&
+                req.depositStatus !== 'forfeited' &&
+                isPartnerListing(outing)
+                  ? { partnerLateCancel: true }
+                  : {}),
               }
             : r,
         ),
@@ -1516,7 +1524,12 @@ function reducer(state: AppState, action: AppAction): AppState {
             !r.leftTableAt &&
             (r.depositStatus === 'held' || !r.depositStatus)
           ) {
-            return { ...r, depositStatus: 'forfeited' as const };
+            // Lot 37 : imprévu refusé / sans réponse sur un lieu → 20 € entiers au lieu.
+            return {
+              ...r,
+              depositStatus: 'forfeited' as const,
+              ...(isPartnerListing(imprevuOuting) ? { partnerLateCancel: true } : {}),
+            };
           }
           return r;
         });
@@ -7464,6 +7477,11 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       if (outing.hostNoShowReported) {
         return { ok: false, reason: 'host_no_show' };
       }
+      // Lot 37 : sur un lieu, seul l’invité se déclare (la liste H+30 fait le reste) —
+      // refus explicite, comme le reducer.
+      if (isPartnerListing(outing) && user.id !== guestId) {
+        return { ok: false, reason: 'partner_use_check' };
+      }
       const jokerExempted = isJokerExempted(state.imprevuReports, {
         outingId,
         reporterId: guestId,
@@ -7534,7 +7552,6 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           reportedByUserId: user.id,
         },
       });
-      const shareWho = isPartnerListing(outing) ? 'lieu' : 'hôte';
       // 18/10 : caution déjà rendue (table normale), elle reste acquise.
       const depositKept = disagreement && req.depositStatus === 'returned' && !isPartnerListing(outing);
       const lossText = depositKept
@@ -7544,8 +7561,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         : partnerSelf
           ? `caution perdue (${PARTNER_DEPOSIT_FORFEIT_LABEL}).`
         : pending
-          ? `caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € ${shareWho}).`
-          : `caution perdue (6,90 € Moment / 13,10 € ${shareWho}).`;
+          ? 'caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € hôte).'
+          : 'caution perdue (6,90 € Moment / 13,10 € hôte).';
       const note: ChatMessage = {
         id: uid('msg'),
         threadKey: chatThreadKey(outingId, requestId),

@@ -41,6 +41,9 @@ const LABELS: Record<string, string> = {
   cancelled: 'Ce moment a été annulé.',
   already_done: 'La liste de ce soir est déjà validée.',
   nobody: 'Personne à pointer sur cette liste.',
+  // 26/10 · Débug audit 36 : lieu — présence par la liste, plus de désistement après.
+  partner_venue_list: 'Chez un lieu, la présence se valide sur la liste, 30 min après le début.',
+  partner_seat_locked: 'La liste de ce soir est faite : tu ne peux plus te désister.',
   host_pending: 'L’absence de l’hôte n’est pas encore tranchée : la caution ne peut pas être perdue maintenant.',
 };
 

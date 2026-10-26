@@ -2521,5 +2521,54 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(/depositsKept\s*\?/.test(od),'audit 36: guest banner honours depositsKept');
   ok(/Chez un lieu partenaire : les 20 € entiers au lieu\./.test(rdf('screens','OnboardingScreen.tsx')),'audit 36: onboarding mentions the venue rule');
 }
+// 26/10 · Lot 37 · Annulation tardive / absence sur un lieu → 20 € entiers au lieu
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const NC=require('../src/utils/noShowContest');
+  const H=3600e3, MIN=60e3, now=Date.now(), iso=(ms:number)=>new Date(ms).toISOString();
+  const guest={id:'u1',firstName:'Moi'} as any;
+  const o=(x:any={})=>({id:'o1',hostId:'h1',hostName:'Lieu',status:'open',capacity:2,spotsLeft:1,startsAt:iso(now+30*MIN),category:'resto',budgetMaxEuros:20,neighborhood:'X',...x});
+  const rq=(x:any={})=>({id:'r1',outingId:'o1',userId:'u1',userName:'Moi',status:'confirmed',depositStatus:'held',createdAt:iso(now-H),...x});
+  const S=(x:any={})=>({...I,currentUser:guest,outings:[o()],requests:[rq()],momentPhotos:[],...x});
+  const CR=(s0:any,at=now)=>D(s0,{type:'CANCEL_REQUEST',payload:{requestId:'r1',cancelledAt:iso(at),by:'guest'}}).requests[0];
+  const sh=(r:any)=>JSON.stringify(NC.depositForfeitShares(r));
+  // Lieu, après H−1
+  const pl=CR(S({outings:[o({isPartnerListing:true})]}));
+  ok(pl.status==='cancelled'&&pl.depositStatus==='forfeited'&&pl.partnerLateCancel===true,'lot 37: late cancel on a venue → forfeited, flagged');
+  ok(NC.partnerVenueNoShowShareEuros(pl)===20&&NC.hostNoShowShareEuros(pl)===0&&sh(pl)==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}','lot 37: late cancel on a venue → 20 € entiers au lieu, 0 € Moment');
+  // Lieu, après H (moment commencé, pas de liste encore)
+  const pa=CR(S({outings:[o({isPartnerListing:true,startsAt:iso(now-10*MIN)})]}));
+  ok(pa.depositStatus==='forfeited'&&pa.partnerLateCancel===true&&sh(pa)==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}','lot 37: withdrawal after H on a venue → 20 € au lieu');
+  // Lieu, fenêtre gratuite : rien
+  const pf=CR(S({outings:[o({isPartnerListing:true,startsAt:iso(now+3*H)})]}));
+  ok(pf.depositStatus==='returned'&&!pf.partnerLateCancel&&sh(pf)==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}','lot 37: free cancel on a venue → returned, no share');
+  // Table normale inchangée
+  const nl=CR(S());
+  ok(nl.depositStatus==='forfeited'&&!nl.partnerLateCancel&&NC.partnerVenueNoShowShareEuros(nl)===0&&sh(nl)==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}','lot 37: normal table late cancel → 6,90 / 13,10 unchanged');
+  // Absences lieu (liste / auto-déclaration) → même répartition
+  ok(sh({depositStatus:'forfeited',attendance:'absent',partnerVenueAbsent:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}'&&sh({depositStatus:'forfeited',attendance:'absent',partnerSelfAbsent:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}','lot 37: venue absence (list / self) → 20 € au lieu');
+  ok(sh({depositStatus:'forfeited',attendance:'absent'})==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}'&&sh({depositStatus:'forfeited',attendance:'absent',noShowNotRetained:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}'&&sh({depositStatus:'noshow_pending',partnerVenueAbsent:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}','lot 37: normal absence split, nothing while pending / not retained');
+  ok(sh({depositStatus:'forfeited',leftTableAt:iso(now)})==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}','lot 37: early leave keeps the split (hypothèse : départ ≠ trop tard / absent)');
+  // Imprévu refusé / sans réponse sur un lieu
+  const imp=(x:any={})=>S({outings:[o({isPartnerListing:true,startsAt:iso(now-MIN)}),],imprevuReports:[{id:'i1',outingId:'o1',reporterId:'u1',requestId:'r1',status:'pending',motive:'x',reason:'y',createdAt:iso(now-H)}],...x});
+  const ar=D(imp(),{type:'RESPOND_IMPREVU',payload:{imprevuId:'i1',decision:'auto_refused',respondedAt:iso(now),forfeitReporterDeposit:true}}).requests[0];
+  ok(ar.depositStatus==='forfeited'&&ar.partnerLateCancel===true&&NC.partnerVenueNoShowShareEuros(ar)===20,'lot 37: imprévu unanswered on a venue → 20 € au lieu');
+  const an=D(imp({outings:[o({startsAt:iso(now-MIN)})]}),{type:'RESPOND_IMPREVU',payload:{imprevuId:'i1',decision:'auto_refused',respondedAt:iso(now),forfeitReporterDeposit:true}}).requests[0];
+  ok(an.depositStatus==='forfeited'&&!an.partnerLateCancel&&sh(an)==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}','lot 37: imprévu unanswered on a normal table → split unchanged');
+  // Joker après coup : rien au lieu
+  ok(NC.partnerVenueNoShowShareEuros({...pl,depositStatus:'returned'})===0,'lot 37: deposit back (joker) → nothing to the venue');
+  // Écrans
+  const ip=rdf('screens','ImprevuScreen.tsx');
+  ok(/const venue = isPartnerListing\(outing\)/.test(ip)&&/venue \? PARTNER_DEPOSIT_FORFEIT_LABEL/.test(ip)&&/→ \{lossShort\}/.test(ip),'lot 37: Imprévu texts = 20 € au lieu on a venue');
+  // Polish lot 35
+  const ctx=rdf('data','ChanceContext.tsx');
+  ok(!/shareWho/.test(ctx)&&/isPartnerListing\(outing\) && user\.id !== guestId\) \{\s*return \{ ok: false, reason: 'partner_use_check' \}/.test(ctx),'lot 37: reportGuestNoShow refuses the venue up front, no dead « 13,10 € lieu »');
+  ok(/!req\.noShowFinalNotice && !req\.partnerSelfAbsent/.test(ctx),'lot 37: single toast on venue self-declaration');
+  const self=D(S({outings:[o({isPartnerListing:true,startsAt:iso(now-10*MIN)})]}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:0,lowerPriority:false,reportedAt:iso(now),reportedByUserId:'u1'}});
+  ok(self.requests[0].partnerSelfAbsent===true&&self.toast==null&&!!self.requests[0].noShowFinalNotice,'lot 37: reducer adds no toast on self-declaration (callback toast only)');
+  const TR=require('../src/utils/tableReports');
+  ok(TR.TABLE_REPORT_OUTCOME_LABELS.suspension==='Compte fermé'&&!Object.values(TR.TABLE_REPORT_OUTCOME_LABELS).some((v:any)=>/Suspension/.test(v)),'lot 37: table report outcome label « Compte fermé »');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

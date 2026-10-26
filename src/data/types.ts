@@ -487,6 +487,13 @@ export interface Request {
    * fermé), pas dans le barème invité table normale.
    */
   partnerSelfAbsent?: boolean;
+  /**
+   * 26/10 · Lot 37 : caution perdue sur un moment lieu sans absence déclarée —
+   * désistement trop tard (après H−1, ou après H) ou imprévu refusé / sans
+   * réponse. Les 20 € entiers vont au lieu (0 € Moment), comme une absence.
+   * Ne compte pas dans le barème des absences.
+   */
+  partnerLateCancel?: boolean;
   /** Ancien litige partenaire (avant 25/10 soir) — plus créé, gardé pour lecture. */
   partnerDispute?: PartnerDispute;
 }

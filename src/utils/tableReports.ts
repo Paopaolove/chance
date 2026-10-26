@@ -95,7 +95,8 @@ export const REPEATED_UNCONFIRMED_MIN_OTHERS = 2;
 export const TABLE_REPORT_OUTCOME_LABELS: Record<TableReportOutcome, string> = {
   sans_suite: 'Sans suite',
   warning: 'Avertissement',
-  suspension: 'Suspension',
+  // Lot 37 : libellé « compte fermé » (clé interne inchangée).
+  suspension: 'Compte fermé',
   abusive: 'Signalement abusif',
 };
 
