@@ -454,12 +454,14 @@ export interface Request {
   /**
    * 30/10 · Départ avant H+30 sur un moment lieu (partenaire), avec ou sans
    * motif (même indicateur côté lieu). Sans malaise : 20 € entiers au lieu
-   * (0 € Moment, pas 6,90 / 13,10). Malaise : caution rendue.
+   * (0 € Moment, pas 6,90 / 13,10). Malaise : caution rendue, 0 € au lieu (lot 38b).
    */
   partnerEarlyLeave?: boolean;
   /**
    * Part hôte d’un départ avant H+30, identique avec ou sans motif : 13,10 €
-   * (table normale) ou 20 € entiers au lieu (moment partenaire, 30/10).
+   * (table normale seulement). Moment lieu : jamais renseigné (lot 38b) — la
+   * part du lieu (20 € sans motif, 0 € en malaise) vient de depositForfeitShares
+   * et n’est pas affichée, pour que le lieu ne devine pas le motif.
    * Sans motif : issue de la caution perdue. Malaise : payée par Moment
    * (ligne interne MomentPaidHostLine, jamais visible par l’hôte). Démo, pas de paiement réel.
    */

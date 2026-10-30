@@ -958,7 +958,9 @@ export function OutingDetailScreen() {
                   <View style={{ marginTop: spacing.sm }}>
                     <Text style={styles.hint}>
                       {r.leftTableAt
-                        ? [hostLeaveView(r)!.label, hostLeaveView(r)!.earningsLabel.replace('pour toi', 'pour ton lieu')].filter(Boolean).join(' · ')
+                        ? // Lot 38b : « X a quitté la table », sans montant (20 € ou 0 €
+                          // trahirait le motif) — identique avec ou sans malaise.
+                          hostLeaveView(r)!.label
                         : r.attendance === 'present'
                           ? `${r.userName} · présent · caution rendue`
                           : r.attendance === 'absent'
@@ -1565,7 +1567,7 @@ export function OutingDetailScreen() {
                   Alert.alert(
                     'Tu as quitté la table',
                     res.discomfort
-                      ? 'Caution rendue, rien n’est compté. Moment est prévenu en toute confidentialité — l’hôte ne voit pas le motif.'
+                      ? `Caution rendue, rien n’est compté. Moment est prévenu en toute confidentialité — ${partner ? 'le lieu' : 'l’hôte'} ne voit pas le motif.`
                       : res.deposit === 'forfeited'
                         ? // 30/10 · Lieu : 20 € entiers au lieu ; table normale : 6,90 / 13,10.
                           `Départ avant 30 min : caution ${DEPOSIT_EUROS} € perdue (${partner ? PARTNER_DEPOSIT_FORFEIT_LABEL : describeDepositForfeitSplit()}).`

@@ -6,6 +6,8 @@
  *     compté, signalement confidentiel pour Moment (l’hôte ne voit pas le motif).
  *   · sans motif avant H+30 : caution perdue — table normale 6,90 € Moment /
  *     13,10 € hôte ; moment lieu (partenaire) 20 € entiers au lieu (30/10).
+ *   · moment lieu + malaise (30/10, lot 38b) : caution rendue, 0 € au lieu ;
+ *     côté lieu, seulement « X a quitté la table » (ni motif ni montant).
  *   · sans motif à partir de H+30 : libre, caution rendue, rien compté.
  * - 2 malaises en 3 mois (Paris) sans élément concret : motif plus proposé,
  *   drapeau revue manuelle.
@@ -200,8 +202,10 @@ export function isDiscomfortReasonOffered(
  * - table normale : 13,10 € à l’hôte (6,90 € Moment) ;
  * - 30/10 · moment lieu (partenaire) : 20 € entiers au lieu (0 € Moment),
  *   aligné sur absence retenue / annulation tardive lieu / ConfirmSlot partenaire.
- * Malaise : même montant (payé par Moment, caution rendue) pour que le lieu
- * ne puisse pas distinguer le motif.
+ * Malaise : table normale → même montant (payé par Moment, caution rendue) ;
+ * lieu (lot 38b, 30/10) → 0 € au lieu, caution rendue. Le reducer ne stocke
+ * donc jamais cette part sur une demande lieu (`hostLeaveShareEuros` absent) :
+ * le lieu voit « X a quitté la table » sans montant, avec ou sans malaise.
  */
 export function hostLeaveShareEuros(
   startsAt: string,

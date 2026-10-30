@@ -256,6 +256,7 @@ export function partnerVenueNoShowShareEuros(
  * - table normale (trop tard ou absent) → 6,90 € Moment / 13,10 € hôte ;
  * - départ avant H+30 sans motif (« Je quitte la table ») : table normale
  *   → 6,90 € / 13,10 € ; 30/10 · lieu (`partnerEarlyLeave`) → 20 € entiers au lieu ;
+ *   lieu + malaise : caution rendue (`returned_discomfort_leave`) → 0 partout ;
  * - caution non perdue, absence non retenue → 0 partout.
  */
 export function depositForfeitShares(

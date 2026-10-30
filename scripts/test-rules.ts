@@ -2570,7 +2570,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const TR=require('../src/utils/tableReports');
   ok(TR.TABLE_REPORT_OUTCOME_LABELS.suspension==='Compte fermé'&&!Object.values(TR.TABLE_REPORT_OUTCOME_LABELS).some((v:any)=>/Suspension/.test(v)),'lot 37: table report outcome label « Compte fermé »');
 }
-// 30/10 · Lot 38 · Départ anticipé sur un lieu → 20 € entiers au lieu (table normale et malaise inchangés)
+// 30/10 · Lot 38 · Départ anticipé sur un lieu → 20 € entiers au lieu ; lot 38b : malaise lieu → caution rendue, 0 € au lieu, motif invisible
 {
   const fs=require('node:fs'), path=require('node:path');
   const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
@@ -2586,9 +2586,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const v=L(st(-10*MIN,true));
   const vr=v.requests[0];
   ok(vr.depositStatus==='forfeited'&&vr.leftTableEarly===true&&vr.partnerEarlyLeave===true,'lot 38: venue early leave → forfeited, flagged');
-  ok(vr.hostLeaveShareEuros===20&&sh(vr)==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}','lot 38: venue early leave → 20 € entiers au lieu, 0 € Moment');
+  ok(!vr.hostLeaveShareEuros&&sh(vr)==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}','lot 38: venue early leave → 20 € entiers au lieu, 0 € Moment');
   ok(v.momentPaidHostLines.length===0,'lot 38: venue early leave without motive → no Moment-paid line');
-  ok(LT.hostLeaveView(vr).earningsEuros===20&&LT.hostLeaveView(vr).earningsLabel.replace('pour toi','pour ton lieu')==='20 € pour ton lieu','lot 38: venue sees « 20 € pour ton lieu »');
+  ok(LT.hostLeaveView(vr).label==='Moi a quitté la table'&&LT.hostLeaveView(vr).earningsLabel==='','lot 38b: venue sees « Moi a quitté la table », no amount');
   // Table normale inchangée
   const n=L(st(-10*MIN,false)).requests[0];
   ok(n.depositStatus==='forfeited'&&!n.partnerEarlyLeave&&n.hostLeaveShareEuros===13.1&&sh(n)==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}','lot 38: normal table early leave → 6,90 / 13,10 unchanged');
@@ -2596,10 +2596,12 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const m=L(st(-10*MIN,true),'discomfort');
   const mr=m.requests[0];
   ok(mr.depositStatus==='returned_discomfort_leave'&&sh(mr)==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}'&&m.confidentialLeaveReports[0].guestDepositRefundedEuros===20,'lot 38: venue discomfort → deposit returned, nothing taken from the guest');
-  // Vue lieu identique avec ou sans malaise (motif confidentiel) : Moment paie la part du lieu
-  ok(m.momentPaidHostLines.length===1&&m.momentPaidHostLines[0].amountEuros===20&&mr.hostLeaveShareEuros===20,'lot 38: venue discomfort → Moment pays the venue 20 € (same view as no motive)');
-  const pv=(r:any)=>JSON.stringify(LT.projectRequestForHost({...r,leftTableAt:'x'}));
-  ok(pv(mr)===pv(vr),'lot 38: venue projection identical with/without discomfort');
+  // Lot 38b · Malaise sur un lieu : 0 € au lieu (ni 20 € ni 13,10 €), aucune ligne Moment
+  ok(m.momentPaidHostLines.length===0&&!mr.hostLeaveShareEuros&&mr.partnerEarlyLeave===true,'lot 38b: venue discomfort → 0 € au lieu, no Moment-paid line');
+  // Motif invisible côté lieu : projection + vue identiques avec ou sans malaise
+  const pv=(r:any)=>JSON.stringify({p:LT.projectRequestForHost({...r,leftTableAt:'x'}),v:LT.hostLeaveView({...r,leftTableAt:'x'})});
+  ok(pv(mr)===pv(vr)&&LT.hostDepositStatus(mr)===LT.hostDepositStatus(vr),'lot 38b: venue view identical with/without discomfort (motif invisible)');
+  ok(!/malaise|aise|discomfort/i.test(pv(mr)),'lot 38b: nothing in the venue view mentions the discomfort');
   // Malaise table normale inchangé (13,10 € payés par Moment)
   const mn=L(st(-10*MIN,false),'discomfort');
   ok(mn.momentPaidHostLines[0].amountEuros===13.1&&!mn.requests[0].partnerEarlyLeave,'lot 38: normal table discomfort unchanged (Moment 13,10 € to host)');
@@ -2615,6 +2617,8 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   // Écran : plus de « 13,10 € pour le lieu »
   const od=rdf('screens','OutingDetailScreen.tsx');
   ok(!/13,10 € pour le lieu/.test(od)&&!/venue: partner/.test(od),'lot 38: no « 13,10 € pour le lieu » on the leave alert');
+  ok(!/earningsLabel\.replace\('pour toi', 'pour ton lieu'\)/.test(od)&&/hostLeaveView\(r\)!\.label\n/.test(od),'lot 38b: venue leave line = label only (no amount)');
+  ok(/\$\{partner \? 'le lieu' : 'l’hôte'\} ne voit pas le motif/.test(od),'lot 38b: guest discomfort alert names the venue');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;
