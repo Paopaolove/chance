@@ -452,7 +452,14 @@ export interface Request {
   /** Départ avant H+30, avec ou sans motif (même indicateur côté hôte). Le motif n’est jamais stocké ici. */
   leftTableEarly?: boolean;
   /**
-   * Part hôte d’un départ avant H+30 (13,10 €), identique avec ou sans motif.
+   * 30/10 · Départ avant H+30 sur un moment lieu (partenaire), avec ou sans
+   * motif (même indicateur côté lieu). Sans malaise : 20 € entiers au lieu
+   * (0 € Moment, pas 6,90 / 13,10). Malaise : caution rendue.
+   */
+  partnerEarlyLeave?: boolean;
+  /**
+   * Part hôte d’un départ avant H+30, identique avec ou sans motif : 13,10 €
+   * (table normale) ou 20 € entiers au lieu (moment partenaire, 30/10).
    * Sans motif : issue de la caution perdue. Malaise : payée par Moment
    * (ligne interne MomentPaidHostLine, jamais visible par l’hôte). Démo, pas de paiement réel.
    */

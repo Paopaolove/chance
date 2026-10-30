@@ -2502,7 +2502,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(/!\(partner && isPartnerSeatLocked\(outing, myRequest\)\)/.test(od),'audit 36: « Me désister » hidden once the evening is settled on a venue');
   // NB : confirmation avant perte, texte lieu
   ok(/'Te désister \?'/.test(od)&&/isCancelFreeWindow\(outing\.startsAt\)/.test(od)&&!/Place libérée — \$\{describeDepositForfeitMoment\(\)\}/.test(od),'audit 36: late withdrawal asks first, forfeit text partner-aware');
-  ok(/describeDepositForfeitSplit\(\{ venue: partner \}\)/.test(od)&&/13,10 € pour le lieu/.test(require('../src/data/pricing').describeDepositForfeitSplit({venue:true})),'audit 36: early leave on a venue names the venue');
+  ok(/partner \? PARTNER_DEPOSIT_FORFEIT_LABEL : describeDepositForfeitSplit\(\)/.test(od)&&!/describeDepositForfeitSplit\(\{ venue/.test(od),'lot 38: early leave on a venue = 20 € entiers au lieu (was audit 36 split)');
   // NB : reducer — sur un lieu, seul l’invité se déclare absent
   const rn=D(S(),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(now)}});
   ok(rn.requests[0].attendance===undefined&&rn.requests[0].depositStatus==='held','audit 36: partner no-show without reporter refused');
@@ -2549,7 +2549,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   // Absences lieu (liste / auto-déclaration) → même répartition
   ok(sh({depositStatus:'forfeited',attendance:'absent',partnerVenueAbsent:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}'&&sh({depositStatus:'forfeited',attendance:'absent',partnerSelfAbsent:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}','lot 37: venue absence (list / self) → 20 € au lieu');
   ok(sh({depositStatus:'forfeited',attendance:'absent'})==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}'&&sh({depositStatus:'forfeited',attendance:'absent',noShowNotRetained:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}'&&sh({depositStatus:'noshow_pending',partnerVenueAbsent:true})==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}','lot 37: normal absence split, nothing while pending / not retained');
-  ok(sh({depositStatus:'forfeited',leftTableAt:iso(now)})==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}','lot 37: early leave keeps the split (hypothèse : départ ≠ trop tard / absent)');
+  ok(sh({depositStatus:'forfeited',leftTableAt:iso(now)})==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}','lot 37/38: early leave on a normal table keeps the split');
   // Imprévu refusé / sans réponse sur un lieu
   const imp=(x:any={})=>S({outings:[o({isPartnerListing:true,startsAt:iso(now-MIN)}),],imprevuReports:[{id:'i1',outingId:'o1',reporterId:'u1',requestId:'r1',status:'pending',motive:'x',reason:'y',createdAt:iso(now-H)}],...x});
   const ar=D(imp(),{type:'RESPOND_IMPREVU',payload:{imprevuId:'i1',decision:'auto_refused',respondedAt:iso(now),forfeitReporterDeposit:true}}).requests[0];
@@ -2569,6 +2569,52 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(self.requests[0].partnerSelfAbsent===true&&self.toast==null&&!!self.requests[0].noShowFinalNotice,'lot 37: reducer adds no toast on self-declaration (callback toast only)');
   const TR=require('../src/utils/tableReports');
   ok(TR.TABLE_REPORT_OUTCOME_LABELS.suspension==='Compte fermé'&&!Object.values(TR.TABLE_REPORT_OUTCOME_LABELS).some((v:any)=>/Suspension/.test(v)),'lot 37: table report outcome label « Compte fermé »');
+}
+// 30/10 · Lot 38 · Départ anticipé sur un lieu → 20 € entiers au lieu (table normale et malaise inchangés)
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const NC=require('../src/utils/noShowContest');
+  const LT=require('../src/utils/leaveTable');
+  const PR=require('../src/data/pricing');
+  const MIN=60e3, now=Date.now(), iso=(ms:number)=>new Date(ms).toISOString();
+  const guest={id:'u1',firstName:'Moi'} as any;
+  const st=(startOffMs:number,partner:boolean,x:any={})=>({...I,currentUser:guest,outings:[o({startsAt:iso(now+startOffMs),status:'closed',...(partner?{isPartnerListing:true}:{})})],requests:[rq({status:'confirmed',depositStatus:'held',...x})],momentPhotos:[]});
+  const L=(s0:any,reason?:any)=>D(s0,{type:'LEAVE_TABLE',payload:{requestId:'r1',leftAt:iso(now),reason,reportId:'lv38'}});
+  const sh=(r:any)=>JSON.stringify(NC.depositForfeitShares(r));
+  // Lieu, sans motif, avant H+30 → perdue, 20 € entiers au lieu, 0 € Moment
+  const v=L(st(-10*MIN,true));
+  const vr=v.requests[0];
+  ok(vr.depositStatus==='forfeited'&&vr.leftTableEarly===true&&vr.partnerEarlyLeave===true,'lot 38: venue early leave → forfeited, flagged');
+  ok(vr.hostLeaveShareEuros===20&&sh(vr)==='{"momentEuros":0,"hostEuros":0,"venueEuros":20}','lot 38: venue early leave → 20 € entiers au lieu, 0 € Moment');
+  ok(v.momentPaidHostLines.length===0,'lot 38: venue early leave without motive → no Moment-paid line');
+  ok(LT.hostLeaveView(vr).earningsEuros===20&&LT.hostLeaveView(vr).earningsLabel.replace('pour toi','pour ton lieu')==='20 € pour ton lieu','lot 38: venue sees « 20 € pour ton lieu »');
+  // Table normale inchangée
+  const n=L(st(-10*MIN,false)).requests[0];
+  ok(n.depositStatus==='forfeited'&&!n.partnerEarlyLeave&&n.hostLeaveShareEuros===13.1&&sh(n)==='{"momentEuros":6.9,"hostEuros":13.1,"venueEuros":0}','lot 38: normal table early leave → 6,90 / 13,10 unchanged');
+  // Malaise sur un lieu → caution rendue, jamais 20 € retenus sur l’invité
+  const m=L(st(-10*MIN,true),'discomfort');
+  const mr=m.requests[0];
+  ok(mr.depositStatus==='returned_discomfort_leave'&&sh(mr)==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}'&&m.confidentialLeaveReports[0].guestDepositRefundedEuros===20,'lot 38: venue discomfort → deposit returned, nothing taken from the guest');
+  // Vue lieu identique avec ou sans malaise (motif confidentiel) : Moment paie la part du lieu
+  ok(m.momentPaidHostLines.length===1&&m.momentPaidHostLines[0].amountEuros===20&&mr.hostLeaveShareEuros===20,'lot 38: venue discomfort → Moment pays the venue 20 € (same view as no motive)');
+  const pv=(r:any)=>JSON.stringify(LT.projectRequestForHost({...r,leftTableAt:'x'}));
+  ok(pv(mr)===pv(vr),'lot 38: venue projection identical with/without discomfort');
+  // Malaise table normale inchangé (13,10 € payés par Moment)
+  const mn=L(st(-10*MIN,false),'discomfort');
+  ok(mn.momentPaidHostLines[0].amountEuros===13.1&&!mn.requests[0].partnerEarlyLeave,'lot 38: normal table discomfort unchanged (Moment 13,10 € to host)');
+  // Lieu après H+30 → libre
+  const late=L(st(-31*MIN,true)).requests[0];
+  ok(late.depositStatus==='returned'&&!late.partnerEarlyLeave&&!late.hostLeaveShareEuros&&sh(late)==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}','lot 38: venue leave ≥ H+30 → free, no share');
+  // Caution déjà rendue (joker…) : rien au lieu
+  const back=L(st(-10*MIN,true,{depositStatus:'returned'})).requests[0];
+  ok(back.depositStatus==='returned'&&!back.hostLeaveShareEuros&&sh(back)==='{"momentEuros":0,"hostEuros":0,"venueEuros":0}','lot 38: already-returned deposit → nothing to the venue');
+  // Helpers
+  ok(LT.hostLeaveShareEuros(iso(now-10*MIN),now,{partner:true})===20&&LT.hostLeaveShareEuros(iso(now-10*MIN),now)===13.1&&LT.hostLeaveShareEuros(iso(now-40*MIN),now,{partner:true})===0,'lot 38: hostLeaveShareEuros venue 20 / normal 13,10 / after H+30 0');
+  ok(PR.describeDepositForfeitSplit()==='6,90 € pour Moment, 13,10 € pour l’hôte','lot 38: split label = normal table only');
+  // Écran : plus de « 13,10 € pour le lieu »
+  const od=rdf('screens','OutingDetailScreen.tsx');
+  ok(!/13,10 € pour le lieu/.test(od)&&!/venue: partner/.test(od),'lot 38: no « 13,10 € pour le lieu » on the leave alert');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

@@ -1671,11 +1671,13 @@ function reducer(state: AppState, action: AppAction): AppState {
           DISCOMFORT_REVIEW_THRESHOLD;
       // Part hôte seulement si la caution était encore bloquée au départ
       // (sinon ni perte ni ligne Moment) — identique avec ou sans malaise.
+      // 30/10 · Lieu : 20 € entiers au lieu (pas 6,90 / 13,10) ; table normale inchangée.
+      const partnerLeave = isPartnerListing(outing);
       const hostShare =
         req.depositStatus === 'held'
-          ? hostLeaveShareEuros(outing.startsAt, leftAtMs)
+          ? hostLeaveShareEuros(outing.startsAt, leftAtMs, { partner: partnerLeave })
           : 0;
-      // Malaise avant H+30 : Moment paie la part hôte (ligne interne), caution rendue.
+      // Malaise avant H+30 : Moment paie la part hôte / lieu (ligne interne), caution rendue.
       const paidLines =
         outcome.confidentialReport && hostShare > 0 && guestRefunded
           ? [
@@ -1722,6 +1724,9 @@ function reducer(state: AppState, action: AppAction): AppState {
                 leftTableEarly:
                   isLeaveBeforeH30(outing.startsAt, leftAtMs) || undefined,
                 hostLeaveShareEuros: hostShare || undefined,
+                // 30/10 · Départ anticipé sur un lieu (même indicateur avec ou sans motif).
+                partnerEarlyLeave:
+                  (partnerLeave && isLeaveBeforeH30(outing.startsAt, leftAtMs)) || undefined,
                 depositStatus: deposit,
               }
             : r,
@@ -3788,7 +3793,7 @@ interface ChanceContextValue {
   /**
    * « Je quitte la table » (invité, pendant le moment). Motif facultatif.
    * Malaise → caution rendue + signalement confidentiel (hôte ne voit pas le motif).
-   * Sans motif : avant H+30 caution perdue (6,90/13,10), après libre.
+   * Sans motif : avant H+30 caution perdue (6,90/13,10 ; lieu : 20 € entiers au lieu), après libre.
    */
   leaveTable: (
     requestId: string,

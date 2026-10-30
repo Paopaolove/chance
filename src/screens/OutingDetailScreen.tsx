@@ -1567,8 +1567,8 @@ export function OutingDetailScreen() {
                     res.discomfort
                       ? 'Caution rendue, rien n’est compté. Moment est prévenu en toute confidentialité — l’hôte ne voit pas le motif.'
                       : res.deposit === 'forfeited'
-                        ? // Débug audit 36 : départ ≠ absent → partage maintenu, lieu nommé.
-                          `Départ avant 30 min : caution ${DEPOSIT_EUROS} € perdue (${describeDepositForfeitSplit({ venue: partner })}).`
+                        ? // 30/10 · Lieu : 20 € entiers au lieu ; table normale : 6,90 / 13,10.
+                          `Départ avant 30 min : caution ${DEPOSIT_EUROS} € perdue (${partner ? PARTNER_DEPOSIT_FORFEIT_LABEL : describeDepositForfeitSplit()}).`
                         : 'Caution rendue, rien n’est compté.',
                   );
                 };

@@ -4,7 +4,8 @@
  * - Départ pendant le moment, sans justification obligatoire.
  *   · motif malaise (« Je ne me sens pas à l’aise ») : caution rendue, rien
  *     compté, signalement confidentiel pour Moment (l’hôte ne voit pas le motif).
- *   · sans motif avant H+30 : caution perdue (6,90 € Moment / 13,10 € hôte).
+ *   · sans motif avant H+30 : caution perdue — table normale 6,90 € Moment /
+ *     13,10 € hôte ; moment lieu (partenaire) 20 € entiers au lieu (30/10).
  *   · sans motif à partir de H+30 : libre, caution rendue, rien compté.
  * - 2 malaises en 3 mois (Paris) sans élément concret : motif plus proposé,
  *   drapeau revue manuelle.
@@ -14,6 +15,7 @@ import { OUTING_AUTO_COMPLETE_AFTER_MS } from './outingActive';
 import {
   DEPOSIT_EUROS,
   DEPOSIT_FORFEIT_HOST_EUROS,
+  DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS,
   formatPriceEuros,
 } from '../data/pricing';
 
@@ -193,9 +195,21 @@ export function isDiscomfortReasonOffered(
   return countRecentDiscomfort(reports, guestId, nowMs) < DISCOMFORT_REVIEW_THRESHOLD;
 }
 
-/** Part hôte d’un départ (13,10 € avant H+30, sinon 0) — même valeur avec ou sans motif. */
-export function hostLeaveShareEuros(startsAt: string, leftAtMs: number): number {
-  return isLeaveBeforeH30(startsAt, leftAtMs) ? DEPOSIT_FORFEIT_HOST_EUROS : 0;
+/**
+ * Part hôte d’un départ avant H+30, sinon 0 — même valeur avec ou sans motif.
+ * - table normale : 13,10 € à l’hôte (6,90 € Moment) ;
+ * - 30/10 · moment lieu (partenaire) : 20 € entiers au lieu (0 € Moment),
+ *   aligné sur absence retenue / annulation tardive lieu / ConfirmSlot partenaire.
+ * Malaise : même montant (payé par Moment, caution rendue) pour que le lieu
+ * ne puisse pas distinguer le motif.
+ */
+export function hostLeaveShareEuros(
+  startsAt: string,
+  leftAtMs: number,
+  opts?: { partner?: boolean },
+): number {
+  if (!isLeaveBeforeH30(startsAt, leftAtMs)) return 0;
+  return opts?.partner ? DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS : DEPOSIT_FORFEIT_HOST_EUROS;
 }
 
 /**
@@ -212,7 +226,11 @@ export function hostLeaveView(r: {
   return {
     label: `${r.userName} a quitté la table`,
     earningsEuros,
-    earningsLabel: earningsEuros > 0 ? `${formatPriceEuros(earningsEuros)} pour toi` : '',
+    // 30/10 · Lieu : « 20 € » (comme les autres textes lieu), pas « 20,00 € ».
+    earningsLabel:
+      earningsEuros > 0
+        ? `${Number.isInteger(earningsEuros) ? `${earningsEuros} €` : formatPriceEuros(earningsEuros)} pour toi`
+        : '',
   };
 }
 

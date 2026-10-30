@@ -254,8 +254,8 @@ export function partnerVenueNoShowShareEuros(
  * - lieu (absence liste / auto-déclarée, désistement trop tard, imprévu refusé)
  *   → 20 € entiers au lieu, 0 € Moment, 0 € hôte ;
  * - table normale (trop tard ou absent) → 6,90 € Moment / 13,10 € hôte ;
- * - départ avant H+30 (« Je quitte la table ») → 6,90 € / 13,10 € (lieu compris :
- *   un départ n’est ni « trop tard » ni « absent ») ;
+ * - départ avant H+30 sans motif (« Je quitte la table ») : table normale
+ *   → 6,90 € / 13,10 € ; 30/10 · lieu (`partnerEarlyLeave`) → 20 € entiers au lieu ;
  * - caution non perdue, absence non retenue → 0 partout.
  */
 export function depositForfeitShares(
@@ -266,10 +266,15 @@ export function depositForfeitShares(
     partnerSelfAbsent?: boolean;
     partnerLateCancel?: boolean;
     leftTableAt?: string;
+    partnerEarlyLeave?: boolean;
   },
 ): { momentEuros: number; hostEuros: number; venueEuros: number } {
   const none = { momentEuros: 0, hostEuros: 0, venueEuros: 0 };
   if (r.depositStatus !== 'forfeited' || r.noShowNotRetained) return none;
+  // 30/10 · Départ anticipé (avant H+30, sans malaise) sur un lieu → 20 € entiers au lieu.
+  if (r.leftTableAt && r.partnerEarlyLeave) {
+    return { momentEuros: 0, hostEuros: 0, venueEuros: DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS };
+  }
   if (!r.leftTableAt && (r.partnerVenueAbsent || r.partnerSelfAbsent || r.partnerLateCancel)) {
     return { momentEuros: 0, hostEuros: 0, venueEuros: DEPOSIT_FORFEIT_PARTNER_VENUE_EUROS };
   }
