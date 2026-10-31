@@ -2649,5 +2649,16 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const users=[...walk(path.join(__dirname,'..','src','screens')),...walk(path.join(__dirname,'..','src','components'))].filter((f:string)=>/\.tsx$/.test(f)&&/partnerAbsenceCounterForSelf|formatPartnerAbsenceCounter|partnerNoShowCount/.test(fs.readFileSync(f,'utf8'))).map((f:string)=>path.basename(f));
   ok(users.length===1&&users[0]==='ProfileScreen.tsx','lot 39: counter rendered only on own Profile');
 }
+// Lot 39 · fil invité ↔ lieu : pas de compteur ni de fermeture dans la note auto
+{
+  const D=R, iso=(t:number)=>new Date(t).toISOString(), now=Date.now(), H=36e5, day=24*H;
+  const me:any={id:'u1',firstName:'Léa',notificationsGranted:true,locationGranted:true,createdAt:iso(now-400*day)};
+  const old3=[{requestId:'a',at:iso(now-30*day)},{requestId:'b',at:iso(now-20*day)},{requestId:'c',at:iso(now-10*day)}];
+  const st={...I,currentUser:me,partnerNoShowLog:{u1:old3},outings:[{id:'o1',hostId:'h1',hostName:'Lieu',title:'T',startsAt:iso(now-H),status:'closed',isPartnerListing:true,partnerKind:'resto',capacity:2,spotsLeft:0}],requests:[{id:'r1',outingId:'o1',userId:'u1',userName:'Léa',status:'confirmed',depositStatus:'held',createdAt:iso(now-2*H)}]} as any;
+  const ok4=D(st,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(now),reportedByUserId:'u1'}});
+  ok(ok4.currentUser.banned===true,'lot 39 setup: 4th venue absence closes the account');
+  const cx=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
+  ok(!/Note auto · \$\{PARTNER_NOSHOW_BAN_AT\}e absence/.test(cx)&&/text: partnerSelf\s*\?\s*`Note auto · absence déclarée par l’invité — \$\{lossText\}`/.test(cx),'lot 39: shared venue thread note never shows « N sur 4 » / closure');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;

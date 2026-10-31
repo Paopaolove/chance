@@ -7579,10 +7579,10 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         outingId,
         requestId,
         kind: 'system',
+        // 31/10 · Lot 39 : fil partagé avec le lieu → jamais le compteur « N sur 4 »
+        // ni la fermeture (privés à l’invité : toast + Profil).
         text: partnerSelf
-          ? banned
-            ? `Note auto · ${PARTNER_NOSHOW_BAN_AT}e absence en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
-            : `Note auto · absence déclarée par l’invité — ${lossText}`
+          ? `Note auto · absence déclarée par l’invité — ${lossText}`
           : banned
           ? `Note auto · 3e absence invité — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
           : lowerPriority
