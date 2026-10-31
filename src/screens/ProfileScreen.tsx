@@ -22,7 +22,7 @@ import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import { mergeProfileTags } from '../data/interests';
 import { categoryLabels } from '../data/mockOutings';
-import { describeDepositForfeitMoment, pricing } from '../data/pricing';
+import { pricing } from '../data/pricing';
 import { MainTabParamList, RootStackParamList } from '../navigation/types';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import {
@@ -42,6 +42,7 @@ import {
   PARTNER_CULTURE_MAX_SAME_EVENING,
   PARTNER_KIND_LABELS,
   PARTNER_WARNINGS_BEFORE_CLOSE,
+  partnerAbsenceCounterForSelf,
 } from '../utils/partners';
 import { demoLabel, isDemoEnabled } from '../utils/devMode';
 import { markPresentReasonLabel } from '../utils/markPresent';
@@ -263,15 +264,21 @@ function ProfileScreenInner() {
               )}
             </Text>
           </View>
-        ) : (user.guestNoShowCount ?? 0) === 1 ? (
-          <View style={styles.warnBanner}>
-            <Text style={styles.warnTitle}>Caution perdue</Text>
-            <Text style={styles.warnBody}>
-              1re absence après confirmation — {describeDepositForfeitMoment()}{' '}
-              Un 2e baisse ta priorité ; au bout de trois, le compte est fermé.
-            </Text>
-          </View>
         ) : null}
+        {(() => {
+          // 31/10 · Lot 39 : compteur lieu privé (l’intéressé seul), « N sur 4 ».
+          const line = partnerAbsenceCounterForSelf(
+            user.id,
+            user.id,
+            state.partnerNoShowLog?.[user.id],
+            Date.now(),
+          );
+          return line && !user.banned ? (
+            <Text style={styles.partnerAbsenceLine} accessibilityLabel={line}>
+              {line}
+            </Text>
+          ) : null;
+        })()}
         <View style={styles.jokerBanner}>
           <Text style={styles.jokerText}>
             {hasJokerAvailable()
@@ -1185,6 +1192,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 4,
+  },
+  partnerAbsenceLine: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
   },
   pastSection: { marginBottom: spacing.md },
   pastTitle: {

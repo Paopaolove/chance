@@ -411,6 +411,32 @@ export function partnerNoShowSanction(countInWindow: number): { banned: boolean 
 }
 
 /**
+ * 31/10 · Lot 39 · Compteur lieu, pour l’intéressé seul : « N sur 4 »
+ * (absences retenues sur des moments lieu, 12 mois glissants). Jamais affiché
+ * à l’hôte, aux autres invités ni au lieu.
+ */
+export function formatPartnerAbsenceCounter(count: number): string {
+  const n = Math.max(0, Math.min(PARTNER_NOSHOW_BAN_AT, Math.floor(count || 0)));
+  return `${n} sur ${PARTNER_NOSHOW_BAN_AT}`;
+}
+
+/**
+ * Lot 39 · Ligne privée « Absences lieu : N sur 4 » : seulement si le lecteur
+ * est la personne concernée et qu’il y a au moins une absence retenue dans la
+ * fenêtre (source : le journal, recalculé à `nowMs`). Sinon `null`.
+ */
+export function partnerAbsenceCounterForSelf(
+  viewerId: string | null | undefined,
+  subjectId: string | null | undefined,
+  log: { requestId: string; at: string }[] | undefined,
+  nowMs: number,
+): string | null {
+  if (!viewerId || !subjectId || viewerId !== subjectId) return null;
+  const n = partnerNoShowsInWindow(log, nowMs);
+  return n > 0 ? `Absences lieu : ${formatPartnerAbsenceCounter(n)}` : null;
+}
+
+/**
  * 25/10 soir · même horloge que la table : silence des deux à H+6 → caution
  * rendue, sans absence (avant : « le lendemain »). On ne pénalise pas le silence
  * du lieu. Le minuteur passe par `shouldReturnDepositH6` / RETURN_DEPOSITS_H6 (depositH6).

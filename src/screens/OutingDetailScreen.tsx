@@ -82,6 +82,7 @@ import { isContestWindowOpen } from '../utils/noShowContest';
 import { HostNoShowContestCard } from '../components/HostNoShowContestCard';
 import { isHostNoShowUnresolved } from '../utils/hostNoShowContest';
 import { useFirstMomentGate } from '../components/FirstMomentSheet';
+import { myLateCancelForfeit } from '../utils/depositLoss';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'OutingDetail'>;
@@ -726,6 +727,17 @@ export function OutingDetailScreen() {
           </View>
         );
       })()}
+
+      {/* 31/10 · Lot 39 : caution perdue après désistement trop tard — visible
+          sur ce moment (et son historique), à l’invité seul ; plus de bandeau Profil. */}
+      {!isHost && !myRequest && myLateCancelForfeit(outgoingRequests, outing.id, state.currentUser?.id) ? (
+        <View style={styles.actions}>
+          <Text style={styles.statusOk}>Caution perdue</Text>
+          <Text style={styles.hint}>
+            {`Désistement à moins d’1 h du début. ${describeDepositForfeitMoment({ partner })}`}
+          </Text>
+        </View>
+      ) : null}
 
       {isHost ? (
         <View style={styles.actions}>

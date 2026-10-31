@@ -2620,5 +2620,34 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(!/earningsLabel\.replace\('pour toi', 'pour ton lieu'\)/.test(od)&&/hostLeaveView\(r\)!\.label\n/.test(od),'lot 38b: venue leave line = label only (no amount)');
   ok(/\$\{partner \? 'le lieu' : 'l’hôte'\} ne voit pas le motif/.test(od),'lot 38b: guest discomfort alert names the venue');
 }
+// 31/10 · Lot 39 · Bandeau « Caution perdue » pas à vie + compteur lieu privé « N sur 4 »
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const PU=require('../src/utils/partners');
+  const DL=require('../src/utils/depositLoss');
+  const pf=rdf('screens','ProfileScreen.tsx'), od=rdf('screens','OutingDetailScreen.tsx');
+  // 1. Plus de bandeau permanent « Caution perdue » sur le Profil
+  ok(!/Caution perdue/.test(pf)&&!/guestNoShowCount/.test(pf)&&!/describeDepositForfeitMoment/.test(pf),'lot 39: no permanent « Caution perdue » banner on Profile');
+  ok(/demoLabel\('Compte fermé \(démo\)'\)/.test(pf)&&/<Text style=\{styles\.warnTitle\}>Avertissement<\/Text>/.test(pf)&&/<Text style=\{styles\.warnTitle\}>Priorité baissée<\/Text>/.test(pf),'lot 39: other Profile banners kept (fermé, avertissement hôte, priorité)');
+  // Sur le moment : absence / départ (demande confirmée) + désistement trop tard
+  ok(/getRequestById\(myRequest\.id\)\?\.depositStatus === 'forfeited'/.test(od)&&/myLateCancelForfeit\(outgoingRequests, outing\.id, state\.currentUser\?\.id\)/.test(od)&&/>Caution perdue<\/Text>/.test(od),'lot 39: loss shown on the moment (confirmed and late-cancelled)');
+  const rq=(x:any)=>({id:'r',outingId:'o1',userId:'u1',status:'cancelled',depositStatus:'forfeited',...x});
+  ok(DL.myLateCancelForfeit([rq({})],'o1','u1')?.id==='r','lot 39: late cancel loss found for the guest');
+  ok(!DL.myLateCancelForfeit([rq({})],'o1','u2')&&!DL.myLateCancelForfeit([rq({})],'o2','u1')&&!DL.myLateCancelForfeit([rq({})],'o1',undefined),'lot 39: late cancel loss only for that guest, that moment');
+  ok(!DL.myLateCancelForfeit([rq({depositStatus:'returned'})],'o1','u1')&&!DL.myLateCancelForfeit([rq({status:'confirmed'})],'o1','u1'),'lot 39: free cancel / active request → no late-cancel note');
+  // 2. Compteur lieu « N sur 4 »
+  ok(PU.formatPartnerAbsenceCounter(0)==='0 sur 4'&&PU.formatPartnerAbsenceCounter(2)==='2 sur 4'&&PU.formatPartnerAbsenceCounter(4)==='4 sur 4'&&PU.formatPartnerAbsenceCounter(7)==='4 sur 4','lot 39: « N sur 4 » label');
+  const now=Date.parse('2026-10-31T12:00:00Z'), day=864e5;
+  const log=[{requestId:'a',at:new Date(now-400*day).toISOString()},{requestId:'b',at:new Date(now-100*day).toISOString()},{requestId:'c',at:new Date(now-5*day).toISOString()}];
+  ok(PU.partnerAbsenceCounterForSelf('u1','u1',log,now)==='Absences lieu : 2 sur 4','lot 39: self sees « Absences lieu : 2 sur 4 » (12 months window)');
+  ok(PU.partnerAbsenceCounterForSelf('h1','u1',log,now)===null&&PU.partnerAbsenceCounterForSelf(undefined,'u1',log,now)===null,'lot 39: counter invisible to host / others / venue');
+  ok(PU.partnerAbsenceCounterForSelf('u1','u1',[log[0]],now)===null&&PU.partnerAbsenceCounterForSelf('u1','u1',undefined,now)===null,'lot 39: no line without a retained absence in 12 months');
+  ok(/partnerAbsenceCounterForSelf\(\s*user\.id,\s*user\.id,\s*state\.partnerNoShowLog\?\.\[user\.id\]/.test(pf),'lot 39: Profile (own) shows the private counter from the log');
+  // Jamais ailleurs (cartes, profil public, écran lieu)
+  const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
+  const users=[...walk(path.join(__dirname,'..','src','screens')),...walk(path.join(__dirname,'..','src','components'))].filter((f:string)=>/\.tsx$/.test(f)&&/partnerAbsenceCounterForSelf|formatPartnerAbsenceCounter|partnerNoShowCount/.test(fs.readFileSync(f,'utf8'))).map((f:string)=>path.basename(f));
+  ok(users.length===1&&users[0]==='ProfileScreen.tsx','lot 39: counter rendered only on own Profile');
+}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
