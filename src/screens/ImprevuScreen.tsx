@@ -27,7 +27,11 @@ import {
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { isJokerAllowedNow } from '../utils/leaveTable';
 import { isPartnerListing } from '../utils/partners';
-import { PARTNER_DEPOSIT_FORFEIT_LABEL } from '../data/pricing';
+import {
+  depositForfeitShort,
+  describeDepositForfeitSplit,
+  PARTNER_DEPOSIT_FORFEIT_LABEL,
+} from '../data/pricing';
 
 type Nav = NativeStackNavigationProp<RootStackParamList, 'Imprevu'>;
 type R = RouteProp<RootStackParamList, 'Imprevu'>;
@@ -65,7 +69,7 @@ export function ImprevuScreen() {
   const isHost = !!outing && me?.id === outing.hostId;
   // Lot 37 : sur un lieu, trop tard ou absent = 20 € entiers au lieu.
   const venue = isPartnerListing(outing);
-  const lossShort = venue ? PARTNER_DEPOSIT_FORFEIT_LABEL : '6,90 € Moment / 13,10 € hôte';
+  const lossShort = venue ? PARTNER_DEPOSIT_FORFEIT_LABEL : depositForfeitShort();
   const otherUserId = outing
     ? isHost
       ? request?.userId ??
@@ -195,7 +199,7 @@ export function ImprevuScreen() {
           !existing.jokerUsed ? (
           <Text style={[styles.body, { marginBottom: spacing.md }]}>
             Joker déjà utilisé ce mois — si tu annules trop tard ou tu ne viens
-            pas : {venue ? PARTNER_DEPOSIT_FORFEIT_LABEL : '6,90 € pour Moment, 13,10 € pour l’hôte'}.
+            pas : {venue ? PARTNER_DEPOSIT_FORFEIT_LABEL : describeDepositForfeitSplit()}.
           </Text>
         ) : null}
         <Button

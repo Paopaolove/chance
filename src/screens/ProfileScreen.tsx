@@ -418,6 +418,7 @@ function ProfileScreenInner() {
                     onAdd={() => void onAddMomentPhoto(m.outing.id)}
                     onDelete={(id) => deleteMomentPhoto(id)}
                     onWithdraw={(id) => respondMomentPhoto(id, 'declined')}
+                    depositLoss={m.depositLoss}
                   />
                 );
               })}

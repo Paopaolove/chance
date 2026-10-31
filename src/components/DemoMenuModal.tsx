@@ -15,7 +15,12 @@ import { describeDepositForfeitMoment } from '../data/pricing';
 import { colors, fonts, radius, spacing, typography } from '../theme';
 import { navigationRef } from '../navigation/navigationRef';
 import { Button } from './Button';
-import { isPartnerListing, partnerVenueCheckRequests } from '../utils/partners';
+import {
+  isPartnerListing,
+  PARTNER_NOSHOW_BAN_AT,
+  PARTNER_NOSHOW_WINDOW_MONTHS,
+  partnerVenueCheckRequests,
+} from '../utils/partners';
 import { isDemoEnabled } from '../utils/devMode';
 
 type Props = {
@@ -422,6 +427,8 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                   );
                   return;
                 }
+                // 31/10 · Lot 40 : moment lieu → barème lieu (4 en 12 mois) et 20 € au lieu.
+                const partner = isPartnerListing(getOutingById(req.outingId));
                 const r = reportGuestNoShow(req.id);
                 if (!r.ok) Alert.alert('Impossible', refusalLabel(r.reason));
                 else if (r.jokerExempted)
@@ -437,10 +444,14 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                         ? 'Priorité baissée'
                         : 'Caution perdue',
                     r.banned
-                      ? '3e absence — compte fermé.'
+                      ? partner
+                        ? `${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — compte fermé. ${describeDepositForfeitMoment({ partner })}`
+                        : '3e absence — compte fermé.'
                       : r.lowerPriority
                         ? '2e absence — priorité baissée + mention profil.'
-                        : `1re absence — ${describeDepositForfeitMoment()}`,
+                        : partner
+                          ? describeDepositForfeitMoment({ partner })
+                          : `1re absence — ${describeDepositForfeitMoment()}`,
                   );
               })
             }

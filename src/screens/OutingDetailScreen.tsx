@@ -31,6 +31,7 @@ import { RatingLine } from '../components/RatingLine';
 import { useChance } from '../data/ChanceContext';
 import {
   DEPOSIT_EUROS,
+  depositForfeitShort,
   describeDepositForfeitMoment,
   describeDepositForfeitSplit,
   isCancelFreeWindow,
@@ -187,7 +188,7 @@ export function OutingDetailScreen() {
             'Te déclarer absent ?',
             partner
               ? `Ta caution de 20 € est perdue tout de suite (${PARTNER_DEPOSIT_FORFEIT_LABEL}), sans contestation possible.`
-              : 'Ta caution de 20 € est perdue tout de suite (6,90 € Moment / 13,10 € hôte), sans contestation possible.',
+              : `Ta caution de 20 € est perdue tout de suite (${depositForfeitShort()}), sans contestation possible.`,
             [
               { text: 'Retour', style: 'cancel' },
               {
@@ -374,7 +375,7 @@ export function OutingDetailScreen() {
                 else
                   Alert.alert(
                     'Imprévu refusé',
-                    `Caution encore bloquée. Annule au moins 1 heure avant pour la récupérer ; trop tard ou absence → perdue (${partner ? PARTNER_DEPOSIT_FORFEIT_LABEL : '6,90 € Moment / 13,10 € hôte'}). L’invité peut utiliser son joker.`,
+                    `Caution encore bloquée. Annule au moins 1 heure avant pour la récupérer ; trop tard ou absence → perdue (${depositForfeitShort({ partner })}). L’invité peut utiliser son joker.`,
                   );
               }}
               style={{ marginTop: spacing.sm }}
@@ -1068,20 +1069,14 @@ export function OutingDetailScreen() {
                             : `${r.userName} s’est dit présent : contestation ouverte, caution en attente de revue (7 jours max).`,
                         );
                       } else if (res.ok) {
+                        // 31/10 · Lot 40 : signalé par l’hôte = toujours 24 h d’attente
+                        // (ou désaccord) → jamais de barème / fermeture à montrer ici ;
+                        // l’hôte ne voit que l’absence et l’argent.
                         Alert.alert(
-                          res.banned
-                            ? 'Compte fermé'
-                            : res.lowerPriority
-                              ? 'Priorité baissée'
-                              : 'Absence signalée',
-                          (res.banned
-                            ? '3e absence — compte fermé. '
-                            : res.lowerPriority
-                              ? '2e absence — priorité baissée + mention profil. '
-                              : '') +
-                            (res.pending
-                              ? 'Caution en attente 24 h, puis perdue sans contestation : 6,90 € Moment / 13,10 € hôte.'
-                              : 'Caution perdue : 6,90 € Moment / 13,10 € hôte.'),
+                          'Absence signalée',
+                          res.pending
+                            ? `Caution en attente 24 h, puis perdue sans contestation : ${depositForfeitShort({ partner })}.`
+                            : `Caution perdue : ${depositForfeitShort({ partner })}.`,
                         );
                       } else {
                         Alert.alert('Impossible', refusalLabel(res.reason));
@@ -1460,7 +1455,7 @@ export function OutingDetailScreen() {
                   {demoLabel(
                     partner
                       ? `Caution 20 € bloquée (mock). Rendue si tu annules au moins 1 heure avant, si le lieu annule / imprévu accepté / joker ; perdue si trop tard ou absence (${PARTNER_DEPOSIT_FORFEIT_LABEL}).`
-                      : 'Caution 20 € bloquée (mock). Rendue si tu annules au moins 1 heure avant, si l’hôte annule / imprévu accepté / joker ; perdue si trop tard ou absence (6,90 € Moment / 13,10 € hôte).',
+                      : `Caution 20 € bloquée (mock). Rendue si tu annules au moins 1 heure avant, si l’hôte annule / imprévu accepté / joker ; perdue si trop tard ou absence (${depositForfeitShort()}).`,
                   )}
                 </Text>
               ) : null}

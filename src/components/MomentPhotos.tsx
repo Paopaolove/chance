@@ -16,6 +16,11 @@ import {
   MOMENT_PHOTO_STATUS_LABELS,
   type MomentPhotoStatus,
 } from '../utils/momentPhotos';
+import {
+  describePastDepositLoss,
+  PAST_DEPOSIT_LOSS_TITLE,
+  type PastDepositLoss,
+} from '../utils/depositLoss';
 import { Button } from './Button';
 
 /**
@@ -109,6 +114,7 @@ export function OwnPastMoment({
   onAdd,
   onDelete,
   onWithdraw,
+  depositLoss,
 }: {
   outing: Outing;
   photos: OwnPhoto[];
@@ -117,11 +123,19 @@ export function OwnPastMoment({
   onAdd: () => void;
   onDelete: (photoId: string) => void;
   onWithdraw: (photoId: string) => void;
+  /** Lot 39b/40 : caution perdue sur ce moment — Profil soi seulement. */
+  depositLoss?: PastDepositLoss;
 }) {
   return (
     <View style={styles.card}>
       <Text style={styles.momentTitle}>{outing.title}</Text>
       <Text style={styles.meta}>{momentMeta(outing)}</Text>
+      {depositLoss ? (
+        <View style={styles.lossRow}>
+          <Text style={styles.lossTitle}>{PAST_DEPOSIT_LOSS_TITLE}</Text>
+          <Text style={styles.hint}>{describePastDepositLoss(depositLoss)}</Text>
+        </View>
+      ) : null}
       {photos.length ? (
         <View style={styles.photosRow}>
           {photos.map(({ photo, status, mine }) => (
@@ -261,6 +275,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   momentTitle: { ...typography.bodyStrong, color: colors.text },
+  lossRow: { marginTop: spacing.sm },
+  lossTitle: { ...typography.caption, fontFamily: fonts.semiBold, color: colors.text },
   meta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   photosRow: {
     flexDirection: 'row',

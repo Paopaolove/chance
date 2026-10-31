@@ -51,10 +51,17 @@ import {
 import {
   CANCEL_FREE_BEFORE_HOURS,
   DEPOSIT_EUROS as DEPOSIT_FROM_PRICING,
+  depositForfeitShort,
   describeDepositForfeitMoment,
+  describeDepositForfeitSplit,
   isCancelFreeWindow,
   PARTNER_DEPOSIT_FORFEIT_LABEL,
 } from './pricing';
+import {
+  autoNoShowNote,
+  myPastDepositLoss,
+  type PastDepositLoss,
+} from '../utils/depositLoss';
 import {
   isParisSameDay,
   isStartsAtPast,
@@ -417,7 +424,6 @@ function withGuestNoShowStrike(state: AppState, requestId: string, at: string): 
   if (currentUser && currentUser.id === guestId) {
     currentUser = {
       ...currentUser,
-      guestNoShowCount: strike,
       // 25/10 · Lot C : recalculé sur les 3 mois glissants (une priorité
       // baissée échue ne revient pas) ; compte déjà fermé : inchangé.
       lowerPriority: lowerPriority || (!!currentUser.banned && !!currentUser.lowerPriority),
@@ -488,7 +494,6 @@ function withPartnerNoShowStrike(state: AppState, requestId: string, at: string)
   if (currentUser && currentUser.id === guestId) {
     currentUser = {
       ...currentUser,
-      partnerNoShowCount: inWindow,
       banned: banned || currentUser.banned,
       bannedReason: banned && !currentUser.banned
         ? '4 absences en 12 mois sur des moments lieu — compte fermé (démo)'
@@ -544,7 +549,6 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
     if (currentUser && currentUser.id === req.userId) {
       currentUser = {
         ...currentUser,
-        partnerNoShowCount: partnerNoShowsInWindow(logLeft, Date.now()),
         ...(req.noShowCausedBan ? { banned: false, bannedReason: undefined } : {}),
       };
     }
@@ -567,7 +571,6 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
       const stillBanned = req.noShowCausedBan ? false : !!currentUser.banned;
       currentUser = {
         ...currentUser,
-        guestNoShowCount: Math.max(0, (currentUser.guestNoShowCount ?? 1) - 1),
         ...(req.noShowCausedBan ? { banned: false, bannedReason: undefined } : {}),
         lowerPriority: left.lowerPriority,
         profileMention: left.lowerPriority
@@ -2716,7 +2719,6 @@ function reducer(state: AppState, action: AppAction): AppState {
       if (currentUser && currentUser.id === guestId) {
         currentUser = {
           ...currentUser,
-          guestNoShowCount: strike,
           // 25/10 · Lot C : recalculé sur les 3 mois glissants.
           lowerPriority: lowerPriority || (!!currentUser.banned && !!currentUser.lowerPriority),
           profileMention: lowerPriority
@@ -3904,6 +3906,8 @@ interface ChanceContextValue {
     outing: Outing;
     participants: MomentParticipant[];
     photos: { photo: MomentPhoto; status: MomentPhotoStatus; mine: boolean }[];
+    /** Lot 39b/40 : caution perdue sur ce moment (soi seulement). */
+    depositLoss?: PastDepositLoss;
   }[];
   /** Profil d’une autre personne : moments avec au moins une photo publiée. */
   getPublishedPastMomentsForUser: (userId: string) => {
@@ -5354,7 +5358,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const toast: AppToast = {
         id: uid('toast'),
         title: 'Imprévu refusé',
-        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heure avant pour la récupérer ; trop tard ou absence → perdue (${isPartnerListing(outing) ? PARTNER_DEPOSIT_FORFEIT_LABEL : '6,90 € Moment / 13,10 € hôte'}). Tu peux utiliser ton joker si tu en as un.`,
+        body: `Caution encore bloquée. Annule au moins ${CANCEL_FREE_BEFORE_HOURS} heure avant pour la récupérer ; trop tard ou absence → perdue (${depositForfeitShort({ partner: isPartnerListing(outing) })}). Tu peux utiliser ton joker si tu en as un.`,
         createdAt: nowIso,
         type: 'imprevu',
         outingId: report.outingId,
@@ -7571,23 +7575,18 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         : partnerSelf
           ? `caution perdue (${PARTNER_DEPOSIT_FORFEIT_LABEL}).`
         : pending
-          ? 'caution en attente 24 h, puis perdue sans contestation (6,90 € Moment / 13,10 € hôte).'
-          : 'caution perdue (6,90 € Moment / 13,10 € hôte).';
+          ? `caution en attente 24 h, puis perdue sans contestation (${depositForfeitShort()}).`
+          : `caution perdue (${depositForfeitShort()}).`;
       const note: ChatMessage = {
         id: uid('msg'),
         threadKey: chatThreadKey(outingId, requestId),
         outingId,
         requestId,
         kind: 'system',
-        // 31/10 · Lot 39 : fil partagé avec le lieu → jamais le compteur « N sur 4 »
-        // ni la fermeture (privés à l’invité : toast + Profil).
-        text: partnerSelf
-          ? `Note auto · absence déclarée par l’invité — ${lossText}`
-          : banned
-          ? `Note auto · 3e absence invité — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
-          : lowerPriority
-            ? `Note auto · 2e absence invité — priorité baissée + mention profil. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
-            : `Note auto · absence après confirmation — ${lossText}`,
+        // 31/10 · Lot 39 (lieu) + Lot 40 (table normale) : fil partagé avec
+        // l’hôte / le lieu → note neutre (absence + argent). Jamais le barème,
+        // la priorité ni la fermeture (privés à l’invité : toast + Profil).
+        text: autoNoShowNote(lossText, { partnerSelf }),
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'ADD_CHAT_MESSAGE', payload: note });
@@ -7610,7 +7609,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             ? '2e no-show invité — priorité baissée + mention sur le profil.'
             : pending || disagreement
               ? `Absence après confirmation — ${lossText}`
-              : 'Absence après confirmation — caution perdue : 6,90 € pour Moment, 13,10 € pour l’hôte.',
+              : `Absence après confirmation — caution perdue : ${describeDepositForfeitSplit()}.`,
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
@@ -8210,11 +8209,17 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         status: MomentPhotoStatus;
         mine: boolean;
       }[];
+      depositLoss?: PastDepositLoss;
     }[] = [];
     for (const outing of state.outings) {
       const participants = momentParticipants(outing, state.requests);
-      if (!participants.some((p) => p.userId === user.id)) continue;
-      const photos = state.momentPhotos
+      const atTable = participants.some((p) => p.userId === user.id);
+      // 31/10 · Lot 39b/40 : aussi les moments où ma caution est perdue
+      // (absence, départ anticipé, désistement trop tard) — Profil soi seulement.
+      const depositLoss = myPastDepositLoss(outing, state.requests, user.id);
+      if (!atTable && !depositLoss) continue;
+      // Pas à table → pas de photos (elles restent celles des présents).
+      const photos = !atTable ? [] : state.momentPhotos
         .filter((p) => p.outingId === outing.id)
         .map((photo) => ({
           photo,
@@ -8224,7 +8229,12 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         // Photo d’un autre non publiée : jamais affichée ici.
         .filter((x) => x.mine || x.status === 'published')
         .sort((a, b) => a.photo.createdAt.localeCompare(b.photo.createdAt));
-      items.push({ outing, participants, photos });
+      items.push({
+        outing,
+        participants,
+        photos,
+        ...(depositLoss ? { depositLoss } : {}),
+      });
     }
     items.sort(
       (a, b) =>

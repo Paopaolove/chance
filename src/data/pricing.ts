@@ -139,6 +139,17 @@ export function describeDepositForfeitSplit(): string {
 }
 
 /**
+ * 31/10 · Lot 40 · Libellé très court de la perte, selon la table :
+ * lieu → « 20 € entiers au lieu » ; table normale → « 6,90 € Moment / 13,10 € hôte ».
+ * Source unique pour les textes (plus de montants en dur).
+ */
+export function depositForfeitShort(opts?: { partner?: boolean }): string {
+  return opts?.partner
+    ? PARTNER_DEPOSIT_FORFEIT_LABEL
+    : `${formatPriceEuros(DEPOSIT_FORFEIT_CHANCE_EUROS)} Moment / ${formatPriceEuros(DEPOSIT_FORFEIT_HOST_EUROS)} hôte`;
+}
+
+/**
  * 25/10 soir · Trois points produit : sur un moment lieu (partenaire), trop
  * tard ou absent = les 20 € entiers au lieu (pas le partage 6,90 / 13,10).
  */

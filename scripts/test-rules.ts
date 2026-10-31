@@ -12,6 +12,8 @@ import * as MP from '../src/utils/momentPhotos';
 import { parseFreeDate } from '../src/utils/freeDate';
 import { parisWallToUtc, isParisTomorrow, nextParisMidnight } from '../src/utils/parisTime';
 let pass=0, fail=0; const ok=(c:any,m:string)=>{c?pass++:(fail++,console.log('FAIL',m));};
+// 31/10 · Lot 40 : plus de guestNoShowCount / partnerNoShowCount — on lit les sources (strikes / logs).
+const partnerCount=(st:any,uid='u1')=>{const log=st.partnerNoShowLog?.[uid]??[];if(!log.length)return 0;const ref=Math.max(...log.map((e:any)=>Date.parse(e.at)));return require('../src/utils/partners').partnerNoShowsInWindow(log,ref);};
 const H=3600e3, now=Date.now(), iso=(ms:number)=>new Date(ms).toISOString();
 const me:any={id:'u1',firstName:'Moi',gender:'femme',plan:'essai'};
 const host:any={id:'h1',firstName:'Hôte'};
@@ -1166,9 +1168,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(codes.every((c)=>NC.CONTEST_REFUSAL_CODES.includes(c)&&!/[a-z]+_[a-z]+/.test(NC.contestRefusalLabel(c))&&NC.contestRefusalLabel(c).length>5),'contest refusals: every code in clear French');
   ok(NC.contestRefusalLabel('too_late').includes('24 h')&&!/_/.test(NC.contestRefusalLabel('zzz_x')),'contest refusal: 24 h wording, unknown → generic French');
   ok(card.includes('contestRefusalLabel(res.reason)')&&!/Alert\.alert\([^)]*,\s*res\.reason\)/.test(card)&&!/:\s*res\.reason,/.test(card),'static: no raw code in contest alert');
-  ok(!/perdue sans suite/.test(ctx)&&!/perdue sans suite/.test(od)&&/puis perdue sans contestation \(6,90/.test(ctx)&&od.includes('puis perdue sans contestation : 6,90'),'host alert / toast / chat note: « puis perdue sans contestation »');
+  ok(!/perdue sans suite/.test(ctx)&&!/perdue sans suite/.test(od)&&/puis perdue sans contestation \(\$\{depositForfeitShort\(\)\}\)/.test(ctx)&&od.includes('puis perdue sans contestation : ${depositForfeitShort({ partner })}'),'host alert / toast / chat note: « puis perdue sans contestation »');
   const lossIdx=ctx.indexOf('const lossText');
-  ok(lossIdx>0&&/text: (?:partnerSelf[\s\S]{0,500}?: )?banned[\s\S]{0,400}lossText/.test(ctx)&&/body: (?:partnerSelf[\s\S]{0,500}?: )?banned[\s\S]{0,600}lossText/.test(ctx),'static: chat note and toast share the same wording');
+  ok(lossIdx>0&&/text: autoNoShowNote\(lossText, \{ partnerSelf \}\)/.test(ctx)&&/body: (?:partnerSelf[\s\S]{0,500}?: )?banned[\s\S]{0,600}lossText/.test(ctx),'static: chat note and toast share the same wording');
 }
 
 // B1 / B2 (go Paolo 17/10) : absence comptée seulement quand définitive ; contestation acceptée = absence effacée
@@ -1179,7 +1181,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const TR=require('../src/utils/tableReports');
   const RE=require('../src/utils/reviewEligibility');
   const MIN=60e3, T=now-2*H, NSAT=T+H, DL=NSAT+24*H;
-  const guest:any={...me,guestNoShowCount:0};
+  const guest:any={...me};
   const st=(x:any={},more:any={})=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})],...more,...x});
   const NS=(s0:any,by='h1',strike=1,lowerPriority=false,banned=false)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike,lowerPriority,banned,reportedAt:iso(NSAT),reportedByUserId:by}});
   const CT=(s0:any,at=NSAT+H)=>D({...s0,currentUser:guest},{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'Phrase privée zq7 : j’étais là.',at:iso(at)}});
@@ -1190,10 +1192,10 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const asGuest=(s0:any)=>({...s0,currentUser:guest});
   // déclaration seule : ni strike ni sanction, même si le payload en porte
   const d0=NS(asGuest(st()),'h1',3,true,true);
-  ok(!d0.guestNoShowStrikes.u1&&!d0.currentUser.banned&&!d0.currentUser.lowerPriority&&!d0.currentUser.profileMention&&(d0.currentUser.guestNoShowCount??0)===0&&d0.requests[0].depositStatus==='noshow_pending','declaration alone: no strike, no priority, no warning, no ban');
+  ok(!d0.guestNoShowStrikes.u1&&!d0.currentUser.banned&&!d0.currentUser.lowerPriority&&!d0.currentUser.profileMention&&!(d0.guestNoShowLog?.u1?.length)&&d0.requests[0].depositStatus==='noshow_pending','declaration alone: no strike, no priority, no warning, no ban');
   // expiration 24 h : strike + perte
   const e=EXP(d0);
-  ok(e.requests[0].depositStatus==='forfeited'&&e.guestNoShowStrikes.u1===1&&e.currentUser.guestNoShowCount===1,'24 h expiry: strike and loss');
+  ok(e.requests[0].depositStatus==='forfeited'&&e.guestNoShowStrikes.u1===1&&e.guestNoShowLog.u1.length===1,'24 h expiry: strike and loss');
   ok(EXP(d0,DL-MIN).guestNoShowStrikes.u1===undefined,'no strike at 24 h − 1 min');
   ok(JSON.stringify(EXP(e,DL+H).guestNoShowStrikes)===JSON.stringify(e.guestNoShowStrikes),'expiry idempotent: counted once');
   // revue confirmée : strike + perte
@@ -1212,7 +1214,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const a=ACC(CT(p3));
   const ra=a.requests[0];
   ok(ra.attendance===undefined&&ra.depositStatus==='returned'&&ra.noShowNotRetained===true,'contest accepted: attendance cleared, deposit returned');
-  ok(a.guestNoShowStrikes.u1===2&&!a.currentUser.banned&&!a.currentUser.lowerPriority&&(a.currentUser.guestNoShowCount??0)===0,'contest accepted: no strike, no warning, no ban');
+  ok(a.guestNoShowStrikes.u1===2&&!a.currentUser.banned&&!a.currentUser.lowerPriority&&!(a.guestNoShowLog?.u1??[]).some((x:any)=>x.requestId===a.requests[0].id),'contest accepted: no strike, no warning, no ban');
   const a1=ACC(CT(d0));
   ok(!a1.guestNoShowStrikes.u1&&!a1.currentUser.profileMention,'contest accepted (1st): nothing counted');
   ok(TR.canOpenTableReport({...a1.outings[0],startsAt:iso(T)},a1.requests,'u1',now)&&!TR.isMarkedNoShow(a1.outings[0],a1.requests,'u1'),'contest accepted: guest can report again');
@@ -1233,7 +1235,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(hf.requests[0].depositStatus==='returned'&&hf.requests[0].attendance===undefined&&hf.guestNoShowStrikes.u1===0,'already finally lost, then host absent: returned, absence removed (B)');
   // auto-déclaration : perte et comptage immédiats
   const self=NS(asGuest(st()),'u1',1);
-  ok(self.requests[0].depositStatus==='forfeited'&&self.guestNoShowStrikes.u1===1&&self.currentUser.guestNoShowCount===1,'self-declared: immediate loss and count (unchanged)');
+  ok(self.requests[0].depositStatus==='forfeited'&&self.guestNoShowStrikes.u1===1&&self.guestNoShowLog.u1.length===1,'self-declared: immediate loss and count (unchanged)');
   const self3=NS(two,'u1',3,true,true);
   ok(self3.currentUser.banned===true,'self-declared 3rd: immediate ban (unchanged)');
   // confidentialité de la phrase
@@ -1350,7 +1352,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const lost3=EXP(NS(two));
   ok(lost3.requests[0].depositStatus==='forfeited'&&lost3.guestNoShowStrikes.u1===3&&lost3.currentUser.banned===true&&lost3.requests[0].noShowCausedBan===true,'setup: 3rd absence finalised → ban caused by it');
   const unb=RET(HN(lost3,NSAT+2*H,'u2'));
-  ok(unb.requests[0].depositStatus==='returned'&&unb.requests[0].attendance===undefined&&unb.guestNoShowStrikes.u1===2&&unb.currentUser.banned===false&&unb.currentUser.guestNoShowCount===2,'B on finally lost: returned, absence removed, ban lifted');
+  ok(unb.requests[0].depositStatus==='returned'&&unb.requests[0].attendance===undefined&&unb.guestNoShowStrikes.u1===2&&unb.currentUser.banned===false&&!(unb.guestNoShowLog?.u1??[]).some((x:any)=>x.requestId===unb.requests[0].id),'B on finally lost: returned, absence removed, ban lifted');
   const preBan={...st({guestNoShowStrikes:{u1:3}}),currentUser:{...guest,banned:true,bannedReason:'autre'}};
   const lost4=EXP(NS(preBan));
   const kb=RET(HN(lost4,NSAT+2*H,'u2'));
@@ -1515,7 +1517,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(C(p,CT,'  ').requests[0].depositStatus==='noshow_pending','partner contest: sentence mandatory');
   ok(EXP(p,NSAT+D1-MIN).requests[0].depositStatus==='noshow_pending','partner: no loss at 24 h − 1 min');
   const lost=EXP(p,NSAT+D1);
-  ok(lost.requests[0].depositStatus==='forfeited'&&!lost.guestNoShowStrikes.u1&&lost.partnerNoShowLog.u1.length===1&&lost.currentUser.partnerNoShowCount===1&&!lost.currentUser.lowerPriority&&lost.requests[0].noShowFinalNotice.text==='Ton absence est retenue. Les 20 € de caution vont au lieu.','partner: lost at 24 h without answer, partner counter (not guest barème), final message');
+  ok(lost.requests[0].depositStatus==='forfeited'&&!lost.guestNoShowStrikes.u1&&lost.partnerNoShowLog.u1.length===1&&partnerCount(lost)===1&&!lost.currentUser.lowerPriority&&lost.requests[0].noShowFinalNotice.text==='Ton absence est retenue. Les 20 € de caution vont au lieu.','partner: lost at 24 h without answer, partner counter (not guest barème), final message');
   ok(NC.partnerVenueNoShowShareEuros(lost.requests[0])===20&&NC.hostNoShowShareEuros(lost.requests[0])===0,'partner: 20 € entire to the venue (no 6,90 / 13,10 split)');
   ok(NC.partnerVenueNoShowShareEuros(p.requests[0])===0,'partner: 0 € to the venue while pending');
   const c=C(p,CT);
@@ -1537,14 +1539,14 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const self=D(st(),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
   ok(self.requests[0].depositStatus==='forfeited','partner: self-declared absence still immediate');
   // 25/10 soir · Trois points produit (1) : auto-déclaration sur un lieu → barème partenaire, 20 € au lieu
-  ok(self.requests[0].attendance==='absent'&&self.requests[0].partnerSelfAbsent===true&&!self.requests[0].noShowReportedAt&&!self.guestNoShowStrikes.u1&&!(self.guestNoShowLog?.u1?.length)&&self.partnerNoShowLog.u1.length===1&&self.currentUser.partnerNoShowCount===1&&!self.currentUser.lowerPriority&&!self.currentUser.banned,'lot 35: partner self absence → partner counter (not the guest barème)');
+  ok(self.requests[0].attendance==='absent'&&self.requests[0].partnerSelfAbsent===true&&!self.requests[0].noShowReportedAt&&!self.guestNoShowStrikes.u1&&!(self.guestNoShowLog?.u1?.length)&&self.partnerNoShowLog.u1.length===1&&partnerCount(self)===1&&!self.currentUser.lowerPriority&&!self.currentUser.banned,'lot 35: partner self absence → partner counter (not the guest barème)');
   ok(NC.partnerVenueNoShowShareEuros(self.requests[0])===20&&NC.hostNoShowShareEuros(self.requests[0])===0,'lot 35: partner self absence → 20 € entire to the venue (no 6,90 / 13,10)');
   const old3=[1,2,3].map((i)=>({requestId:'old'+i,at:iso(NSAT-i*30*24*H)}));
   const self4=D(st({partnerNoShowLog:{u1:old3}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
   ok(self4.currentUser.banned===true&&/compte fermé/.test(self4.currentUser.bannedReason)&&self4.partnerNoShowLog.u1.length===4&&!self4.guestNoShowStrikes.u1,'lot 35: 4th partner absence in 12 months (self-declared) → compte fermé');
   const oldOut=[1,2,3].map((i)=>({requestId:'older'+i,at:iso(NSAT-(400+i)*24*H)}));
   const selfOld=D(st({partnerNoShowLog:{u1:oldOut}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
-  ok(!selfOld.currentUser.banned&&selfOld.currentUser.partnerNoShowCount===1,'lot 35: absences older than 12 months do not count');
+  ok(!selfOld.currentUser.banned&&partnerCount(selfOld)===1,'lot 35: absences older than 12 months do not count');
   const self2=D(st({guestNoShowStrikes:{u1:2},guestNoShowLog:{u1:[{requestId:'g1',at:iso(NSAT-10*24*H)},{requestId:'g2',at:iso(NSAT-5*24*H)}]}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:3,lowerPriority:true,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
   ok(!self2.currentUser.banned&&self2.guestNoShowStrikes.u1===2&&self2.guestNoShowLog.u1.length===2,'lot 35: partner self absence never triggers the guest barème (3rd absence ≠ fermeture here)');
   const selfRet=D(st({requests:[rq({status:'confirmed',depositStatus:'returned'})]}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
@@ -1601,9 +1603,9 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const gst=(log:any)=>S({currentUser:me,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'})],partnerNoShowLog:{u1:log},guestNoShowStrikes:{u1:2}});
   const lose=(s0:any)=>{const a=VC({...s0,currentUser:host},['r1'],T+H);return D({...a,currentUser:s0.currentUser},{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(T+H+24*H)}});};
   const third=lose(gst(old));
-  ok(!third.currentUser.banned&&third.currentUser.partnerNoShowCount===3&&third.guestNoShowStrikes.u1===2,'3rd partner absence in 12 months: not closed, guest barème untouched');
+  ok(!third.currentUser.banned&&partnerCount(third)===3&&third.guestNoShowStrikes.u1===2,'3rd partner absence in 12 months: not closed, guest barème untouched');
   const fourth=lose(gst([...old,{requestId:'d',at:iso(now-10*day)}]));
-  ok(fourth.currentUser.banned===true&&fourth.currentUser.partnerNoShowCount===4&&fourth.requests[0].noShowCausedBan===true,'4th partner absence in 12 months: account closed');
+  ok(fourth.currentUser.banned===true&&partnerCount(fourth)===4&&fourth.requests[0].noShowCausedBan===true,'4th partner absence in 12 months: account closed');
   // non-régression table normale : pas de liste, « Pas venu » hôte + barème invité (2/3 · 3 mois), 6,90 / 13,10
   const NC=require('../src/utils/noShowContest');
   const nt=(more:any={})=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],...more});
@@ -1936,7 +1938,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(JSON.stringify(NC.requestsDueForReviewTimeout(kept.requests,NSAT+7*D1))==='["r1"]'&&NC.requestsDueForReviewTimeout(kept.requests,NSAT+7*D1-MIN).length===0,'caution acquise: review timer runs (7 days)');
   // issue « absence retenue »
   const ret=D(kept,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(NSAT+2*D1)}}), rr=ret.requests[0];
-  ok(ret.guestNoShowStrikes.u1===1&&ret.currentUser.guestNoShowCount===1,'caution acquise: absence retained → counter incremented');
+  ok(ret.guestNoShowStrikes.u1===1&&ret.guestNoShowLog.u1.length===1,'caution acquise: absence retained → counter incremented');
   ok(rr.depositStatus==='returned'&&NC.hostNoShowShareEuros(rr)===0,'caution acquise: absence retained → money unchanged, host gets nothing');
   ok(rr.noShowFinalNotice?.text==='Ton absence est retenue. La caution déjà rendue reste acquise.'&&ret.toast?.body==='Ton absence est retenue. La caution déjà rendue reste acquise.','caution acquise: retained notice text');
   ok(NC.NOSHOW_FINAL_NOTICE_TEXT==='Ton absence est retenue. La caution est perdue.','caution acquise: forfeited notice text unchanged');
@@ -2259,12 +2261,12 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   // 2) Priorité baissée / mention : levée automatique hors 3 mois glissants
   const NOW=now;
   const ago=(n:number)=>iso(NOW-n*D1);
-  const lp=(log:any[],strikes=log.length,u:any={})=>S({currentUser:{...me,lowerPriority:true,profileMention:'Absence après confirmation (démo)',guestNoShowCount:strikes,...u},guestNoShowStrikes:{u1:strikes},guestNoShowLog:{u1:log}});
+  const lp=(log:any[],strikes=log.length,u:any={})=>S({currentUser:{...me,lowerPriority:true,profileMention:'Absence après confirmation (démo)',...u},guestNoShowStrikes:{u1:strikes},guestNoShowLog:{u1:log}});
   const RF=(s0:any,at=NOW)=>D(s0,{type:'REFRESH_GUEST_SANCTIONS',payload:{at:iso(at)}});
   const e=(id:string,n:number)=>({requestId:id,at:ago(n)});
   const exp=RF(lp([e('x1',100),e('x2',20)]));
   ok(exp.currentUser.lowerPriority===false&&exp.currentUser.profileMention===undefined,'Lot C p2: one absence left the 3 months → lower priority + mention lifted');
-  ok(exp.guestNoShowStrikes.u1===2&&exp.guestNoShowLog.u1.length===2&&exp.currentUser.guestNoShowCount===2,'Lot C p2: history and total counter kept (only the sanction is recalculated)');
+  ok(exp.guestNoShowStrikes.u1===2&&exp.guestNoShowLog.u1.length===2&&exp.guestNoShowStrikes.u1===2,'Lot C p2: history and total counter kept (only the sanction is recalculated)');
   const keep=lp([e('x1',60),e('x2',20)]);
   ok(RF(keep)===keep&&RF(keep).currentUser.lowerPriority===true,'Lot C p2: 2 absences still within 3 months → unchanged');
   ok(RF(keep,NOW+61*D1).currentUser.lowerPriority===false,'Lot C p2: same state read later (oldest gone) → lifted');
@@ -2449,7 +2451,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const PRc=require('../src/data/pricing');
   ok(PRc.describeDepositForfeitMoment({partner:true})==='Caution 20 € perdue : 20 € entiers au lieu.'&&PRc.describeDepositForfeitMoment()==='Caution 20 € perdue : 6,90 € pour Moment, 13,10 € pour l’hôte.','lot 35: forfeit sentence — partner 20 € au lieu, normal table unchanged');
   const cs=rdf('screens','ConfirmSlotScreen.tsx');
-  ok(/partner\s*\?\s*`Perdue si trop tard ou absence : \$\{PARTNER_DEPOSIT_FORFEIT_LABEL\}\.`\s*:\s*'Perdue si trop tard ou absence : 6,90 € Moment \/ 13,10 € hôte\.'/.test(cs)&&!/13,10 € \{partner/.test(cs),'lot 35: ConfirmSlot partner = 20 € entiers au lieu, normal table unchanged');
+  ok(/`Perdue si trop tard ou absence : \$\{depositForfeitShort\(\{ partner \}\)\}\.`/.test(cs)&&!/13,10 € \{partner/.test(cs),'lot 35: ConfirmSlot partner = 20 € entiers au lieu, normal table unchanged');
   const od=rdf('screens','OutingDetailScreen.tsx'), co=rdf('screens','CreateOutingScreen.tsx');
   ok(!/13,10 € pour le lieu/.test(co)&&/les 20 € entiers pour le lieu/.test(co),'lot 35: venue publish text = 20 € entiers pour le lieu');
   ok(/partner\s*\?\s*`Ta caution de 20 € est perdue tout de suite \(\$\{PARTNER_DEPOSIT_FORFEIT_LABEL\}\)/.test(od)&&/describeDepositForfeitMoment\(\{ partner \}\)/.test(od),'lot 35: self-declaration + forfeit hint on a partner moment = 20 € au lieu');
@@ -2658,7 +2660,49 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const ok4=D(st,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(now),reportedByUserId:'u1'}});
   ok(ok4.currentUser.banned===true,'lot 39 setup: 4th venue absence closes the account');
   const cx=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
-  ok(!/Note auto · \$\{PARTNER_NOSHOW_BAN_AT\}e absence/.test(cx)&&/text: partnerSelf\s*\?\s*`Note auto · absence déclarée par l’invité — \$\{lossText\}`/.test(cx),'lot 39: shared venue thread note never shows « N sur 4 » / closure');
+  ok(!/Note auto · \$\{PARTNER_NOSHOW_BAN_AT\}e absence/.test(cx)&&/text: autoNoShowNote\(lossText, \{ partnerSelf \}\)/.test(cx),'lot 39: shared venue thread note never shows « N sur 4 » / closure');
+}
+// 31/10 · Lot 40 · Note auto neutre (table normale + lieu), Caution perdue dans Moments passés, plus de compteurs doublons
+{
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const DL=require('../src/utils/depositLoss'), PR=require('../src/data/pricing'), MP=require('../src/utils/momentPhotos');
+  const cx=rdf('data','ChanceContext.tsx'), od=rdf('screens','OutingDetailScreen.tsx'), mpc=rdf('components','MomentPhotos.tsx'), pf=rdf('screens','ProfileScreen.tsx'), hp=rdf('screens','HostProfileScreen.tsx'), dm=rdf('components','DemoMenuModal.tsx');
+  // 1. Note auto neutre : absence + argent, jamais barème / priorité / fermeture
+  const notes=[DL.autoNoShowNote('caution perdue (x).'),DL.autoNoShowNote('caution perdue (x).',{partnerSelf:true})];
+  ok(notes[0]==='Note auto · absence après confirmation — caution perdue (x).'&&notes[1]==='Note auto · absence déclarée par l’invité — caution perdue (x).','lot 40: autoNoShowNote = absence + money');
+  ok(notes.every((n:string)=>!/compte fermé|priorité|mention|\de absence|sur 4/i.test(n)),'lot 40: auto note never shows barème / priority / closure');
+  ok(!/Note auto · [23]e absence/.test(cx)&&!/Note auto · [^`']*compte fermé\. \$\{lossText/.test(cx),'lot 40: no barème branch left in the shared thread note');
+  // Alerte hôte « Signaler absence » : plus de branches mortes barème / fermeture
+  const sig=od.slice(od.indexOf('const res = reportGuestNoShow(r.id);'),od.indexOf('const res = reportGuestNoShow(r.id);')+1400);
+  ok(sig.length>100&&!/res\.banned|res\.lowerPriority|Compte fermé|Priorité baissée/.test(sig)&&/depositForfeitShort\(\{ partner \}\)/.test(sig),'lot 40: host « Signaler absence » alert = absence + money only (venue-aware)');
+  // Montants : helper unique
+  ok(PR.depositForfeitShort()==='6,90 € Moment / 13,10 € hôte'&&PR.depositForfeitShort({partner:true})==='20 € entiers au lieu','lot 40: depositForfeitShort normal / venue');
+  ok([cx,od,rdf('screens','ConfirmSlotScreen.tsx'),rdf('screens','ImprevuScreen.tsx')].every((t:string)=>!/'[^'\n]*6,90 € (Moment|pour Moment)[^'\n]*'/.test(t)),'lot 40: no hard-coded 6,90 / 13,10 strings left in context / detail / confirm / imprévu');
+  // Démo « Simuler mon absence » : barème + montant lieu
+  ok(/const partner = isPartnerListing\(getOutingById\(req\.outingId\)\)/.test(dm)&&/describeDepositForfeitMoment\(\{ partner \}\)/.test(dm)&&/PARTNER_NOSHOW_BAN_AT\} absences en \$\{PARTNER_NOSHOW_WINDOW_MONTHS\} mois/.test(dm),'lot 40: demo self absence uses venue barème + 20 € au lieu');
+  // 2. Caution perdue dans Moments passés (soi seulement)
+  const now=Date.parse('2026-10-31T12:00:00Z'), H=36e5;
+  const out=(x:any={})=>({id:'o1',hostId:'h1',hostName:'Hôte',title:'T',startsAt:new Date(now-3*H).toISOString(),status:'completed',...x});
+  const rq=(x:any={})=>({id:'r1',outingId:'o1',userId:'u1',userName:'Léa',status:'confirmed',depositStatus:'forfeited',attendance:'absent',...x});
+  const abs=DL.myPastDepositLoss(out(),[rq()],'u1',now);
+  ok(abs?.reason==='absence'&&abs.amountLabel==='6,90 € Moment / 13,10 € hôte'&&DL.describePastDepositLoss(abs)==='Absence — 6,90 € Moment / 13,10 € hôte.','lot 40: past loss — absence, normal table 6,90 / 13,10');
+  const ven=DL.myPastDepositLoss(out({isPartnerListing:true,status:'closed'}),[rq()],'u1',now);
+  ok(ven?.reason==='absence'&&ven.amountLabel==='20 € entiers au lieu','lot 40: past loss — venue = 20 € entiers au lieu');
+  ok(DL.myPastDepositLoss(out(),[rq({attendance:'present',leftTableAt:new Date(now-2*H).toISOString()})],'u1',now)?.reasonLabel==='Départ anticipé','lot 40: past loss — early leave without motive');
+  ok(DL.myPastDepositLoss(out(),[rq({status:'cancelled',attendance:undefined})],'u1',now)?.reasonLabel==='Désistement trop tard','lot 40: past loss — late cancel');
+  ok(!DL.myPastDepositLoss(out(),[rq()],'u2',now)&&!DL.myPastDepositLoss(out({hostId:'u1'}),[rq()],'u1',now)&&!DL.myPastDepositLoss(out(),[rq()],undefined,now),'lot 40: past loss — only that guest');
+  ok(!DL.myPastDepositLoss(out(),[rq({depositStatus:'returned'})],'u1',now)&&!DL.myPastDepositLoss(out(),[rq({depositStatus:'noshow_pending'})],'u1',now)&&!DL.myPastDepositLoss(out({startsAt:new Date(now+2*H).toISOString()}),[rq({status:'cancelled'})],'u1',now),'lot 40: no line if deposit returned / pending / moment not started yet');
+  // momentParticipants inchangé (photos : présents seulement)
+  ok(!MP.momentParticipants(out(),[rq()]).length&&MP.momentParticipants(out(),[rq({attendance:'present',depositStatus:'returned'})]).length===2,'lot 40: photo participants still = present only');
+  const gm=cx.slice(cx.indexOf('const getMyPastMoments = useCallback'),cx.indexOf('const getPublishedPastMomentsForUser = useCallback'));
+  const gp=cx.slice(cx.indexOf('const getPublishedPastMomentsForUser = useCallback'),cx.indexOf('const getPublishedPastMomentsForUser = useCallback')+1500);
+  ok(/myPastDepositLoss\(outing, state\.requests, user\.id\)/.test(gm)&&/if \(!atTable && !depositLoss\) continue;/.test(gm)&&/!atTable \? \[\]/.test(gm),'lot 40: getMyPastMoments includes lost-deposit moments (no photos if not at table)');
+  ok(!/depositLoss|myPastDepositLoss/.test(gp)&&!/depositLoss/.test(hp)&&!/depositLoss/.test(mpc.slice(mpc.indexOf('export function PublicPastMoment'),mpc.indexOf('type OwnPhoto'))),'lot 40: never on the public profile');
+  ok(/depositLoss=\{m\.depositLoss\}/.test(pf)&&/PAST_DEPOSIT_LOSS_TITLE/.test(mpc)&&DL.PAST_DEPOSIT_LOSS_TITLE==='Caution perdue','lot 40: own Profile past moment shows « Caution perdue »');
+  // 3. Plus de guestNoShowCount / partnerNoShowCount
+  const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
+  ok(walk(path.join(__dirname,'..','src')).filter((f:string)=>/\.tsx?$/.test(f)).every((f:string)=>{const t=fs.readFileSync(f,'utf8').replace(/\/\/[^\n]*/g,'');return !/guestNoShowCount|partnerNoShowCount/.test(t);}),'lot 40: guestNoShowCount / partnerNoShowCount removed (sources = strikes + logs)');
 }
 console.log({pass,fail});
 if(fail) process.exitCode=1;

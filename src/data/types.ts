@@ -158,10 +158,8 @@ export interface User {
   createdAt: string;
   /** Host no-shows: 1 = warning, 2+ = ban (mock). */
   hostNoShowCount?: number;
-  /** Guest absence after confirm: 1 = forfeit; 2 = lower priority; 3+ = compte fermé. */
-  guestNoShowCount?: number;
-  /** 25/10 soir · Absences retenues sur moments partenaires (12 mois glissants, 4 → fermé). */
-  partnerNoShowCount?: number;
+  // 31/10 · Lot 40 : guestNoShowCount / partnerNoShowCount supprimés (doublons).
+  // Sources : guestNoShowStrikes + guestNoShowLog / partnerNoShowLog (fenêtres recalculées).
   /** After 2nd guest no-show — deprioritized in host queues (mock). */
   lowerPriority?: boolean;
   /** Visible profile mention after repeated guest absence (mock). */
