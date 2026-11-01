@@ -74,6 +74,10 @@ import {
   canPartnerOrUserCreateOuting,
   partnerNoShowSanction,
   partnerNoShowsInWindow,
+  partnerTempCloseEndMs,
+  partnerTempCloseLabel,
+  isAccountClosedNow,
+  isPartnerTempClosed,
   partnerVenueCheckFirstNames,
   partnerVenueCheckNotifBody,
   partnerVenueCheckRefusal,
@@ -475,7 +479,8 @@ export const PARTNER_NOSHOW_FINAL_NOTICE_TEXT =
 /**
  * 25/10 soir · Partenaire calé The Fork : absence retenue sur un moment
  * partenaire (24 h sans contestation, revue retenue). Barème distinct du
- * barème invité : 4 absences retenues sur 12 mois glissants → compte fermé.
+ * barème invité : 4 absences retenues sur 12 mois glissants → compte fermé
+ * temporairement 1 mois (lot 41) ; après ce mois, une de plus → compte fermé.
  * Le barème invité (2e priorité, 3e fermeture, 3 mois) n’est pas touché.
  */
 function withPartnerNoShowStrike(state: AppState, requestId: string, at: string): AppState {
@@ -487,16 +492,26 @@ function withPartnerNoShowStrike(state: AppState, requestId: string, at: string)
   const atMs = Number.isFinite(new Date(at).getTime()) ? new Date(at).getTime() : Date.now();
   const log = [...prevLog, { requestId, at }];
   const inWindow = partnerNoShowsInWindow(log, atMs);
-  const { banned } = partnerNoShowSanction(inWindow);
-  const causedBan = banned && !partnerNoShowSanction(partnerNoShowsInWindow(prevLog, atMs)).banned;
+  const me = state.currentUser && state.currentUser.id === guestId ? state.currentUser : null;
+  // 01/11 · Lot 41 : 4 → fermeture temporaire 1 mois ; après ce mois, la suivante → compte fermé.
+  const prevUntil = me?.partnerTempCloseUntil ? Date.parse(me.partnerTempCloseUntil) : undefined;
+  const { tempClose, banned } = partnerNoShowSanction(inWindow, prevUntil, atMs);
+  const causedBan = banned && !me?.banned;
+  const causedTempClose = tempClose && !me?.banned;
   let currentUser = state.currentUser;
   let toast = state.toast;
   if (currentUser && currentUser.id === guestId) {
     currentUser = {
       ...currentUser,
+      ...(causedTempClose
+        ? {
+            partnerTempCloseFrom: new Date(atMs).toISOString(),
+            partnerTempCloseUntil: new Date(partnerTempCloseEndMs(atMs)).toISOString(),
+          }
+        : {}),
       banned: banned || currentUser.banned,
-      bannedReason: banned && !currentUser.banned
-        ? '4 absences en 12 mois sur des moments lieu — compte fermé (démo)'
+      bannedReason: causedBan
+        ? 'Nouvelle absence sur un moment lieu après une fermeture temporaire — compte fermé (démo)'
         : currentUser.bannedReason,
     };
     // Lot 37 : auto-déclaration lieu → un seul toast, celui du callback reportGuestNoShow.
@@ -519,6 +534,7 @@ function withPartnerNoShowStrike(state: AppState, requestId: string, at: string)
         ? {
             ...r,
             ...(causedBan ? { noShowCausedBan: true } : {}),
+            ...(causedTempClose ? { noShowCausedTempClose: true } : {}),
             noShowFinalNotice: r.noShowFinalNotice ?? { text: PARTNER_NOSHOW_FINAL_NOTICE_TEXT, at },
           }
         : r,
@@ -547,9 +563,21 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
     const logLeft = partnerNoShowLog[req.userId].filter((e) => e.requestId !== requestId);
     partnerNoShowLog = { ...partnerNoShowLog, [req.userId]: logLeft };
     if (currentUser && currentUser.id === req.userId) {
+      // 01/11 · Lot 41 : fermeture temporaire levée si l’absence effacée en faisait
+      // partie et qu’il en reste moins de 4 sur les 12 mois qui finissaient à son début.
+      const from = currentUser.partnerTempCloseFrom ? Date.parse(currentUser.partnerTempCloseFrom) : NaN;
+      const erased = (state.partnerNoShowLog?.[req.userId] ?? []).find((e) => e.requestId === requestId);
+      const liftTemp =
+        !!currentUser.partnerTempCloseUntil &&
+        (req.noShowCausedTempClose ||
+          (Number.isFinite(from) &&
+            !!erased &&
+            Date.parse(erased.at) <= from &&
+            partnerNoShowsInWindow(logLeft, from) < PARTNER_NOSHOW_BAN_AT));
       currentUser = {
         ...currentUser,
         ...(req.noShowCausedBan ? { banned: false, bannedReason: undefined } : {}),
+        ...(liftTemp ? { partnerTempCloseUntil: undefined, partnerTempCloseFrom: undefined } : {}),
       };
     }
   }
@@ -593,6 +621,7 @@ function voidHostDeclaredNoShow(state: AppState, requestId: string): AppState {
         attendance: _a,
         noShowStrikeApplied: _s,
         noShowCausedBan: _b,
+        noShowCausedTempClose: _tc,
         noShowContestPausedAt: _p,
         ...rest
       } = r;
@@ -2666,7 +2695,7 @@ function reducer(state: AppState, action: AppAction): AppState {
       }
       // 25/10 soir · Trois points produit : auto-déclaration sur un moment lieu.
       // Perte immédiate, 20 € entiers au lieu ; barème partenaire (4 absences
-      // retenues / 12 mois → compte fermé), pas le barème invité table normale.
+      // retenues / 12 mois → fermeture temporaire 1 mois, lot 41), pas le barème invité table normale.
       if (isPartnerListing(outingNoShow) && reportedByUserId === guestId) {
         if ((existing.depositStatus ?? 'held') !== 'held') return state;
         const selfAbsent: AppState = {
@@ -3310,6 +3339,7 @@ type CreateOutingFailReason =
   | 'no_user'
   | 'already_active'
   | 'banned'
+  | 'temp_closed'
   | 'starts_in_past'
   | 'partner_closed'
   | 'culture_evening_full'
@@ -3838,6 +3868,8 @@ interface ChanceContextValue {
         strike: number;
         lowerPriority: boolean;
         banned?: boolean;
+        /** 01/11 · Lot 41 : fermeture temporaire posée par cette absence (fin ISO). */
+        tempCloseUntil?: string;
         jokerExempted?: boolean;
         pending?: boolean;
         disagreement?: boolean;
@@ -4129,6 +4161,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
       if (user.banned) return { ok: false, reason: 'banned' };
+      // 01/11 · Lot 41 : fermeture temporaire = compte inutilisable partout.
+      if (isPartnerTempClosed(user)) return { ok: false, reason: 'temp_closed' };
       if (isPartnerClosed(user)) return { ok: false, reason: 'partner_closed' };
       const partnerListing = isPartnerUser(user);
       // Compte lieu : pas d’urgent « déjà sur place », pas de proposition ciblée.
@@ -4430,6 +4464,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     ): { ok: true; requestId: string } | { ok: false; reason: string } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'no_user' };
+      // 01/11 · Lot 41 : compte fermé (définitif ou temporairement) → pas de demande.
+      if (user.banned) return { ok: false, reason: 'banned' };
+      if (isPartnerTempClosed(user)) return { ok: false, reason: 'temp_closed' };
       const outing = state.outings.find((o) => o.id === outingId);
       if (!outing) return { ok: false, reason: 'not_found' };
       if (outing.hostId === user.id) return { ok: false, reason: 'own_outing' };
@@ -4649,7 +4686,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'invalid' };
-      if (user.banned) return { ok: false, reason: 'invalid' };
+      if (isAccountClosedNow(user)) return { ok: false, reason: 'invalid' };
       const req = state.requests.find((r) => r.id === requestId);
       // Idempotent double-tap: already confirmed → ok (no deposit/credit again)
       if (req && req.status === 'confirmed') {
@@ -7433,6 +7470,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
           strike: number;
           lowerPriority: boolean;
           banned?: boolean;
+          /** 01/11 · Lot 41 : fermeture temporaire posée par cette absence (fin ISO). */
+          tempCloseUntil?: string;
           jokerExempted?: boolean;
           /** Caution en attente 24 h (contestation possible). */
           pending?: boolean;
@@ -7534,16 +7573,23 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
       const prev = state.guestNoShowStrikes[guestId] ?? 0;
       const strike = pending || disagreement || partnerSelf ? prev : prev + 1;
       // 25/10 : barème sur 3 mois glissants (absences retenues seulement).
-      const { lowerPriority, banned } = partnerSelf
-        ? {
-            lowerPriority: false,
-            banned: partnerNoShowSanction(
-              partnerNoShowsInWindow(
-                [...(state.partnerNoShowLog?.[guestId] ?? []), { requestId, at: reportedAt }],
-                new Date(reportedAt).getTime(),
-              ),
-            ).banned,
-          }
+      // 01/11 · Lot 41 : lieu → 4 = fermeture temporaire 1 mois, puis la suivante = compte fermé.
+      const partnerSanction = partnerSelf
+        ? partnerNoShowSanction(
+            partnerNoShowsInWindow(
+              [...(state.partnerNoShowLog?.[guestId] ?? []), { requestId, at: reportedAt }],
+              new Date(reportedAt).getTime(),
+            ),
+            user.partnerTempCloseUntil ? Date.parse(user.partnerTempCloseUntil) : undefined,
+            new Date(reportedAt).getTime(),
+          )
+        : null;
+      const tempClosed = !!partnerSanction?.tempClose && !user.banned;
+      const tempCloseUntil = tempClosed
+        ? new Date(partnerTempCloseEndMs(new Date(reportedAt).getTime())).toISOString()
+        : undefined;
+      const { lowerPriority, banned } = partnerSanction
+        ? { lowerPriority: false, banned: partnerSanction.banned }
         : pending || disagreement
         ? { lowerPriority: false, banned: false }
         : guestSanctionFromStrike(
@@ -7594,6 +7640,8 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         id: uid('toast'),
         title: banned
           ? 'Compte fermé'
+          : tempClosed
+            ? 'Compte fermé temporairement'
           : lowerPriority
             ? 'Priorité baissée'
             : pending || disagreement
@@ -7601,7 +7649,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
               : 'Caution perdue',
         body: partnerSelf
           ? banned
-            ? `${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
+            ? `Nouvelle absence sur un moment lieu après une fermeture temporaire — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
+            : tempCloseUntil
+              ? `${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — ${partnerTempCloseLabel(tempCloseUntil).replace(/^C/, 'c')}. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
             : `Absence déclarée — caution perdue : ${PARTNER_DEPOSIT_FORFEIT_LABEL}.`
           : banned
           ? `3e absence — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
@@ -7613,7 +7663,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
       };
       dispatch({ type: 'SET_TOAST', payload: toast });
-      return { ok: true, strike, lowerPriority, banned, pending, disagreement, depositKept };
+      return { ok: true, strike, lowerPriority, banned, tempCloseUntil, pending, disagreement, depositKept };
     },
     [
       state.currentUser,

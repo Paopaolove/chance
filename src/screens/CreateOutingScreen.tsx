@@ -45,6 +45,7 @@ import {
   PARTNER_GESTURES,
   PARTNER_KIND_LABELS,
   partnerOfferChips,
+  tempClosedRefusal,
 } from '../utils/partners';
 import { CheckNote } from '../components/CheckNote';
 import { useFirstMomentGate } from '../components/FirstMomentSheet';
@@ -498,6 +499,7 @@ function CreateOutingScreenInner() {
         already_active:
           'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
         banned: demoLabel('Compte fermé (démo).'),
+        temp_closed: tempClosedRefusal(state.currentUser),
         no_user: 'Profil manquant.',
         starts_in_past: 'Impossible de publier (créneau).',
       };
@@ -636,6 +638,7 @@ function CreateOutingScreenInner() {
         already_active:
           'Tu as déjà une annonce active (ouverte, ou à venir avec des confirmés). Attends la fin ou termine-la avant d’en publier une autre.',
         banned: demoLabel('Compte fermé (démo).'),
+        temp_closed: tempClosedRefusal(state.currentUser),
         no_user: 'Profil manquant.',
         starts_in_past:
           'Ce créneau est déjà passé. Choisis une date et une heure dans le futur.',
@@ -1426,6 +1429,7 @@ function PartnerCreateForm() {
         partner_offer_required: 'Choisis au moins un geste ou une remise.',
         partner_offer_invalid: 'Offre invalide (texte « Autre » ou % à vérifier).',
         banned: demoLabel('Compte fermé (démo).'),
+        temp_closed: tempClosedRefusal(state.currentUser),
         starts_in_past: 'Ce créneau est déjà passé.',
         no_user: 'Profil manquant.',
       };

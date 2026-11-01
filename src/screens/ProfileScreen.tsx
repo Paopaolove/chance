@@ -43,6 +43,11 @@ import {
   PARTNER_KIND_LABELS,
   PARTNER_WARNINGS_BEFORE_CLOSE,
   partnerAbsenceCounterForSelf,
+  formatTempCloseEndDate,
+  isPartnerTempClosed,
+  partnerTempCloseLabel,
+  PARTNER_NOSHOW_BAN_AT,
+  PARTNER_NOSHOW_WINDOW_MONTHS,
 } from '../utils/partners';
 import { demoLabel, isDemoEnabled } from '../utils/devMode';
 import { markPresentReasonLabel } from '../utils/markPresent';
@@ -238,6 +243,14 @@ function ProfileScreenInner() {
               {demoLabel(
                 user.bannedReason ?? 'Tu ne peux plus publier de moment.',
               )}
+            </Text>
+          </View>
+        ) : isPartnerTempClosed(user) && user.partnerTempCloseUntil ? (
+          // 01/11 · Lot 41 : 4 absences lieu retenues / 12 mois → fermeture 1 mois, partout.
+          <View style={styles.banBanner} accessibilityLabel={partnerTempCloseLabel(user.partnerTempCloseUntil)}>
+            <Text style={styles.banTitle}>Compte fermé temporairement</Text>
+            <Text style={styles.banBody}>
+              {`Jusqu’au ${formatTempCloseEndDate(user.partnerTempCloseUntil)}. ${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu. Après cette date, une nouvelle absence sur un moment lieu ferme le compte.`}
             </Text>
           </View>
         ) : (user.hostNoShowCount ?? 0) === 1 ||

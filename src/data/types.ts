@@ -173,6 +173,16 @@ export interface User {
   banned?: boolean;
   bannedReason?: string;
   /**
+   * 01/11 · Lot 41 · Fermeture temporaire (4 absences lieu retenues / 12 mois) :
+   * fin (ISO) = +1 mois après la 4e. Compte inutilisable partout tant que
+   * maintenant < cette date. Gardé après la fin : la prochaine absence lieu
+   * retenue ferme le compte pour de bon. Effacé si une absence comptée est levée
+   * et qu’il en reste moins de 4.
+   */
+  partnerTempCloseUntil?: string;
+  /** Début (ISO) de la fermeture temporaire (instant de la 4e absence retenue). */
+  partnerTempCloseFrom?: string;
+  /**
    * Paris calendar month (« YYYY-MM ») when the monthly joker was consumed.
    * Empty / other month → joker available again.
    */
@@ -441,6 +451,8 @@ export interface Request {
   /** Absence définitive comptée : numéro de l’absence et fermeture causée (pour l’annuler si l’hôte est déclaré absent). */
   noShowStrikeApplied?: number;
   noShowCausedBan?: boolean;
+  /** 01/11 · Lot 41 : cette absence lieu retenue a posé la fermeture temporaire (4e / 12 mois). */
+  noShowCausedTempClose?: boolean;
   /** « Pas venu » effacé parce que l’hôte a été déclaré absent (règle B). */
   noShowVoided?: boolean;
   /** Message à l’invité quand l’absence devient définitive (jamais projeté vers l’hôte). */
@@ -484,14 +496,14 @@ export interface Request {
   /**
    * 25/10 soir · Partenaire The Fork : absence venant de la liste du lieu.
    * Perte = 20 € entiers au lieu (pas 6,90 / 13,10) ; compteur partenaire
-   * (4 absences retenues en 12 mois → compte fermé), pas le barème invité.
+   * (4 absences retenues en 12 mois → compte fermé temporairement 1 mois, lot 41), pas le barème invité.
    */
   partnerVenueAbsent?: boolean;
   /**
    * 25/10 soir · Trois points produit : l’invité s’est déclaré absent (« Je ne
    * suis pas venu ») sur un moment lieu. Perte immédiate = 20 € entiers au lieu ;
    * compte dans le barème partenaire (4 absences retenues / 12 mois → compte
-   * fermé), pas dans le barème invité table normale.
+   * fermé temporairement 1 mois, lot 41), pas dans le barème invité table normale.
    */
   partnerSelfAbsent?: boolean;
   /**

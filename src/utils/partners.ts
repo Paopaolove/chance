@@ -278,7 +278,7 @@ export const PARTNER_VENUE_CHECK_AFTER_MS = 30 * 60 * 1000;
 /** Message à l’invité décoché. */
 export const PARTNER_VENUE_ABSENT_TEXT = 'Le lieu t’a marqué absent';
 
-/** Barème partenaire : 4 absences retenues sur 12 mois glissants → compte fermé. */
+/** Barème partenaire : 4 absences retenues sur 12 mois glissants → compte fermé temporairement 1 mois (lot 41). */
 export const PARTNER_NOSHOW_WINDOW_MONTHS = 12;
 export const PARTNER_NOSHOW_BAN_AT = 4;
 
@@ -405,9 +405,71 @@ export function partnerNoShowsInWindow(
   }).length;
 }
 
-/** 4 absences retenues sur 12 mois (moments partenaires) → compte fermé. */
-export function partnerNoShowSanction(countInWindow: number): { banned: boolean } {
-  return { banned: countInWindow >= PARTNER_NOSHOW_BAN_AT };
+/** 01/11 · Lot 41 : durée de la fermeture temporaire (4 absences lieu retenues). */
+export const PARTNER_TEMP_CLOSE_MONTHS = 1;
+
+/** Fin de la fermeture temporaire : +1 mois calendaire (fin de mois bornée : 31/01 → 28-29/02). */
+export function partnerTempCloseEndMs(fromMs: number): number {
+  const d = new Date(fromMs);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + PARTNER_TEMP_CLOSE_MONTHS);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return d.getTime();
+}
+
+/**
+ * 01/11 · Lot 41 · Barème lieu (remplace « 4 = compte fermé immédiat », lots 35–39) :
+ * - jamais eu de fermeture temporaire : 4 retenues sur 12 mois → fermeture temporaire 1 mois ;
+ * - fermeture temporaire déjà terminée : une nouvelle absence lieu retenue → compte fermé ;
+ * - pendant la fermeture temporaire : rien de plus (l’absence reste au journal).
+ * `tempCloseUntilMs` : fin de la fermeture temporaire déjà posée (sinon undefined).
+ */
+export function partnerNoShowSanction(
+  countInWindow: number,
+  tempCloseUntilMs?: number,
+  atMs: number = Date.now(),
+): { tempClose: boolean; banned: boolean } {
+  if (tempCloseUntilMs !== undefined && Number.isFinite(tempCloseUntilMs)) {
+    return { tempClose: false, banned: atMs >= tempCloseUntilMs };
+  }
+  return { tempClose: countInWindow >= PARTNER_NOSHOW_BAN_AT, banned: false };
+}
+
+/** Fermeture temporaire (absences lieu) en cours à nowMs. */
+export function isPartnerTempClosed(user: User | null | undefined, nowMs: number = Date.now()): boolean {
+  const t = user?.partnerTempCloseUntil ? Date.parse(user.partnerTempCloseUntil) : NaN;
+  return Number.isFinite(t) && nowMs < t;
+}
+
+/** Compte inutilisable partout dans Moment : fermé, ou fermé temporairement (en cours). */
+export function isAccountClosedNow(user: User | null | undefined, nowMs: number = Date.now()): boolean {
+  return !!user?.banned || isPartnerTempClosed(user, nowMs);
+}
+
+/** « 1 décembre 2026 » (Europe/Paris). */
+export function formatTempCloseEndDate(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return iso;
+  return d.toLocaleDateString('fr-FR', {
+    timeZone: 'Europe/Paris',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+/** Libellé UI : « Compte fermé temporairement jusqu’au 1 décembre 2026 ». */
+export function partnerTempCloseLabel(untilIso: string): string {
+  return `Compte fermé temporairement jusqu’au ${formatTempCloseEndDate(untilIso)}`;
+}
+
+/** Message de refus (publier / rejoindre) pendant la fermeture temporaire. */
+export function tempClosedRefusal(user: User | null | undefined): string {
+  return user?.partnerTempCloseUntil
+    ? `${partnerTempCloseLabel(user.partnerTempCloseUntil)}.`
+    : 'Compte fermé temporairement.';
 }
 
 /**

@@ -54,6 +54,7 @@ import {
   isPartnerCultureListing,
   isPartnerListing,
   partnerListingChips,
+  tempClosedRefusal,
 } from '../utils/partners';
 import { imprevuMotiveLabel } from '../utils/imprevu';
 import { formatOutingWhen } from '../utils/format';
@@ -274,6 +275,8 @@ export function OutingDetailScreen() {
         full: 'Plus de place disponible.',
         already_requested: 'Tu as déjà une demande en cours.',
         own_outing: 'C’est ton propre moment.',
+        banned: demoLabel('Compte fermé (démo).'),
+        temp_closed: tempClosedRefusal(state.currentUser),
         outing_started:
           'Ce moment a déjà commencé ou est terminé — plus de demandes.',
       };

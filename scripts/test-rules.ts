@@ -1170,7 +1170,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(card.includes('contestRefusalLabel(res.reason)')&&!/Alert\.alert\([^)]*,\s*res\.reason\)/.test(card)&&!/:\s*res\.reason,/.test(card),'static: no raw code in contest alert');
   ok(!/perdue sans suite/.test(ctx)&&!/perdue sans suite/.test(od)&&/puis perdue sans contestation \(\$\{depositForfeitShort\(\)\}\)/.test(ctx)&&od.includes('puis perdue sans contestation : ${depositForfeitShort({ partner })}'),'host alert / toast / chat note: « puis perdue sans contestation »');
   const lossIdx=ctx.indexOf('const lossText');
-  ok(lossIdx>0&&/text: autoNoShowNote\(lossText, \{ partnerSelf \}\)/.test(ctx)&&/body: (?:partnerSelf[\s\S]{0,500}?: )?banned[\s\S]{0,600}lossText/.test(ctx),'static: chat note and toast share the same wording');
+  ok(lossIdx>0&&/text: autoNoShowNote\(lossText, \{ partnerSelf \}\)/.test(ctx)&&/body: (?:partnerSelf[\s\S]{0,900}?: )?banned[\s\S]{0,600}lossText/.test(ctx),'static: chat note and toast share the same wording');
 }
 
 // B1 / B2 (go Paolo 17/10) : absence comptée seulement quand définitive ; contestation acceptée = absence effacée
@@ -1543,7 +1543,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(NC.partnerVenueNoShowShareEuros(self.requests[0])===20&&NC.hostNoShowShareEuros(self.requests[0])===0,'lot 35: partner self absence → 20 € entire to the venue (no 6,90 / 13,10)');
   const old3=[1,2,3].map((i)=>({requestId:'old'+i,at:iso(NSAT-i*30*24*H)}));
   const self4=D(st({partnerNoShowLog:{u1:old3}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
-  ok(self4.currentUser.banned===true&&/compte fermé/.test(self4.currentUser.bannedReason)&&self4.partnerNoShowLog.u1.length===4&&!self4.guestNoShowStrikes.u1,'lot 35: 4th partner absence in 12 months (self-declared) → compte fermé');
+  ok(!self4.currentUser.banned&&Date.parse(self4.currentUser.partnerTempCloseUntil)===P.partnerTempCloseEndMs(NSAT)&&P.isPartnerTempClosed(self4.currentUser,NSAT+H)&&self4.partnerNoShowLog.u1.length===4&&!self4.guestNoShowStrikes.u1,'lot 35→41: 4th partner absence in 12 months (self-declared) → compte fermé temporairement 1 mois');
   const oldOut=[1,2,3].map((i)=>({requestId:'older'+i,at:iso(NSAT-(400+i)*24*H)}));
   const selfOld=D(st({partnerNoShowLog:{u1:oldOut}}),{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(NSAT),reportedByUserId:'u1'}});
   ok(!selfOld.currentUser.banned&&partnerCount(selfOld)===1,'lot 35: absences older than 12 months do not count');
@@ -1597,7 +1597,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(PU.partnerVenueCheckRefusal({...st().outings[0],hostNoShowReported:true},st().requests,'h1',T+H)==='host_no_show','venue check refused if venue reported absent');
   // compteur partenaire : 4 absences retenues en 12 mois → compte fermé
   const day=24*H;
-  ok(PU.partnerNoShowSanction(3).banned===false&&PU.partnerNoShowSanction(4).banned===true,'partner barème: 4 → closed');
+  ok(PU.partnerNoShowSanction(3).tempClose===false&&PU.partnerNoShowSanction(4).tempClose===true&&PU.partnerNoShowSanction(4).banned===false,'partner barème (lot 41): 4 → temporary closure, not definitive');
   const old=[{requestId:'a',at:iso(now-400*day)},{requestId:'b',at:iso(now-100*day)},{requestId:'c',at:iso(now-50*day)}];
   ok(PU.partnerNoShowsInWindow(old,now)===2,'partner window: 12 months');
   const gst=(log:any)=>S({currentUser:me,outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'})],partnerNoShowLog:{u1:log},guestNoShowStrikes:{u1:2}});
@@ -1605,7 +1605,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const third=lose(gst(old));
   ok(!third.currentUser.banned&&partnerCount(third)===3&&third.guestNoShowStrikes.u1===2,'3rd partner absence in 12 months: not closed, guest barème untouched');
   const fourth=lose(gst([...old,{requestId:'d',at:iso(now-10*day)}]));
-  ok(fourth.currentUser.banned===true&&partnerCount(fourth)===4&&fourth.requests[0].noShowCausedBan===true,'4th partner absence in 12 months: account closed');
+  ok(!fourth.currentUser.banned&&!!fourth.currentUser.partnerTempCloseUntil&&partnerCount(fourth)===4&&fourth.requests[0].noShowCausedTempClose===true&&!fourth.requests[0].noShowCausedBan,'4th partner absence in 12 months (lot 41): temporary closure');
   // non-régression table normale : pas de liste, « Pas venu » hôte + barème invité (2/3 · 3 mois), 6,90 / 13,10
   const NC=require('../src/utils/noShowContest');
   const nt=(more:any={})=>S({currentUser:host,outings:[o({startsAt:iso(T),status:'closed'})],requests:[rq({status:'confirmed',depositStatus:'held'})],...more});
@@ -2658,7 +2658,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const old3=[{requestId:'a',at:iso(now-30*day)},{requestId:'b',at:iso(now-20*day)},{requestId:'c',at:iso(now-10*day)}];
   const st={...I,currentUser:me,partnerNoShowLog:{u1:old3},outings:[{id:'o1',hostId:'h1',hostName:'Lieu',title:'T',startsAt:iso(now-H),status:'closed',isPartnerListing:true,partnerKind:'resto',capacity:2,spotsLeft:0}],requests:[{id:'r1',outingId:'o1',userId:'u1',userName:'Léa',status:'confirmed',depositStatus:'held',createdAt:iso(now-2*H)}]} as any;
   const ok4=D(st,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(now),reportedByUserId:'u1'}});
-  ok(ok4.currentUser.banned===true,'lot 39 setup: 4th venue absence closes the account');
+  ok(!ok4.currentUser.banned&&P.isPartnerTempClosed(ok4.currentUser,now+H),'lot 39 setup (lot 41): 4th venue absence → compte fermé temporairement');
   const cx=require('node:fs').readFileSync(require('node:path').join(__dirname,'..','src','data','ChanceContext.tsx'),'utf8');
   ok(!/Note auto · \$\{PARTNER_NOSHOW_BAN_AT\}e absence/.test(cx)&&/text: autoNoShowNote\(lossText, \{ partnerSelf \}\)/.test(cx),'lot 39: shared venue thread note never shows « N sur 4 » / closure');
 }
@@ -2704,5 +2704,71 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const walk=(d:string):string[]=>fs.readdirSync(d,{withFileTypes:true}).flatMap((e:any)=>e.isDirectory()?walk(path.join(d,e.name)):[path.join(d,e.name)]);
   ok(walk(path.join(__dirname,'..','src')).filter((f:string)=>/\.tsx?$/.test(f)).every((f:string)=>{const t=fs.readFileSync(f,'utf8').replace(/\/\/[^\n]*/g,'');return !/guestNoShowCount|partnerNoShowCount/.test(t);}),'lot 40: guestNoShowCount / partnerNoShowCount removed (sources = strikes + logs)');
 }
+// 01/11 · Lot 41 · Absences lieu : 4 → compte fermé temporairement 1 mois (partout), puis la suivante → compte fermé
+{
+  const PU=require('../src/utils/partners');
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const MIN=60e3, day=24*H, D1=day, T=now-2*H, NSAT=T+H;
+  const guest:any={...me};
+  const old3=[1,2,3].map((i)=>({requestId:'old'+i,at:iso(NSAT-i*30*day)}));
+  const base=(u:any={},log:any[]=old3,rx:any={})=>S({currentUser:{...guest,...u},outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held',...rx}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})],partnerNoShowLog:{u1:log}});
+  const SELF=(s0:any,at=NSAT)=>D(s0,{type:'REPORT_GUEST_NO_SHOW',payload:{outingId:'o1',requestId:'r1',guestId:'u1',strike:1,lowerPriority:false,reportedAt:iso(at),reportedByUserId:'u1'}});
+  const VC=(s0:any)=>({...D({...s0,currentUser:host},{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:['r1'],at:iso(NSAT)}}),currentUser:s0.currentUser});
+  // date de fin : +1 mois calendaire, fin de mois bornée
+  ok(PU.partnerTempCloseEndMs(Date.parse('2026-11-01T09:00:00.000Z'))===Date.parse('2026-12-01T09:00:00.000Z')&&PU.partnerTempCloseEndMs(Date.parse('2026-01-31T12:00:00.000Z'))===Date.parse('2026-02-28T12:00:00.000Z'),'lot 41: end date = +1 calendar month (31/01 → 28/02)');
+  ok(PU.partnerTempCloseLabel('2026-12-01T09:00:00.000Z')==='Compte fermé temporairement jusqu’au 1 décembre 2026','lot 41: label « Compte fermé temporairement » + end date');
+  // barème pur
+  const until=Date.parse('2026-12-01T09:00:00.000Z');
+  ok(PU.partnerNoShowSanction(4,until,until-MIN).banned===false&&PU.partnerNoShowSanction(4,until,until-MIN).tempClose===false,'lot 41: during the month → nothing more');
+  ok(PU.partnerNoShowSanction(1,until,until).banned===true&&PU.partnerNoShowSanction(5,until,until+day).banned===true,'lot 41: after the month → one more retained venue absence closes for good');
+  // 4e retenue (auto-déclaration) → temporaire, partout
+  const t4=SELF(base());
+  const u4=t4.currentUser;
+  ok(!u4.banned&&Date.parse(u4.partnerTempCloseUntil)===PU.partnerTempCloseEndMs(NSAT)&&u4.partnerTempCloseFrom===iso(NSAT)&&t4.requests[0].noShowCausedTempClose===true,'lot 41: 4th retained (self) → temporary closure, end = +1 month');
+  ok(PU.isPartnerTempClosed(u4,NSAT+H)&&PU.isAccountClosedNow(u4,NSAT+H)&&!PU.isPartnerTempClosed(u4,Date.parse(u4.partnerTempCloseUntil))&&!PU.isAccountClosedNow(u4,Date.parse(u4.partnerTempCloseUntil)+MIN),'lot 41: closed until the end date, reopened after');
+  ok(PU.partnerAbsenceCounterForSelf('u1','u1',t4.partnerNoShowLog.u1,NSAT)==='Absences lieu : 4 sur 4'&&PU.partnerAbsenceCounterForSelf('h1','u1',t4.partnerNoShowLog.u1,NSAT)===null,'lot 41: « N sur 4 » unchanged, self only');
+  ok(t4.requests[0].depositStatus==='forfeited'&&NC41().partnerVenueNoShowShareEuros(t4.requests[0])===20&&!t4.guestNoShowStrikes.u1,'lot 41: money unchanged (20 € to the venue), guest barème untouched');
+  // 4e retenue (liste du lieu, 24 h sans contestation) → temporaire
+  const v4=D(VC(base()),{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(NSAT+D1)}});
+  ok(!v4.currentUser.banned&&Date.parse(v4.currentUser.partnerTempCloseUntil)===PU.partnerTempCloseEndMs(NSAT+D1)&&v4.requests[0].noShowCausedTempClose===true,'lot 41: 4th retained (venue list, 24 h) → temporary closure');
+  // contestation acceptée : rien de compté, pas de fermeture temporaire
+  const ct=D(VC(base()),{type:'CONTEST_NO_SHOW',payload:{requestId:'r1',note:'J’étais à la table.',at:iso(NSAT+H)}});
+  const acc=D(ct,{type:'ACCEPT_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(NSAT+2*H)}});
+  ok(!acc.currentUser.partnerTempCloseUntil&&!acc.currentUser.banned&&acc.partnerNoShowLog.u1.length===3,'lot 41: 4th contested and accepted → no temporary closure');
+  const conf=D(ct,{type:'CONFIRM_NO_SHOW_AFTER_REVIEW',payload:{requestId:'r1',at:iso(NSAT+2*H)}});
+  ok(!!conf.currentUser.partnerTempCloseUntil&&!conf.currentUser.banned,'lot 41: 4th retained after review → temporary closure');
+  // pendant le mois : une autre absence retenue ne ferme pas pour de bon
+  const during=SELF(base({partnerTempCloseFrom:iso(NSAT-5*day),partnerTempCloseUntil:iso(NSAT+20*day)},[...old3,{requestId:'d4',at:iso(NSAT-5*day)}]));
+  ok(!during.currentUser.banned&&during.currentUser.partnerTempCloseUntil===iso(NSAT+20*day)&&during.partnerNoShowLog.u1.length===5,'lot 41: absence retained during the month → no definitive closure, same end date');
+  // après le mois : une seule nouvelle absence lieu retenue → compte fermé
+  const after=SELF(base({partnerTempCloseFrom:iso(NSAT-40*day),partnerTempCloseUntil:iso(NSAT-10*day)},[...old3,{requestId:'d4',at:iso(NSAT-40*day)}]));
+  ok(after.currentUser.banned===true&&/compte fermé/.test(after.currentUser.bannedReason)&&after.requests[0].noShowCausedBan===true&&!after.requests[0].noShowCausedTempClose,'lot 41: after the month, next retained venue absence → compte fermé (definitive)');
+  const afterOne=SELF(base({partnerTempCloseFrom:iso(NSAT-200*day),partnerTempCloseUntil:iso(NSAT-170*day)},[]));
+  ok(afterOne.currentUser.banned===true&&partnerCount(afterOne)===1,'lot 41: after the month, even a single absence in the window closes for good');
+  // absence effacée (règle B : lieu déclaré absent) → fermeture temporaire levée
+  const lostTemp=base({partnerTempCloseFrom:iso(NSAT),partnerTempCloseUntil:iso(PU.partnerTempCloseEndMs(NSAT))},[...old3,{requestId:'r1',at:iso(NSAT)}],{attendance:'absent',noShowReportedAt:iso(NSAT),partnerVenueAbsent:true,depositStatus:'forfeited',noShowCausedTempClose:true});
+  const HN=(s0:any)=>D(s0,{type:'REPORT_HOST_NO_SHOW',payload:{outingId:'o1',hostId:'h1',strike:0,banned:false,reportedAt:iso(T+90*MIN),reportedByUserId:'u2'}});
+  const RETH=(s0:any)=>s0.outings[0].hostNoShowCase?D(s0,{type:'EXPIRE_HOST_NO_SHOW_CONTEST',payload:{outingId:'o1',at:iso(Date.parse(s0.outings[0].hostNoShowCase.reportedAt)+D1)}}):s0;
+  const lift=RETH(HN(lostTemp));
+  ok(lift.requests[0].noShowVoided===true&&!lift.currentUser.partnerTempCloseUntil&&!lift.currentUser.banned&&lift.partnerNoShowLog.u1.length===3,'lot 41: the 4th erased → temporary closure lifted (back under 4)');
+  const lostEarlier=base({partnerTempCloseFrom:iso(NSAT+day),partnerTempCloseUntil:iso(PU.partnerTempCloseEndMs(NSAT+day))},[old3[0],old3[1],{requestId:'r1',at:iso(NSAT)},{requestId:'d4',at:iso(NSAT+day)}],{attendance:'absent',noShowReportedAt:iso(NSAT),partnerVenueAbsent:true,depositStatus:'forfeited'});
+  const lift2=RETH(HN(lostEarlier));
+  ok(lift2.requests[0].noShowVoided===true&&!lift2.currentUser.partnerTempCloseUntil,'lot 41: an earlier counted absence erased → under 4 → temporary closure lifted');
+  const lost5=base({partnerTempCloseFrom:iso(NSAT+day),partnerTempCloseUntil:iso(PU.partnerTempCloseEndMs(NSAT+day))},[...old3,{requestId:'r1',at:iso(NSAT)},{requestId:'d4',at:iso(NSAT+day)}],{attendance:'absent',noShowReportedAt:iso(NSAT),partnerVenueAbsent:true,depositStatus:'forfeited'});
+  ok(RETH(HN(lost5)).requests[0].noShowVoided===true&&!!RETH(HN(lost5)).currentUser.partnerTempCloseUntil,'lot 41: still 4 after erasing one → temporary closure kept');
+  // gate « partout » + libellés
+  const cx=rdf('data','ChanceContext.tsx'), pf=rdf('screens','ProfileScreen.tsx'), co=rdf('screens','CreateOutingScreen.tsx'), od=rdf('screens','OutingDetailScreen.tsx'), dm=rdf('components','DemoMenuModal.tsx');
+  const fnBody=(name:string)=>cx.slice(cx.indexOf(`const ${name} = useCallback(`),cx.indexOf(`const ${name} = useCallback(`)+1500);
+  ok(/isPartnerTempClosed\(user\)\) return \{ ok: false, reason: 'temp_closed' \}/.test(fnBody('createOuting'))&&/isPartnerTempClosed\(user\)\) return \{ ok: false, reason: 'temp_closed' \}/.test(fnBody('joinOuting'))&&/isAccountClosedNow\(user\)\) return \{ ok: false/.test(fnBody('confirmSlot')),'lot 41: temporary closure gates publish / join / confirm');
+  ok((co.match(/temp_closed: tempClosedRefusal\(state\.currentUser\)/g)||[]).length===3&&/temp_closed: tempClosedRefusal\(state\.currentUser\)/.test(od),'lot 41: refusals show « Compte fermé temporairement jusqu’au … »');
+  ok(PU.tempClosedRefusal({partnerTempCloseUntil:'2026-12-01T09:00:00.000Z'})==='Compte fermé temporairement jusqu’au 1 décembre 2026.','lot 41: refusal text with end date');
+  ok(/isPartnerTempClosed\(user\) && user\.partnerTempCloseUntil/.test(pf)&&/>Compte fermé temporairement</.test(pf)&&/formatTempCloseEndDate\(user\.partnerTempCloseUntil\)/.test(pf),'lot 41: Profile banner « Compte fermé temporairement » + end date');
+  ok(/'Compte fermé temporairement'/.test(dm)&&/partnerTempCloseLabel\(r\.tempCloseUntil\)/.test(dm)&&/'Compte fermé temporairement'/.test(cx),'lot 41: Demo menu + toast titles');
+  const uiStr=(t:string)=>(t.match(/'[^'\n]*'|`[^`]*`|>[^<>{}\n]+</g)||[]).join('\n');
+  ok([pf,co,od,dm,rdf('utils','partners.ts')].every((t:string)=>!/\bban\b|\bbanni|suspendu/i.test(uiStr(t))),'lot 41: no « ban » / « suspendu » in UI strings');
+  ok(!/4 absences en 12 mois sur des moments lieu — compte fermé \(démo\)/.test(cx),'lot 41: old « 4 = compte fermé immédiat » removed');
+}
+function NC41(){return require('../src/utils/noShowContest');}
 console.log({pass,fail});
 if(fail) process.exitCode=1;
