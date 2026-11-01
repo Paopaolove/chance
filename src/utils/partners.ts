@@ -460,16 +460,44 @@ export function formatTempCloseEndDate(iso: string): string {
   });
 }
 
-/** Libellé UI : « Compte fermé temporairement jusqu’au 1 décembre 2026 ». */
+/** 01/11 · Libellé exact Paolo (vocal) : ne pas raccourcir. */
+export const PARTNER_TEMP_CLOSE_TITLE =
+  'Compte fermé temporairement pendant un mois à cause des absences';
+
+/**
+ * Libellé UI : « Compte fermé temporairement pendant un mois à cause des
+ * absences, jusqu’au 1 décembre 2026 ».
+ */
 export function partnerTempCloseLabel(untilIso: string): string {
-  return `Compte fermé temporairement jusqu’au ${formatTempCloseEndDate(untilIso)}`;
+  return `${PARTNER_TEMP_CLOSE_TITLE}, jusqu’au ${formatTempCloseEndDate(untilIso)}`;
 }
 
-/** Message de refus (publier / rejoindre) pendant la fermeture temporaire. */
+/** Message de refus (publier / rejoindre / confirmer) pendant la fermeture temporaire. */
 export function tempClosedRefusal(user: User | null | undefined): string {
   return user?.partnerTempCloseUntil
     ? `${partnerTempCloseLabel(user.partnerTempCloseUntil)}.`
-    : 'Compte fermé temporairement.';
+    : `${PARTNER_TEMP_CLOSE_TITLE}.`;
+}
+
+/**
+ * 01/11 · Lot 42 · Fermeture définitive (absence lieu retenue après le mois de
+ * fermeture temporaire). Texte exact Paolo, sans raccourcir ni reformuler.
+ */
+export const PARTNER_DEFINITIVE_CLOSE_TEXT =
+  'Ton compte est fermé définitivement.\n\n' +
+  'Après quatre absences, on t’avait laissé un mois pour reprendre — compte fermé temporairement à cause des absences. ' +
+  'Tu as de nouveau été absent. Les absences sont un point critique de Moment : sans confiance sur la venue, ça ne tient pas. ' +
+  'C’est donc terminé, sans limite de temps.';
+
+/** Refus « compte fermé » : texte exact si fermeture définitive lieu, sinon le libellé générique. */
+export function bannedRefusal(user: User | null | undefined, fallback: string): string {
+  return user?.bannedReason === PARTNER_DEFINITIVE_CLOSE_TEXT ? PARTNER_DEFINITIVE_CLOSE_TEXT : fallback;
+}
+
+/** Fermeture temporaire déjà terminée (et pas levée) : on est au « 1 sur 1 ». */
+export function isPartnerTempCloseOver(user: { partnerTempCloseUntil?: string } | null | undefined, nowMs: number = Date.now()): boolean {
+  const t = user?.partnerTempCloseUntil ? Date.parse(user.partnerTempCloseUntil) : NaN;
+  return Number.isFinite(t) && nowMs >= t;
 }
 
 /**
@@ -482,18 +510,28 @@ export function formatPartnerAbsenceCounter(count: number): string {
   return `${n} sur ${PARTNER_NOSHOW_BAN_AT}`;
 }
 
+/** 01/11 · Lot 42 : après le mois de fermeture temporaire, le compteur affiche « 1 sur 1 ». */
+export const PARTNER_AFTER_TEMP_CLOSE_COUNTER = '1 sur 1';
+
 /**
  * Lot 39 · Ligne privée « Absences lieu : N sur 4 » : seulement si le lecteur
  * est la personne concernée et qu’il y a au moins une absence retenue dans la
  * fenêtre (source : le journal, recalculé à `nowMs`). Sinon `null`.
+ * Lot 42 : `tempCloseUntil` passé → « Absences lieu : 1 sur 1 ».
  */
 export function partnerAbsenceCounterForSelf(
   viewerId: string | null | undefined,
   subjectId: string | null | undefined,
   log: { requestId: string; at: string }[] | undefined,
   nowMs: number,
+  tempCloseUntil?: string,
 ): string | null {
   if (!viewerId || !subjectId || viewerId !== subjectId) return null;
+  // Lot 42 : fermeture temporaire finie → « 1 sur 1 » (une absence lieu retenue = compte fermé),
+  // même si le compteur 12 mois est retombé. Avant / pendant : « N sur 4 ».
+  if (isPartnerTempCloseOver({ partnerTempCloseUntil: tempCloseUntil }, nowMs)) {
+    return `Absences lieu : ${PARTNER_AFTER_TEMP_CLOSE_COUNTER}`;
+  }
   const n = partnerNoShowsInWindow(log, nowMs);
   return n > 0 ? `Absences lieu : ${formatPartnerAbsenceCounter(n)}` : null;
 }

@@ -76,6 +76,7 @@ import {
   partnerNoShowsInWindow,
   partnerTempCloseEndMs,
   partnerTempCloseLabel,
+  PARTNER_DEFINITIVE_CLOSE_TEXT,
   isAccountClosedNow,
   isPartnerTempClosed,
   partnerVenueCheckFirstNames,
@@ -83,7 +84,6 @@ import {
   partnerVenueCheckRefusal,
   partnerVenueCheckRequests,
   PARTNER_NOSHOW_BAN_AT,
-  PARTNER_NOSHOW_WINDOW_MONTHS,
   PARTNER_VENUE_ABSENT_TEXT,
   isPartnerClosed,
   isPartnerCultureHost,
@@ -501,27 +501,37 @@ function withPartnerNoShowStrike(state: AppState, requestId: string, at: string)
   let currentUser = state.currentUser;
   let toast = state.toast;
   if (currentUser && currentUser.id === guestId) {
+    const tempUntil = causedTempClose ? new Date(partnerTempCloseEndMs(atMs)).toISOString() : undefined;
     currentUser = {
       ...currentUser,
-      ...(causedTempClose
+      ...(tempUntil
         ? {
             partnerTempCloseFrom: new Date(atMs).toISOString(),
-            partnerTempCloseUntil: new Date(partnerTempCloseEndMs(atMs)).toISOString(),
+            partnerTempCloseUntil: tempUntil,
           }
         : {}),
       banned: banned || currentUser.banned,
-      bannedReason: causedBan
-        ? 'Nouvelle absence sur un moment lieu après une fermeture temporaire — compte fermé (démo)'
-        : currentUser.bannedReason,
+      // Lot 42 : texte exact Paolo (bandeau Profil « Compte fermé »).
+      bannedReason: causedBan ? PARTNER_DEFINITIVE_CLOSE_TEXT : currentUser.bannedReason,
     };
     // Lot 37 : auto-déclaration lieu → un seul toast, celui du callback reportGuestNoShow.
     if (!req.noShowFinalNotice && !req.partnerSelfAbsent) {
-      toast = {
-        id: `noshow-final-${requestId}`,
-        title: 'Absence retenue',
-        body: PARTNER_NOSHOW_FINAL_NOTICE_TEXT,
-        createdAt: at,
-      };
+      toast = causedBan
+        ? {
+            id: `noshow-final-${requestId}`,
+            title: 'Compte fermé',
+            body: PARTNER_DEFINITIVE_CLOSE_TEXT,
+            createdAt: at,
+          }
+        : {
+            id: `noshow-final-${requestId}`,
+            title: 'Absence retenue',
+            // Lot 42 : 4e retenue → le toast dit aussi la fermeture temporaire + date de fin.
+            body: tempUntil
+              ? `${PARTNER_NOSHOW_FINAL_NOTICE_TEXT} ${partnerTempCloseLabel(tempUntil)}.`
+              : PARTNER_NOSHOW_FINAL_NOTICE_TEXT,
+            createdAt: at,
+          };
     }
   }
   return {
@@ -3454,7 +3464,9 @@ interface ChanceContextValue {
           | 'race_lost'
           | 'no_spot'
           | 'outing_started'
-          | 'outing_finished';
+          | 'outing_finished'
+          | 'banned'
+          | 'temp_closed';
       };
   expireRequestIfNeeded: (requestId: string) => void;
   setDispoSoir: (value: boolean) => void;
@@ -4682,11 +4694,15 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
             | 'race_lost'
             | 'no_spot'
             | 'outing_started'
-            | 'outing_finished';
+            | 'outing_finished'
+            | 'banned'
+            | 'temp_closed';
         } => {
       const user = state.currentUser;
       if (!user) return { ok: false, reason: 'invalid' };
-      if (isAccountClosedNow(user)) return { ok: false, reason: 'invalid' };
+      // Lot 42 : motif explicite (l’écran affiche le libellé, pas « Place libérée »).
+      if (user.banned) return { ok: false, reason: 'banned' };
+      if (isAccountClosedNow(user)) return { ok: false, reason: 'temp_closed' };
       const req = state.requests.find((r) => r.id === requestId);
       // Idempotent double-tap: already confirmed → ok (no deposit/credit again)
       if (req && req.status === 'confirmed') {
@@ -7641,7 +7657,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
         title: banned
           ? 'Compte fermé'
           : tempClosed
-            ? 'Compte fermé temporairement'
+            ? 'Absence retenue'
           : lowerPriority
             ? 'Priorité baissée'
             : pending || disagreement
@@ -7649,9 +7665,9 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
               : 'Caution perdue',
         body: partnerSelf
           ? banned
-            ? `Nouvelle absence sur un moment lieu après une fermeture temporaire — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
+            ? PARTNER_DEFINITIVE_CLOSE_TEXT
             : tempCloseUntil
-              ? `${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — ${partnerTempCloseLabel(tempCloseUntil).replace(/^C/, 'c')}. ${lossText[0].toUpperCase()}${lossText.slice(1)}`
+              ? `Absence déclarée — caution perdue : ${PARTNER_DEPOSIT_FORFEIT_LABEL}. ${partnerTempCloseLabel(tempCloseUntil)}.`
             : `Absence déclarée — caution perdue : ${PARTNER_DEPOSIT_FORFEIT_LABEL}.`
           : banned
           ? `3e absence — compte fermé. ${lossText[0].toUpperCase()}${lossText.slice(1)}`

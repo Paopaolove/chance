@@ -15,7 +15,14 @@ import { formatCountdown } from '../utils/format';
 import { useOpenUserProfile } from '../utils/openUserProfile';
 import { isStartsAtPast } from '../utils/parisTime';
 import { isUrgentOnSite } from '../utils/outingActive';
-import { isPartnerListing, partnerListingChips } from '../utils/partners';
+import { demoLabel } from '../utils/devMode';
+import {
+  bannedRefusal,
+  isAccountClosedNow,
+  isPartnerListing,
+  partnerListingChips,
+  tempClosedRefusal,
+} from '../utils/partners';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type R = RouteProp<RootStackParamList, 'ConfirmSlot'>;
@@ -44,6 +51,7 @@ export function ConfirmSlotScreen() {
   const [done, setDone] = useState(false);
   const [expired, setExpired] = useState(false);
   const [noSpot, setNoSpot] = useState(false);
+  const [closedNotice, setClosedNotice] = useState(false);
   const { requireBeforeMoment, sheet: firstMomentSheet } = useFirstMomentGate();
 
   useEffect(() => {
@@ -114,6 +122,28 @@ export function ConfirmSlotScreen() {
             navigation.replace('OutingDetail', { outingId: outing.id })
           }
         />
+      </SafeAreaView>
+    );
+  }
+
+  // 01/11 · Lot 42 : compte fermé (temporairement ou définitivement) → le libellé
+  // exact, jamais un simple « Place libérée » / expiré.
+  const me = state.currentUser;
+  if (closedNotice || isAccountClosedNow(me)) {
+    const definitive = !!me?.banned;
+    return (
+      <SafeAreaView style={styles.wrap}>
+        <View style={styles.centerBlock}>
+          <Text style={styles.hero}>
+            {definitive ? 'Compte fermé' : 'Compte fermé temporairement'}
+          </Text>
+          <Text style={styles.bodyCenter}>
+            {definitive
+              ? bannedRefusal(me, demoLabel('Compte fermé (démo).'))
+              : `${tempClosedRefusal(me)} Confirmation impossible pendant cette période.`}
+          </Text>
+        </View>
+        <Button title="Retour aux annonces" onPress={goFeed} />
       </SafeAreaView>
     );
   }
@@ -201,6 +231,10 @@ export function ConfirmSlotScreen() {
         navigation.navigate('Paywall', {
           returnToConfirmRequestId: request.id,
         });
+        return;
+      }
+      if (result.reason === 'banned' || result.reason === 'temp_closed') {
+        setClosedNotice(true);
         return;
       }
       if (result.reason === 'no_spot') {

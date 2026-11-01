@@ -46,6 +46,7 @@ import {
   formatTempCloseEndDate,
   isPartnerTempClosed,
   partnerTempCloseLabel,
+  PARTNER_TEMP_CLOSE_TITLE,
   PARTNER_NOSHOW_BAN_AT,
   PARTNER_NOSHOW_WINDOW_MONTHS,
 } from '../utils/partners';
@@ -248,7 +249,7 @@ function ProfileScreenInner() {
         ) : isPartnerTempClosed(user) && user.partnerTempCloseUntil ? (
           // 01/11 · Lot 41 : 4 absences lieu retenues / 12 mois → fermeture 1 mois, partout.
           <View style={styles.banBanner} accessibilityLabel={partnerTempCloseLabel(user.partnerTempCloseUntil)}>
-            <Text style={styles.banTitle}>Compte fermé temporairement</Text>
+            <Text style={styles.banTitle}>{PARTNER_TEMP_CLOSE_TITLE}</Text>
             <Text style={styles.banBody}>
               {`Jusqu’au ${formatTempCloseEndDate(user.partnerTempCloseUntil)}. ${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu. Après cette date, une nouvelle absence sur un moment lieu ferme le compte.`}
             </Text>
@@ -285,6 +286,8 @@ function ProfileScreenInner() {
             user.id,
             state.partnerNoShowLog?.[user.id],
             Date.now(),
+            // Lot 42 : mois de fermeture temporaire fini → « 1 sur 1 ».
+            user.partnerTempCloseUntil,
           );
           return line && !user.banned ? (
             <Text style={styles.partnerAbsenceLine} accessibilityLabel={line}>

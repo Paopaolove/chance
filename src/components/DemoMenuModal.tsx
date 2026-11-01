@@ -17,9 +17,8 @@ import { navigationRef } from '../navigation/navigationRef';
 import { Button } from './Button';
 import {
   isPartnerListing,
-  PARTNER_NOSHOW_BAN_AT,
   partnerTempCloseLabel,
-  PARTNER_NOSHOW_WINDOW_MONTHS,
+  PARTNER_DEFINITIVE_CLOSE_TEXT,
   partnerVenueCheckRequests,
 } from '../utils/partners';
 import { isDemoEnabled } from '../utils/devMode';
@@ -442,16 +441,16 @@ export function DemoMenuModal({ visible, onClose }: Props) {
                     r.banned
                       ? 'Compte fermé'
                       : r.tempCloseUntil
-                        ? 'Compte fermé temporairement'
+                        ? 'Absence retenue'
                       : r.lowerPriority
                         ? 'Priorité baissée'
                         : 'Caution perdue',
                     r.banned
                       ? partner
-                        ? `Nouvelle absence sur un moment lieu après une fermeture temporaire — compte fermé. ${describeDepositForfeitMoment({ partner })}`
+                        ? PARTNER_DEFINITIVE_CLOSE_TEXT
                         : '3e absence — compte fermé.'
                       : r.tempCloseUntil
-                        ? `${PARTNER_NOSHOW_BAN_AT} absences en ${PARTNER_NOSHOW_WINDOW_MONTHS} mois sur des moments lieu — ${partnerTempCloseLabel(r.tempCloseUntil).replace(/^C/, 'c')}. ${describeDepositForfeitMoment({ partner })}`
+                        ? `${describeDepositForfeitMoment({ partner })} ${partnerTempCloseLabel(r.tempCloseUntil)}.`
                       : r.lowerPriority
                         ? '2e absence — priorité baissée + mention profil.'
                         : partner

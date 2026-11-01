@@ -2680,7 +2680,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   ok(PR.depositForfeitShort()==='6,90 € Moment / 13,10 € hôte'&&PR.depositForfeitShort({partner:true})==='20 € entiers au lieu','lot 40: depositForfeitShort normal / venue');
   ok([cx,od,rdf('screens','ConfirmSlotScreen.tsx'),rdf('screens','ImprevuScreen.tsx')].every((t:string)=>!/'[^'\n]*6,90 € (Moment|pour Moment)[^'\n]*'/.test(t)),'lot 40: no hard-coded 6,90 / 13,10 strings left in context / detail / confirm / imprévu');
   // Démo « Simuler mon absence » : barème + montant lieu
-  ok(/const partner = isPartnerListing\(getOutingById\(req\.outingId\)\)/.test(dm)&&/describeDepositForfeitMoment\(\{ partner \}\)/.test(dm)&&/PARTNER_NOSHOW_BAN_AT\} absences en \$\{PARTNER_NOSHOW_WINDOW_MONTHS\} mois/.test(dm),'lot 40: demo self absence uses venue barème + 20 € au lieu');
+  ok(/const partner = isPartnerListing\(getOutingById\(req\.outingId\)\)/.test(dm)&&/describeDepositForfeitMoment\(\{ partner \}\)/.test(dm)&&/partnerTempCloseLabel\(r\.tempCloseUntil\)/.test(dm),'lot 40: demo self absence uses venue barème + 20 € au lieu');
   // 2. Caution perdue dans Moments passés (soi seulement)
   const now=Date.parse('2026-10-31T12:00:00Z'), H=36e5;
   const out=(x:any={})=>({id:'o1',hostId:'h1',hostName:'Hôte',title:'T',startsAt:new Date(now-3*H).toISOString(),status:'completed',...x});
@@ -2717,7 +2717,7 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const VC=(s0:any)=>({...D({...s0,currentUser:host},{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:['r1'],at:iso(NSAT)}}),currentUser:s0.currentUser});
   // date de fin : +1 mois calendaire, fin de mois bornée
   ok(PU.partnerTempCloseEndMs(Date.parse('2026-11-01T09:00:00.000Z'))===Date.parse('2026-12-01T09:00:00.000Z')&&PU.partnerTempCloseEndMs(Date.parse('2026-01-31T12:00:00.000Z'))===Date.parse('2026-02-28T12:00:00.000Z'),'lot 41: end date = +1 calendar month (31/01 → 28/02)');
-  ok(PU.partnerTempCloseLabel('2026-12-01T09:00:00.000Z')==='Compte fermé temporairement jusqu’au 1 décembre 2026','lot 41: label « Compte fermé temporairement » + end date');
+  ok(PU.partnerTempCloseLabel('2026-12-01T09:00:00.000Z')==='Compte fermé temporairement pendant un mois à cause des absences, jusqu’au 1 décembre 2026','lot 41: label « Compte fermé temporairement » + end date');
   // barème pur
   const until=Date.parse('2026-12-01T09:00:00.000Z');
   ok(PU.partnerNoShowSanction(4,until,until-MIN).banned===false&&PU.partnerNoShowSanction(4,until,until-MIN).tempClose===false,'lot 41: during the month → nothing more');
@@ -2762,12 +2762,53 @@ ok(OA.isPresenceWindowOpen(o({startsAt:iso(now)}),now)&&!OA.isPresenceWindowOpen
   const fnBody=(name:string)=>cx.slice(cx.indexOf(`const ${name} = useCallback(`),cx.indexOf(`const ${name} = useCallback(`)+1500);
   ok(/isPartnerTempClosed\(user\)\) return \{ ok: false, reason: 'temp_closed' \}/.test(fnBody('createOuting'))&&/isPartnerTempClosed\(user\)\) return \{ ok: false, reason: 'temp_closed' \}/.test(fnBody('joinOuting'))&&/isAccountClosedNow\(user\)\) return \{ ok: false/.test(fnBody('confirmSlot')),'lot 41: temporary closure gates publish / join / confirm');
   ok((co.match(/temp_closed: tempClosedRefusal\(state\.currentUser\)/g)||[]).length===3&&/temp_closed: tempClosedRefusal\(state\.currentUser\)/.test(od),'lot 41: refusals show « Compte fermé temporairement jusqu’au … »');
-  ok(PU.tempClosedRefusal({partnerTempCloseUntil:'2026-12-01T09:00:00.000Z'})==='Compte fermé temporairement jusqu’au 1 décembre 2026.','lot 41: refusal text with end date');
-  ok(/isPartnerTempClosed\(user\) && user\.partnerTempCloseUntil/.test(pf)&&/>Compte fermé temporairement</.test(pf)&&/formatTempCloseEndDate\(user\.partnerTempCloseUntil\)/.test(pf),'lot 41: Profile banner « Compte fermé temporairement » + end date');
-  ok(/'Compte fermé temporairement'/.test(dm)&&/partnerTempCloseLabel\(r\.tempCloseUntil\)/.test(dm)&&/'Compte fermé temporairement'/.test(cx),'lot 41: Demo menu + toast titles');
+  ok(PU.tempClosedRefusal({partnerTempCloseUntil:'2026-12-01T09:00:00.000Z'})==='Compte fermé temporairement pendant un mois à cause des absences, jusqu’au 1 décembre 2026.','lot 41: refusal text with end date');
+  ok(/isPartnerTempClosed\(user\) && user\.partnerTempCloseUntil/.test(pf)&&/\{PARTNER_TEMP_CLOSE_TITLE\}/.test(pf)&&/formatTempCloseEndDate\(user\.partnerTempCloseUntil\)/.test(pf),'lot 41: Profile banner « Compte fermé temporairement » + end date');
+  ok(/'Compte fermé temporairement'/.test(rdf('screens','ConfirmSlotScreen.tsx'))&&/partnerTempCloseLabel\(r\.tempCloseUntil\)/.test(dm)&&/partnerTempCloseLabel\(tempCloseUntil\)/.test(cx),'lot 41: Demo menu + toast titles');
   const uiStr=(t:string)=>(t.match(/'[^'\n]*'|`[^`]*`|>[^<>{}\n]+</g)||[]).join('\n');
   ok([pf,co,od,dm,rdf('utils','partners.ts')].every((t:string)=>!/\bban\b|\bbanni|suspendu/i.test(uiStr(t))),'lot 41: no « ban » / « suspendu » in UI strings');
   ok(!/4 absences en 12 mois sur des moments lieu — compte fermé \(démo\)/.test(cx),'lot 41: old « 4 = compte fermé immédiat » removed');
+}
+// 01/11 · Lot 42 · Toast 4e retenue, « 1 sur 1 » après le mois, libellé exact, fermeture définitive
+{
+  const PU=require('../src/utils/partners');
+  const fs=require('node:fs'), path=require('node:path');
+  const rdf=(...p:string[])=>fs.readFileSync(path.join(__dirname,'..','src',...p),'utf8');
+  const MIN=60e3, day=24*H, D1=day, T=now-2*H, NSAT=T+H;
+  const guest:any={...me};
+  const old3=[1,2,3].map((i)=>({requestId:'old'+i,at:iso(NSAT-i*30*day)}));
+  const base=(u:any={},log:any[]=old3)=>S({currentUser:{...guest,...u},outings:[o({startsAt:iso(T),status:'closed',isPartnerListing:true})],requests:[rq({status:'confirmed',depositStatus:'held'}),rq({id:'r2',userId:'u2',userName:'Bea',status:'confirmed',depositStatus:'held'})],partnerNoShowLog:{u1:log}});
+  const VC=(s0:any)=>({...D({...s0,currentUser:host},{type:'PARTNER_VENUE_CHECK',payload:{outingId:'o1',absentRequestIds:['r1'],at:iso(NSAT)}}),currentUser:s0.currentUser});
+  const RET=(s0:any)=>D(VC(s0),{type:'EXPIRE_NO_SHOW_CONTEST',payload:{requestId:'r1',at:iso(NSAT+D1)}});
+  const EXACT='Ton compte est fermé définitivement.\n\nAprès quatre absences, on t’avait laissé un mois pour reprendre — compte fermé temporairement à cause des absences. Tu as de nouveau été absent. Les absences sont un point critique de Moment : sans confiance sur la venue, ça ne tient pas. C’est donc terminé, sans limite de temps.';
+  ok(PU.PARTNER_DEFINITIVE_CLOSE_TEXT===EXACT,'lot 42: definitive closure text = Paolo’s exact words');
+  ok(PU.PARTNER_TEMP_CLOSE_TITLE==='Compte fermé temporairement pendant un mois à cause des absences','lot 42: temporary closure label = Paolo’s exact words');
+  // 1. Toast « Absence retenue » de la 4e (liste du lieu, 24 h) : mentionne la fermeture + date
+  const v4=RET(base());
+  const lbl=PU.partnerTempCloseLabel(v4.currentUser.partnerTempCloseUntil);
+  ok(v4.toast?.title==='Absence retenue'&&v4.toast.body.includes(lbl)&&/pendant un mois à cause des absences, jusqu’au \d/.test(v4.toast.body),'lot 42: 4th retained → toast « Absence retenue » + closure label + end date');
+  const v3=RET(base({},old3.slice(0,2)));
+  ok(v3.toast?.title==='Absence retenue'&&!/fermé/.test(v3.toast.body),'lot 42: 3rd retained → plain « Absence retenue » toast');
+  const cx=rdf('data','ChanceContext.tsx');
+  ok(/tempClosed\s*\?\s*'Absence retenue'/.test(cx)&&/\$\{partnerTempCloseLabel\(tempCloseUntil\)\}\./.test(cx),'lot 42: self-declared 4th → toast « Absence retenue » + label');
+  // 2. Compteur
+  const pastUntil=iso(NSAT-10*day), futUntil=iso(NSAT+10*day);
+  ok(PU.partnerAbsenceCounterForSelf('u1','u1',old3,NSAT,pastUntil)==='Absences lieu : 1 sur 1'&&PU.partnerAbsenceCounterForSelf('u1','u1',[],NSAT,pastUntil)==='Absences lieu : 1 sur 1','lot 42: after the month → « 1 sur 1 » (even with 0 in the window)');
+  ok(PU.partnerAbsenceCounterForSelf('u1','u1',[...old3,{requestId:'x',at:iso(NSAT-day)}],NSAT,futUntil)==='Absences lieu : 4 sur 4'&&PU.partnerAbsenceCounterForSelf('u1','u1',old3,NSAT)==='Absences lieu : 3 sur 4','lot 42: before / during the closure → « N sur 4 »');
+  ok(PU.partnerAbsenceCounterForSelf('h1','u1',old3,NSAT,pastUntil)===null,'lot 42: « 1 sur 1 » stays private');
+  ok(/state\.partnerNoShowLog\?\.\[user\.id\],\s*Date\.now\(\),[\s\S]{0,200}user\.partnerTempCloseUntil,/.test(rdf('screens','ProfileScreen.tsx')),'lot 42: Profile passes the end date to the counter');
+  // Fermeture définitive (après le mois) : texte exact, toast + Profil
+  const fin=RET(base({partnerTempCloseFrom:iso(NSAT-40*day),partnerTempCloseUntil:iso(NSAT-10*day)}));
+  ok(fin.currentUser.banned===true&&fin.currentUser.bannedReason===EXACT&&fin.toast?.title==='Compte fermé'&&fin.toast.body===EXACT,'lot 42: definitive closure → toast + Profile reason = exact text');
+  ok(/banned\s*\?\s*PARTNER_DEFINITIVE_CLOSE_TEXT/.test(cx)&&/\? PARTNER_DEFINITIVE_CLOSE_TEXT/.test(rdf('components','DemoMenuModal.tsx')),'lot 42: self-declared + demo → exact definitive text');
+  ok(PU.bannedRefusal({banned:true,bannedReason:EXACT},'Compte fermé.')===EXACT&&PU.bannedRefusal({banned:true,bannedReason:'autre'},'Compte fermé.')==='Compte fermé.','lot 42: refusals show the exact text for a definitive venue closure');
+  // 3. ConfirmSlot : motif explicite, plus de « Place libérée »
+  const fnBody=(name:string)=>cx.slice(cx.indexOf(`const ${name} = useCallback(`),cx.indexOf(`const ${name} = useCallback(`)+1500);
+  ok(/isAccountClosedNow\(user\)\) return \{ ok: false, reason: 'temp_closed' \}/.test(fnBody('confirmSlot'))&&/user\.banned\) return \{ ok: false, reason: 'banned' \}/.test(fnBody('confirmSlot')),'lot 42: confirmSlot returns temp_closed / banned (not invalid → expired)');
+  const cs=rdf('screens','ConfirmSlotScreen.tsx');
+  ok(/isAccountClosedNow\(me\)/.test(cs)&&/tempClosedRefusal\(me\)/.test(cs)&&/result\.reason === 'banned' \|\| result\.reason === 'temp_closed'/.test(cs)&&cs.indexOf('isAccountClosedNow(me)')<cs.indexOf('>Place libérée.'),'lot 42: ConfirmSlot shows the closure label before « Place libérée »');
+  const uiStr=(t:string)=>(t.match(/'[^'\n]*'|`[^`]*`|>[^<>{}\n]+</g)||[]).join('\n');
+  ok([cs,cx,rdf('utils','partners.ts')].every((t:string)=>!/\bban\b|\bbanni|suspendu/i.test(uiStr(t))),'lot 42: no « ban » / « suspendu » in UI strings');
 }
 function NC41(){return require('../src/utils/noShowContest');}
 console.log({pass,fail});
