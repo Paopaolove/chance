@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
     fontFamily: fonts.semiBold,
   },
   list: { gap: spacing.sm },
-  /** Carte blanche, filet #E7DFD6, rayon 16, sans ombre. */
+  /** Carte blanche, filet, rayon 16, sans ombre. */
   card: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
-  /** Sélection : filet encre (l’abricot reste au bouton principal). */
+  /** Sélection : filet encre (le CTA reste au bouton principal). */
   cardOn: { borderColor: colors.text },
   name: { ...typography.bodyStrong, color: colors.text, fontFamily: fonts.semiBold },
   meta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },

@@ -1152,7 +1152,7 @@ const styles = StyleSheet.create({
   brand: {
     ...typography.caption,
     color: colors.text,
-    fontFamily: fonts.bold,
+    fontFamily: fonts.brand,
   },
   title: { ...typography.title, color: colors.text, marginTop: 2 },
   titleAccent: { color: colors.primary },
@@ -1162,7 +1162,7 @@ const styles = StyleSheet.create({
   mapScreen: { flex: 1 },
   mapHeader: { flexGrow: 0, maxHeight: '55%' },
   mapHeaderContent: { paddingHorizontal: spacing.screen },
-  /** Annonces actif = plein abricot ; Dispo actif = filet abricot (un seul bouton plein). */
+  /** Annonces actif = plein CTA ; Dispo actif = filet CTA (un seul bouton plein). */
   segment: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -1178,12 +1178,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /** Annonces sélectionné : seul bouton plein abricot de l’écran. */
+  /** Annonces sélectionné : seul bouton plein CTA de l’écran. */
   segmentItemOnFilled: {
     backgroundColor: colors.chipActive,
     borderColor: colors.chipActive,
   },
-  /** Dispo sélectionné : filet abricot, pas de fond plein. */
+  /** Dispo sélectionné : filet CTA, pas de fond plein. */
   segmentItemOnOutline: {
     backgroundColor: colors.chip,
     borderColor: colors.primary,
@@ -1237,7 +1237,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.chipActive,
     borderColor: colors.chipActive,
   },
-  /** Liste / Carte actif : filet + texte abricot, fond blanc. */
+  /** Liste / Carte actif : filet + texte CTA, fond blanc. */
   chipSelectedOutline: {
     backgroundColor: colors.chip,
     borderColor: colors.primary,

@@ -1,10 +1,12 @@
 import { TextStyle } from 'react-native';
 
 export const fonts = {
-  regular: 'PlusJakartaSans_400Regular',
-  medium: 'PlusJakartaSans_500Medium',
-  semiBold: 'PlusJakartaSans_600SemiBold',
-  bold: 'PlusJakartaSans_700Bold',
+  regular: 'InterTight_400Regular',
+  medium: 'InterTight_500Medium',
+  semiBold: 'InterTight_600SemiBold',
+  bold: 'InterTight_700Bold',
+  /** Mot-symbole « Moment » uniquement */
+  brand: 'Fraunces_500Medium',
 } as const;
 
 export const typography = {

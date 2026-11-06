@@ -27,7 +27,7 @@ import { AGE_REQUIRED_HINT, AGE_UNDERAGE_HINT, parseAdultAge } from '../utils/ag
 const { width } = Dimensions.get('window');
 
 /**
- * 3 slides avant le tunnel : grand titre 34 à gauche (« partager. » / « Moment » en orange,
+ * 3 slides avant le tunnel : grand titre 34 à gauche (« partager. » / « Moment » en accent,
  * slide 2 sans mot en couleur),
  * beaucoup d’air. Rien sur la caution / les 10 min / le joker ici (c’est dans
  * « Comment ça marche », plus loin dans le tunnel).
@@ -622,7 +622,14 @@ function OnboardingFlow({ mode }: { mode: 'slides' | 'account' }) {
             <Text style={styles.slideTitle} accessibilityRole="header">
               {item.titleBefore}
               {item.titleGreen ? (
-                <Text style={styles.slideTitleGreen}>{item.titleGreen}</Text>
+                <Text
+                  style={[
+                    styles.slideTitleGreen,
+                    item.titleGreen === 'Moment' && styles.slideTitleBrand,
+                  ]}
+                >
+                  {item.titleGreen}
+                </Text>
               ) : null}
               {item.titleAfter}
             </Text>
@@ -675,8 +682,8 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: spacing.xl, paddingTop: spacing.md },
   brand: {
     ...typography.subtitle,
-    color: colors.primary,
-    fontFamily: fonts.bold,
+    color: colors.text,
+    fontFamily: fonts.brand,
     letterSpacing: -0.4,
   },
   slide: {
@@ -695,6 +702,11 @@ const styles = StyleSheet.create({
   slideTitleGreen: {
     fontFamily: fonts.bold,
     color: colors.primary,
+  },
+  /** Mot-symbole uniquement */
+  slideTitleBrand: {
+    fontFamily: fonts.brand,
+    color: colors.text,
   },
   slideLines: { gap: spacing.md },
   slideLineRow: {
@@ -810,7 +822,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontFamily: fonts.semiBold,
   },
-  /** Étapes en texte numéroté, directement sur le papier (pas de carte). */
+  /** Étapes en texte numéroté, directement sur le fond (pas de carte). */
   stepsBox: {
     gap: spacing.lg,
     marginBottom: spacing.block,

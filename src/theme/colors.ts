@@ -1,47 +1,55 @@
 export const colors = {
-  /** Fond d’écran — papier #F7F1EA ; cartes, champs et pastilles en blanc + liseré `border` */
-  background: '#F7F1EA',
-  surface: '#FFFFFF',
-  /** Carte moment — papier chaud #FBF8F4 (Autour de toi) */
-  cardWarm: '#FBF8F4',
-  /** Pastille pictogramme catégorie — abricot pâle */
-  accentSoft: '#F6E3DA',
-  /** Surfaces secondaires — blanc + liseré `border` (un blanc, un noir, un orange) */
-  surfaceMuted: '#FFFFFF',
-  /** Abricot #E37A55 — uniquement : bouton principal, mot accent, onglet actif, engrenage, pastille active */
-  primary: '#E37A55',
-  primaryDark: '#C45E3C',
-  /** Ancien vert pâle → blanc (l’orange est réservé : CTA, mot accent, onglet actif, engrenage, pastille active) */
-  primarySoft: '#FFFFFF',
-  /** Texte principal — encre #1C1917 */
-  text: '#1C1917',
-  /** Texte secondaire — #6F675E */
-  textSecondary: '#6F675E',
-  /** Légendes / placeholders — même #6F675E (contraste ≥ 4.5 sur blanc) */
-  textMuted: '#6F675E',
-  /** Bordures / liserés 1px — #E7DFD6 (cartes, champs, pastilles) */
-  border: '#E7DFD6',
-  /**
-   * Pas de token « success » : une confirmation = coche + texte foncé
-   * sur fond blanc (CheckNote). L’orange plein reste réservé au CTA.
-   */
-  /** Avertissement — texte + liseré #A15C07, sur fond blanc */
-  warning: '#A15C07',
-  /** Fond des encarts d’avertissement — blanc (plus de crème) */
+  /** Fond d’écran — blanc Moment Pro */
+  background: '#FFFFFF',
+  /** Surfaces / cartes — #F7F7F5 */
+  surface: '#F7F7F5',
+  /** Carte moment — même surface Pro */
+  cardWarm: '#F7F7F5',
+  /** Pastille pictogramme catégorie — surface douce */
+  accentSoft: '#F0F0EE',
+  /** Surfaces secondaires */
+  surfaceMuted: '#F7F7F5',
+  /** CTA / accent — encre slate #1F2937 */
+  primary: '#1F2937',
+  primaryDark: '#111827',
+  /** Soft du CTA — surface */
+  primarySoft: '#F7F7F5',
+  /** Texte principal — encre #111111 */
+  text: '#111111',
+  /** Texte secondaire — #6B6B6B */
+  textSecondary: '#6B6B6B',
+  /** Légendes / placeholders */
+  textMuted: '#6B6B6B',
+  /** Bordures / liserés 1px — #E8E8E6 */
+  border: '#E8E8E6',
+  /** Succès — Moment Pro */
+  success: '#157F3B',
+  /** Avertissement — Moment Pro */
+  warning: '#B54708',
+  /** Fond des encarts d’avertissement */
   warningSoft: '#FFFFFF',
-  /** Erreur / danger — countdown 10 min, no-show, clôturer, erreurs */
-  danger: '#9B2C2C',
+  /** Erreur / danger — Moment Pro */
+  danger: '#C62828',
   dangerSoft: '#FFFFFF',
-  /** Pastille inactive : fond blanc, bord #E7DFD6, texte #1C1917 */
+  /** Pastille inactive */
   chip: '#FFFFFF',
-  chipBorder: '#E7DFD6',
-  chipText: '#1C1917',
-  /** Pastille active : fond abricot #E37A55, texte blanc */
-  chipActive: '#E37A55',
+  chipBorder: '#E8E8E6',
+  chipText: '#111111',
+  /** Pastille active : CTA #1F2937, texte blanc */
+  chipActive: '#1F2937',
   chipActiveText: '#FFFFFF',
-  overlay: 'rgba(28, 25, 23, 0.45)',
-  tabInactive: '#6F675E',
+  overlay: 'rgba(17, 17, 17, 0.45)',
+  tabInactive: '#6B6B6B',
   white: '#FFFFFF',
+} as const;
+
+/** Teintes de catégorie (look Pro) — remplacent d’anciennes teintes jaguar. */
+export const categoryColors = {
+  restaurant: '#9A5839',
+  bar: '#62538D',
+  sport: '#39716C',
+  culture: '#49688A',
+  autre: '#6B6B6B',
 } as const;
 
 export type ColorName = keyof typeof colors;

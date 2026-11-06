@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
-  /** Pastille neutre : blanc + liseré #E7DFD6, texte #1C1917. */
+  /** Pastille neutre : blanc + liseré, texte encre. */
   pill: {
     alignSelf: 'flex-start',
     marginTop: spacing.md,

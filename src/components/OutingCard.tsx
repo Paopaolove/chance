@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { categoryLabels } from '../data/mockOutings';
 import { Outing, OutingCategory } from '../data/types';
-import { colors, fonts, radius, spacing, typography } from '../theme';
+import { categoryColors, colors, fonts, radius, spacing, typography } from '../theme';
 import {
   formatParisTime,
   isParisSameDay,
@@ -110,7 +110,11 @@ export function OutingCard({ outing, onPress }: Props) {
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
-          <Ionicons name={iconName} size={22} color={colors.primary} />
+          <Ionicons
+            name={iconName}
+            size={22}
+            color={categoryColors[outing.category] ?? colors.textSecondary}
+          />
         </View>
         <View style={styles.mainText}>
           <Text style={styles.time} accessibilityLabel={`À ${time}`}>

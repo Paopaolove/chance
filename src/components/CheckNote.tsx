@@ -13,7 +13,7 @@ interface Props {
 }
 
 /**
- * Confirmation sobre : coche #1C1917 + texte foncé, sans fond plein.
+ * Confirmation sobre : coche encre + texte foncé, sans fond plein.
  * L’orange plein reste réservé à l’action principale (CTA).
  */
 export function CheckNote({ children, center, size = 16, style, textStyle }: Props) {

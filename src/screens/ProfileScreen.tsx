@@ -1110,10 +1110,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   brand: {
-
     ...typography.caption,
-    color: colors.primary,
-    fontFamily: fonts.bold,
+    color: colors.text,
+    fontFamily: fonts.brand,
   },
   hero: {
     alignItems: 'center',
@@ -1166,7 +1165,7 @@ const styles = StyleSheet.create({
   },
   missingRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   missingText: { flex: 1 },
-  /** Ligne à cocher : carte blanche, filet #E7DFD6, rayon 16, sans ombre. */
+  /** Ligne à cocher : carte blanche, filet, rayon 16, sans ombre. */
   presenceRow: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -1176,7 +1175,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginTop: spacing.sm,
   },
-  /** Coché : filet encre (l’abricot reste au bouton principal). */
+  /** Coché : filet encre (le CTA reste au bouton principal). */
   presenceRowOn: { borderColor: colors.text },
   missingLabel: { ...typography.bodyStrong, color: colors.text },
   missingHint: { ...typography.caption, color: colors.textSecondary },

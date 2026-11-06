@@ -314,8 +314,8 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
   },
   chanceBrand: {
-    color: colors.primary,
-    fontFamily: fonts.bold,
+    color: colors.text,
+    fontFamily: fonts.brand,
   },
   sub: {
     ...typography.caption,

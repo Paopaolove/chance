@@ -31,7 +31,7 @@ import { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-/** Remplace le bleu iOS par défaut : thème neutre, orange réservé aux accents. */
+/** Remplace le bleu iOS par défaut : thème neutre Moment Pro. */
 const chanceNavTheme: Theme = {
   ...DefaultTheme,
   colors: {

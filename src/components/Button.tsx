@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
 
 const variantStyles = StyleSheet.create({
   primary: { backgroundColor: colors.primary },
-  /** Secondaire = pilule contour #E7DFD6, texte #1C1917 (l’orange reste au bouton principal). */
+  /** Secondaire = pilule contour, texte encre (le CTA reste au bouton principal). */
   secondary: {
     backgroundColor: colors.surface,
     borderWidth: 1,
