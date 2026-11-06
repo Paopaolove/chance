@@ -90,7 +90,13 @@ async function main() {
   if (tests.code !== 0 || fail > 0) {
     finish(false, ['tests', `${fail} échec(s) · ${firstLine(tests.out, /^FAIL /) || `code ${tests.code}`}`]);
   }
-  done.push(`${pass}/${pass + fail} tests`);
+  const bookmarks = run('test:bookmarks', 'npm', ['run', '--silent', 'test:bookmarks']);
+  const bm = bookmarks.out.match(/\{\s*pass:\s*(\d+),\s*fail:\s*(\d+)\s*\}/);
+  if (!bm || bookmarks.code !== 0 || Number(bm[2]) > 0) {
+    finish(false, ['signets', firstLine(bookmarks.out, /^FAIL |Error|error/) || `code ${bookmarks.code}`]);
+  }
+  const bookmarkPass = Number(bm[1]);
+  done.push(`${pass + bookmarkPass}/${pass + fail + bookmarkPass} tests`);
 
   // 3. export web
   fs.rmSync(DIST, { recursive: true, force: true });

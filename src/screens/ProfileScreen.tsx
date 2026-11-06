@@ -10,6 +10,9 @@ import { ensureAndroidChannel } from '../utils/notifications';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { OutingCard } from '../components/OutingCard';
+import { bookmarkedOutings } from '../utils/bookmarks';
+import { useMomentClock } from '../utils/useMomentClock';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { genderLabel } from '../components/GenderPills';
@@ -90,6 +93,12 @@ function ProfileScreenInner() {
     respondMomentPhoto,
   } = useChance();
   const user = state.currentUser;
+  const bookmarkIds = user ? state.bookmarksByUser?.[user.id] ?? [] : [];
+  const nextSavedStart = state.outings
+    .filter((outing) => bookmarkIds.includes(outing.id) && new Date(outing.startsAt).getTime() >= Date.now())
+    .map((outing) => outing.startsAt)
+    .sort()[0];
+  const bookmarksNow = useMomentClock(nextSavedStart);
   // 25/10 · Lot C : à l’accès au profil, priorité baissée / mention
   // recalculées sur les 3 mois glissants (levée automatique).
   useEffect(() => {
@@ -174,6 +183,7 @@ function ProfileScreenInner() {
   ].filter(Boolean);
   const displayTags = mergeProfileTags(user.interests, user.customFilters);
 
+  const savedMoments = bookmarkedOutings(state, Math.max(bookmarksNow, Date.now()));
   const pastMoments = getMyPastMoments();
   const pendingConsents = getPendingMomentPhotoConsentsForMe();
   const nextConsent = pendingConsents[0];
@@ -398,6 +408,22 @@ function ProfileScreenInner() {
             </View>
           ) : (
             <Text style={styles.cardHint}>Aucun centre d’intérêt pour l’instant.</Text>
+          )}
+        </View>
+
+        <View style={styles.pastSection}>
+          <Text style={styles.pastTitle}>Mes signets</Text>
+          <Text style={styles.pastHint}>
+            Pour toi seulement. Aucune demande, aucune place réservée, personne prévenu.
+          </Text>
+          {savedMoments.length ? savedMoments.map((outing) => (
+            <OutingCard
+              key={outing.id}
+              outing={outing}
+              onPress={() => navigation.navigate('OutingDetail', { outingId: outing.id })}
+            />
+          )) : (
+            <Text style={styles.cardHint}>Aucun moment à afficher dans tes signets.</Text>
           )}
         </View>
 

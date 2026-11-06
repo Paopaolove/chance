@@ -8,6 +8,7 @@ import React, {
   useRef,
 } from 'react';
 import { Alert, AppState as RNAppState } from 'react-native';
+import { toggleBookmark as toggleBookmarkState } from '../utils/bookmarks';
 import {
   computeDispoExpiresAt,
   isPastLocalMidnight,
@@ -296,6 +297,7 @@ const initialState: AppState = {
   blockedUserIds: [],
   userReports: [],
   partnerWarningsByHost: {},
+  bookmarksByUser: {},
   momentPhotos: [],
   confidentialLeaveReports: [],
   momentPaidHostLines: [],
@@ -725,6 +727,9 @@ function hostCaseDepositsKept(state: AppState, outing: Outing): boolean {
 
 function reducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
+    case 'TOGGLE_BOOKMARK':
+      return toggleBookmarkState(state, action.payload.outingId);
+
     case 'COMPLETE_ONBOARDING':
       return {
         ...state,
@@ -3358,6 +3363,7 @@ type CreateOutingFailReason =
 
 interface ChanceContextValue {
   state: AppState;
+  toggleBookmark: (outingId: string) => void;
   completeOnboarding: (input: OnboardingInput) => void;
   /** Slides vues → fil visible sans compte. */
   markSlidesSeen: () => void;
@@ -4004,6 +4010,9 @@ const ChanceContext = createContext<ChanceContextValue | null>(null);
 
 export function ChanceProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+  const toggleBookmark = useCallback((outingId: string) => {
+    dispatch({ type: 'TOGGLE_BOOKMARK', payload: { outingId } });
+  }, []);
 
   /** Local push / in-app reminder handles — cancel when request/outing dies. */
   type ScheduledHandles = ScheduledNotifIds & {
@@ -8649,6 +8658,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<ChanceContextValue>(
     () => ({
       state,
+      toggleBookmark,
       completeOnboarding,
       markSlidesSeen,
       clearEntryIntent,
@@ -8771,6 +8781,7 @@ export function ChanceProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       state,
+      toggleBookmark,
       completeOnboarding,
       markSlidesSeen,
       clearEntryIntent,

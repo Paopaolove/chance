@@ -1,6 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useChance } from '../data/ChanceContext';
+import { openAccountFlow } from '../navigation/accountGate';
 import { categoryLabels } from '../data/mockOutings';
 import { Outing, OutingCategory } from '../data/types';
 import { categoryColors, colors, fonts, radius, spacing, typography } from '../theme';
@@ -76,6 +78,10 @@ function dayLabel(startsAt: string, nowMs = Date.now()): string | null {
 
 export function OutingCard({ outing, onPress }: Props) {
   const openProfile = useOpenUserProfile();
+  const { state, toggleBookmark } = useChance();
+  const bookmarked = state.currentUser
+    ? (state.bookmarksByUser?.[state.currentUser.id] ?? []).includes(outing.id)
+    : false;
   const partner = isPartnerListing(outing);
   const pill = cardPill(outing, partner);
   const time = formatParisTime(outing.startsAt);
@@ -98,69 +104,91 @@ export function OutingCard({ outing, onPress }: Props) {
     .join(' · ');
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Moment ${outing.title}`}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-    >
-      <View style={styles.mainRow}>
-        <View
-          style={styles.iconWrap}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        >
-          <Ionicons
-            name={iconName}
-            size={22}
-            color={categoryColors[outing.category] ?? colors.textSecondary}
-          />
-        </View>
-        <View style={styles.mainText}>
-          <Text style={styles.time} accessibilityLabel={`À ${time}`}>
-            {time}
-          </Text>
-          <Text style={styles.title} numberOfLines={2}>
-            {outing.title}
-          </Text>
-          <View style={styles.hostRow}>
-            <Pressable
-              onPress={openHost}
-              accessibilityRole="button"
-              accessibilityLabel={`Voir le profil de ${outing.hostName}`}
-              hitSlop={{ top: 6, bottom: 6 }}
-              style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
-            >
-              <Text style={styles.hostName} numberOfLines={1}>
-                {partner ? outing.hostName : `${outing.hostName} t’invite`}
-              </Text>
-            </Pressable>
-            {partner ? <Text style={styles.partnerTag}> · Partenaire</Text> : null}
-          </View>
-          {placeLine ? (
-            <Text style={styles.place} numberOfLines={1}>
-              {placeLine}
-            </Text>
-          ) : null}
+    <View style={styles.card}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Moment ${outing.title}`}
+        style={({ pressed }) => [styles.cardContent, pressed && styles.pressed]}
+      >
+        <View style={styles.mainRow}>
           <View
-            style={[
-              styles.pill,
-              pill.tone === 'now' && styles.pillNow,
-            ]}
+            style={styles.iconWrap}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
           >
-            <Text
-              style={[
-                styles.pillText,
-                pill.tone === 'now' && styles.pillTextNow,
-              ]}
-              numberOfLines={1}
-            >
-              {pill.label}
+            <Ionicons
+              name={iconName}
+              size={22}
+              color={categoryColors[outing.category] ?? colors.textSecondary}
+            />
+          </View>
+          <View style={styles.mainText}>
+            <Text style={styles.time} accessibilityLabel={`À ${time}`}>
+              {time}
             </Text>
+            <Text style={styles.title} numberOfLines={2}>
+              {outing.title}
+            </Text>
+            <View style={styles.hostRow}>
+              <Pressable
+                onPress={openHost}
+                accessibilityRole="button"
+                accessibilityLabel={`Voir le profil de ${outing.hostName}`}
+                hitSlop={{ top: 6, bottom: 6 }}
+                style={({ pressed }) => [styles.nameTap, pressed && styles.pressed]}
+              >
+                <Text style={styles.hostName} numberOfLines={1}>
+                  {partner ? outing.hostName : `${outing.hostName} t’invite`}
+                </Text>
+              </Pressable>
+              {partner ? <Text style={styles.partnerTag}> · Partenaire</Text> : null}
+            </View>
+            {placeLine ? (
+              <Text style={styles.place} numberOfLines={1}>
+                {placeLine}
+              </Text>
+            ) : null}
+            <View
+              style={[
+                styles.pill,
+                pill.tone === 'now' && styles.pillNow,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillText,
+                  pill.tone === 'now' && styles.pillTextNow,
+                ]}
+                numberOfLines={1}
+              >
+                {pill.label}
+              </Text>
+            </View>
           </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+      <Pressable
+        onPress={(event) => {
+          event.stopPropagation();
+          if (!state.currentUser) {
+            openAccountFlow();
+            return;
+          }
+          toggleBookmark(outing.id);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={`${bookmarked ? 'Retirer le signet' : 'Ajouter un signet'} : ${outing.title}`}
+        accessibilityState={{ selected: bookmarked }}
+        style={({ pressed }) => [styles.bookmark, pressed && styles.pressed]}
+      >
+        <Ionicons
+          name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+          size={22}
+          color={colors.text}
+        />
+      </Pressable>
+    </View>
   );
 }
 
@@ -168,11 +196,13 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.cardWarm,
     borderRadius: radius.card,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.xl,
     marginBottom: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  cardContent: {
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.xl,
   },
   pressed: { opacity: 0.92 },
   mainRow: {
@@ -206,7 +236,22 @@ const styles = StyleSheet.create({
   },
   mainText: { flex: 1, minWidth: 0 },
   nameTap: { flexShrink: 1 },
+  bookmark: {
+    position: 'absolute',
+    top: spacing.xl,
+    right: spacing.xl,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   time: {
+    minHeight: 44,
+    paddingRight: 44,
     fontFamily: fonts.semiBold,
     fontSize: 24,
     lineHeight: 28,

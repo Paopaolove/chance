@@ -36,6 +36,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "test:bookmarks": "node scripts/test-bookmarks.cjs",
     "test:rules": "node scripts/run-test-rules.cjs",
     "verify": "node scripts/verify.cjs"
   },

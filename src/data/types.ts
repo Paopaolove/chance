@@ -757,6 +757,8 @@ export interface AppState {
   slidesSeen: boolean;
   currentUser: User | null;
   outings: Outing[];
+  /** Signets privés par utilisateur ; même durée de vie que l’état démo. */
+  bookmarksByUser?: Record<string, string[]>;
   requests: Request[];
   /** Consumed once after onboarding to route into Create, Feed (Annonces), or Dispo. */
   entryIntent: EntryIntent | null;
@@ -858,6 +860,7 @@ export type OnboardingInput = {
 
 export type AppAction =
   | { type: 'COMPLETE_ONBOARDING'; payload: User; entryIntent: EntryIntent }
+  | { type: 'TOGGLE_BOOKMARK'; payload: { outingId: string } }
   | { type: 'SEE_SLIDES' }
   | { type: 'CLEAR_ENTRY_INTENT' }
   | {
