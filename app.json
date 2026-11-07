@@ -51,7 +51,8 @@
           "photosPermission": "Moment utilise ta photothèque pour ta photo de profil.",
           "cameraPermission": "Moment utilise l’appareil photo pour ta photo de profil."
         }
-      ]
+      ],
+      "expo-status-bar"
     ]
   }
 }

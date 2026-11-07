@@ -89,7 +89,7 @@ export function PillsWithOther<T extends string | number>({
   accessibilityLabel,
   style,
 }: Props<T>) {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const outline = look === 'outline';
 
   const isOn = (id: T) =>

@@ -103,7 +103,7 @@ function DispoSoirScreenInner() {
     user?.dispoNeighborhood ?? user?.neighborhood ?? 'Le Marais',
   );
   const [showQuartiers, setShowQuartiers] = useState(false);
-  const freeDateRef = useRef<TextInput>(null);
+  const freeDateRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [topic, setTopic] = useState(user?.dispoTopic ?? '');
   const [exclusions, setExclusions] = useState(
     (user?.dispoExclusions ?? []).join(', '),

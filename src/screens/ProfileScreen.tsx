@@ -69,7 +69,7 @@ function ProfileScreenInner() {
   const navigation = useNavigation<Nav>();
   const openProfile = useOpenUserProfile();
   const route = useRoute<ProfileRoute>();
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const rateSectionY = useRef(0);
   const photosSectionY = useRef(0);
   const {
